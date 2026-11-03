@@ -507,6 +507,42 @@ function drawTimer(sec) {
   g.fillStyle = 'rgba(0,0,0,.55)'; for (let x = 0; x < w; x += 6) g.fillRect(x, 0, 2, h); for (let y = 0; y < h; y += 6) g.fillRect(0, y, w, 2);   // точки светодиодной матрицы
   ledTimer.t && (ledTimer.t.needsUpdate = true);
 }
+// chery tiggo 8 пресс-кара «шёлкового пути»: тёмно-синий кузов, оранжевый капот с g-drive, надписи на дверях, раллийный номер
+const tiggoTex = {};
+function tiggo(n = 13) {
+  const car = new THREE.Group(), add = (geo, m, x, y, z, rx = 0, ry = 0, rz = 0) => { const o = new THREE.Mesh(geo, m); o.position.set(x, y, z); o.rotation.set(rx, ry, rz); car.add(o); return o; };
+  const paint = tiggoTex.paint ||= new THREE.MeshPhysicalMaterial({ color: 0x141a2a, roughness: 0.3, metalness: 0.4, clearcoat: 1, clearcoatRoughness: 0.08 });
+  const orange = tiggoTex.orange ||= new THREE.MeshStandardMaterial({ color: 0xff6a10, roughness: 0.6 });
+  const s = new THREE.Shape();
+  s.moveTo(-2.35, 0.35); s.lineTo(2.35, 0.35); s.lineTo(2.42, 0.85); s.lineTo(2.12, 1.06); s.lineTo(1.0, 1.16); s.lineTo(0.36, 1.68); s.lineTo(-1.9, 1.73); s.lineTo(-2.3, 1.46); s.lineTo(-2.38, 0.9); s.lineTo(-2.35, 0.35);
+  const geo = new THREE.ExtrudeGeometry(s, { depth: 1.86, bevelEnabled: true, bevelThickness: 0.06, bevelSize: 0.06, bevelSegments: 2 }); geo.translate(0, 0, -0.93);
+  car.add(new THREE.Mesh(geo, paint));
+  const w = new THREE.Shape(); w.moveTo(0.95, 1.19); w.lineTo(0.39, 1.63); w.lineTo(-1.86, 1.67); w.lineTo(-2.23, 1.42); w.lineTo(-2.2, 1.2); w.lineTo(0.95, 1.19);
+  const wg = new THREE.ExtrudeGeometry(w, { depth: 2.0, bevelEnabled: false }); wg.translate(0, 0, -1.0);
+  car.add(new THREE.Mesh(wg, tiggoTex.glass ||= new THREE.MeshPhysicalMaterial({ color: 0x07080b, roughness: 0.05, metalness: 0.3, clearcoat: 1 })));
+  // оранжевый капот с белой надписью
+  tiggoTex.hood ||= decalTex(512, 400, (g, W, H) => { g.fillStyle = '#ff6a10'; g.fillRect(0, 0, W, H); g.save(); g.translate(W / 2, H / 2); g.rotate(-Math.PI / 2); gdrive(g, -150, 30, 78); g.restore(); });
+  add(new THREE.BoxGeometry(1.16, 0.03, 1.9), [orange, orange, new THREE.MeshStandardMaterial({ map: tiggoTex.hood, roughness: 0.6 }), orange, orange, orange], 1.56, 1.19, 0, 0, 0, -0.09);
+  // борта: g-drive на передней двери, раллийная табличка на задней, оранжевая полоса по низу
+  tiggoTex.door ||= decalTex(512, 120, (g) => gdrive(g, 20, 92, 92, '#ff6a10'));
+  tiggoTex.plate ||= decalTex(200, 240, (g) => { g.fillStyle = '#f2efe9'; g.fillRect(0, 0, 200, 240); g.fillStyle = '#ff6a10'; g.fillRect(0, 0, 200, 46); g.fillStyle = '#111'; g.font = '800 92px TT, sans-serif'; g.textAlign = 'center'; g.fillText(String(n), 100, 160); g.font = '22px AP, monospace'; g.fillText('MEDIA', 100, 210); });
+  const dm = t => new THREE.MeshBasicMaterial({ map: t, transparent: true, depthWrite: false });
+  [1, -1].forEach(sd => {
+    const ry = sd > 0 ? 0 : Math.PI, z = sd * 1.0;
+    add(new THREE.PlaneGeometry(1.1, 0.26), dm(tiggoTex.door), 0.45, 0.78, z, 0, ry);
+    add(new THREE.PlaneGeometry(0.42, 0.5), dm(tiggoTex.plate), -0.9, 0.85, z, 0, ry);
+    add(new THREE.BoxGeometry(3.6, 0.1, 0.02), orange, -0.1, 0.45, z);
+    add(new THREE.BoxGeometry(0.16, 0.1, 0.1), orange, 0.85, 1.22, sd * 1.02);   // зеркала
+  });
+  add(new THREE.BoxGeometry(0.3, 0.03, 1.9), orange, 0.42, 1.68, 0, 0, 0, 0.66);  // полоса над лобовым
+  [-0.75, 0.75].forEach(z => add(new THREE.BoxGeometry(2.0, 0.05, 0.06), MAT.graphite, -0.8, 1.79, z));  // рейлинги
+  const tire = new THREE.CylinderGeometry(0.44, 0.44, 0.34, 24); tire.rotateX(Math.PI / 2); const rimG = new THREE.CylinderGeometry(0.28, 0.28, 0.36, 16); rimG.rotateX(Math.PI / 2);
+  [[1.5, 0.88], [1.5, -0.88], [-1.5, 0.88], [-1.5, -0.88]].forEach(([x, z]) => { add(tire, MAT.matte, x, 0.44, z); add(rimG, MAT.graphite, x, 0.44, z); });
+  const hl = tiggoTex.hl ||= new THREE.MeshBasicMaterial({ color: new THREE.Color(0xffe8cc).multiplyScalar(0.9), toneMapped: false }), tl = tiggoTex.tl ||= new THREE.MeshBasicMaterial({ color: new THREE.Color(RED).multiplyScalar(1.6), toneMapped: false });
+  add(new THREE.BoxGeometry(0.04, 0.05, 1.7), hl, 2.44, 0.92, 0); add(new THREE.BoxGeometry(0.04, 0.32, 1.1), MAT.matte, 2.45, 0.62, 0);   // дневные огни и решётка
+  add(new THREE.BoxGeometry(0.04, 0.06, 1.7), tl, -2.39, 1.12, 0);
+  return car;
+}
 function goose() {
   const g = new THREE.Group(), b = new THREE.MeshStandardMaterial({ color: 0x8c8378, roughness: 0.85 }), beak = new THREE.MeshStandardMaterial({ color: 0xff7a10, roughness: 0.5 });
   const add = (geo, m, x, y, z, rz = 0) => { const o = new THREE.Mesh(geo, m); o.position.set(x, y, z); o.rotation.z = rz; g.add(o); return o; };
@@ -661,7 +697,7 @@ function buildQuarters() {
   stand('ironstar', ['gdrive-ironstar-1'], Z.iron + 4, { x: -11 });
   const cfl = new THREE.PointLight(0xffe8dc, 140, 26, 2); cfl.position.set(5, 12, Z.iron - 2); scene.add(cfl);
 
-  // шёлковый путь — вау-момент: арка маршрута над улицей, полукольцо-панорама из четырёх кадров, экипажи кружат перед ней
+  // шёлковый путь — вау-момент: арка маршрута над улицей, полукольцо-панорама из четырёх кадров, пресс-кары chery tiggo 8 в брендинге g-drive кружат перед ней
   const arc = new THREE.Mesh(new THREE.TorusGeometry(27, 0.9, 16, 96, Math.PI), MAT.gloss); arc.position.set(0, 0, Z.silk - 24); scene.add(arc);
   const arcL = new THREE.Mesh(new THREE.TorusGeometry(27, 0.22, 8, 96, Math.PI), new THREE.MeshBasicMaterial({ color: new THREE.Color(0xff7a2a).multiplyScalar(1.8), toneMapped: false })); arcL.position.set(0, 0, Z.silk - 23.1); scene.add(arcL);
   const km = new THREE.Mesh(new THREE.PlaneGeometry(22, 3.43), new THREE.MeshBasicMaterial({ map: labelTex('4 500 км · 10 дней', 'g-drive · ралли «шёлковый путь» · 2022') })); km.position.set(0, 23, Z.silk - 24.8); km.rotation.y = Math.PI; scene.add(km);
@@ -674,9 +710,8 @@ function buildQuarters() {
     pic.userData.case = 'gdrive'; clickable.push(pic);
   });
   const track = new THREE.Mesh(new THREE.RingGeometry(10.6, 11.2, 96), new THREE.MeshBasicMaterial({ color: 0x6a2410 })); track.rotation.x = -Math.PI / 2; track.scale.set(1.3, 0.6, 1); track.position.set(0, 0.07, Z.silk - 2); scene.add(track);
-  const rallyM = new THREE.MeshStandardMaterial({ color: 0xff5a10, roughness: 0.4, metalness: 0.2 });
-  for (let i = 0; i < 5; i++) { const c = muscleCar(rallyM, MAT.matte); c.scale.setScalar(0.9); scene.add(c); rally.push({ c, ph: i / 5 * Math.PI * 2 }); }
-  const sl2 = new THREE.PointLight(0xffb070, 420, 60, 1.8); sl2.position.set(0, 20, Z.silk - 6); scene.add(sl2);
+  for (let i = 0; i < 5; i++) { const c = tiggo(11 + i); c.scale.setScalar(1.25); c.userData.case = 'gdrive'; clickable.push(c); scene.add(c); rally.push({ c, ph: i / 5 * Math.PI * 2 }); }   // 5 экипажей пресс-тура
+  const sl2 = new THREE.PointLight(0xffd8b0, 700, 50, 1.6); sl2.position.set(0, 12, Z.silk - 4); scene.add(sl2);
   plate('assets/cases/avangard-1.jpg', 16, 22, V(-36.4, 15, 424), Math.PI / 2 + 0.6, 'avangard');
 
   // #футболеем всей страной: купола промозоны и стенд из четырёх кадров; без пересвета
