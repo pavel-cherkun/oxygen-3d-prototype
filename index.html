@@ -14,7 +14,7 @@
 html,body{background:var(--bg);color:var(--cream)}
 body{font:400 17px/1.45 "TT",system-ui,sans-serif;font-variation-settings:"opsz" 36,"wdth" 100;overflow-x:hidden}
 canvas#gl{position:fixed;inset:0;width:100vw;height:100vh;display:block;z-index:0}
-#scroll{height:2200vh;position:relative;z-index:-1}
+#scroll{height:2600vh;position:relative;z-index:-1}
 body.orbit #scroll{display:none}
 .t{font-family:"AP",monospace;color:var(--red);font-size:13px;letter-spacing:.02em}
 header{position:fixed;top:0;left:0;right:0;z-index:5;display:flex;align-items:center;justify-content:space-between;padding:20px 28px;pointer-events:none}
@@ -77,6 +77,7 @@ select{background:#111;border:0;border-bottom:1px solid #444;color:var(--cream);
 .sq{position:fixed;z-index:3;width:7px;height:7px;background:var(--red);pointer-events:none;transition:left .45s cubic-bezier(.2,.8,.2,1),top .45s cubic-bezier(.2,.8,.2,1)}
 .tick{position:fixed;z-index:3;width:14px;height:14px;border-color:rgba(225,217,207,.5);border-style:solid;pointer-events:none}
 #micro{position:fixed;right:28px;top:76px;z-index:5;text-align:right;line-height:1.55;pointer-events:none;font-size:11px}
+#micro a{pointer-events:auto}
 #micro .on{color:var(--cream)}
 #microL{position:fixed;left:28px;top:96px;z-index:5;pointer-events:none;font-size:11px;line-height:1.55;color:var(--mute)}
 #wipe{position:fixed;left:0;right:0;top:50%;z-index:7;pointer-events:none;white-space:nowrap;font-weight:520;font-size:22vw;line-height:.8;translate:0 -50%;color:transparent;-webkit-text-stroke:1px rgba(244,7,9,.7);transform:translateX(100%)}
@@ -171,54 +172,26 @@ select{background:#111;border:0;border-bottom:1px solid #444;color:var(--cream);
   <button data-go="atl"><span class="t">{05} эфир · над городом</span><b>atl</b><p>эфир, наружка, digital: кампании на экранах небоскрёбов</p></button>
 </section>
 
-<section class="ov right panel" data-a="0.60" data-b="0.70" data-route="btl" style="max-width:420px">
-  <span class="t">{04} btl · азиатский квартал</span>
-  <h2>азиатский квартал</h2>
-  <p>кейсы, где мы зашли в аниме и киберпанк изнутри культуры</p>
-  <div class="list">
-    <button data-case="fandom"><span>ozon corp · фандом фест</span><span class="t">3 награды</span></button>
-    <button data-case="treschnutye"><span>треснутые · дикси</span><span class="t">5 наград</span></button>
-  </div>
-  <button class="btn" id="openOrbit">покрутить ozon corp в 3D ↻</button>
-  <button class="btn ghost" data-brief="btl">есть задача на btl</button>
+
+
+
+
+
+
+
+
+
+
+
+
+<section class="ov left panel" data-a="0.855" data-b="0.882" style="max-width:400px">
+  <span class="t">{06} ai-квартал · btl и atl</span>
+  <h2>ai-продакшн</h2>
+  <p>та же режиссура, другая физика: от брифа до финального мастера — недели, а не кварталы</p>
+  <div class="list"><button data-case="ai"><span>fonbet · mango office · яндекс лавка · альфа-банк</span><span class="t">4 ролика →</span></button></div>
 </section>
 
-<section class="ov left panel" data-a="0.705" data-b="0.74" data-route="btl" style="max-width:400px">
-  <span class="t">{04} btl · на стыке кварталов</span>
-  <h2>хроники ижоры</h2>
-  <p>100 лет «Зениту» в жанре вебтуна: манхва и футбол в одной истории</p>
-  <button class="btn" data-case="izhora">страница кейса</button>
-</section>
-
-<section class="ov right panel" data-a="0.745" data-b="0.825" data-route="btl" style="max-width:420px">
-  <span class="t">{04} btl · спортивный квартал</span>
-  <h2>спортивный квартал</h2>
-  <div class="list">
-    <button data-case="gdrive"><span>шёлковый путь · g-drive</span><span class="t">ралли · 4 500 км</span></button>
-    <button data-case="ironstar"><span>ironstar · g-drive</span><span class="t">триатлон</span></button>
-    <button data-case="avangard"><span>время авангарда · хк «авангард»</span><span class="t">сезон 24/25</span></button>
-    <button data-case="baltika7"><span>#футболеем всей страной · балтика 7</span><span class="t">чм-2018</span></button>
-  </div>
-  <button class="btn ghost" data-brief="btl">есть задача на btl</button>
-</section>
-
-<section class="ov left panel" data-a="0.66" data-b="0.815" data-route="atl">
-  <span class="t">{05} atl · эфир над городом</span>
-  <h2>atl</h2>
-  <p>эфир, наружка, digital. кейсы — на экранах небоскрёбов, нажмите на экран или строку</p>
-  <div class="chips"><span>тв и olv</span><span>наружка</span><span>радио и аудио</span><span>digital-кампании</span><span>кино</span></div>
-  <div class="list">
-    <button data-case="treschnutye"><span>треснутые · дикси</span><span class="t">5 наград</span></button>
-    <button data-case="zaklinateli"><span>заклинатели · дикси</span><span class="t">gold · silver mercury</span></button>
-    <button data-case="derbent"><span>дербент — город историй</span><span class="t">gold · red apple</span></button>
-  </div>
-  <button class="btn ghost" data-brief="atl">есть задача на atl</button>
-  <p class="t" style="margin-top:10px">лучше работает вместе с btl → <a href="#" data-go="btl" style="color:inherit">проспект</a></p>
-</section>
-
-
-
-<section class="ov right panel" data-a="0.815" data-b="0.865">
+<section class="ov right panel" data-a="0.89" data-b="0.925">
   <span class="t">{06} награды</span>
   <h2>за что давали металл</h2>
   <div class="list">
@@ -234,7 +207,7 @@ select{background:#111;border:0;border-bottom:1px solid #444;color:var(--cream);
   <div class="row"><span>national event services rating</span><span class="t">топ</span></div>
 </section>
 
-<section class="ov left panel" data-a="0.875" data-b="0.925">
+<section class="ov left panel" data-a="0.93" data-b="0.965">
   <span class="t">{07} о нас</span>
   <h2>кто мы</h2>
   <div class="nums"><div><b>2007</b><span class="t">год основания</span></div><div><b>52</b><span class="t">в штате</span></div><div><b>вся рф</b><span class="t">дом — петербург</span></div></div>
@@ -246,7 +219,7 @@ select{background:#111;border:0;border-bottom:1px solid #444;color:var(--cream);
   </div>
 </section>
 
-<section class="ov right panel" data-a="0.945" data-b="1.01" id="brief" style="width:min(460px,calc(100vw - 32px))">
+<section class="ov right panel" data-a="0.972" data-b="1.01" id="brief" style="width:min(460px,calc(100vw - 32px))">
   <span class="t">{08} бриф</span>
   <h2>есть задача?</h2>
   <form id="briefForm" onsubmit="event.preventDefault();this.innerHTML='<p>прототип: данные никуда не отправлены</p>'">
