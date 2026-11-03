@@ -34,6 +34,9 @@ const bloom = new UnrealBloomPass(new THREE.Vector2(innerWidth, innerHeight), 0.
 composer.addPass(bloom);
 composer.addPass(new OutputPass());
 
+import('three/addons/environments/RoomEnvironment.js').then(({ RoomEnvironment }) => {
+  const pm = new THREE.PMREMGenerator(renderer); scene.environment = pm.fromScene(new RoomEnvironment(), 0.04).texture; scene.environmentIntensity = 0.32;
+});
 scene.add(new THREE.HemisphereLight(0x5a6688, 0x140a0a, 0.55));
 const moon = new THREE.DirectionalLight(0x8090c0, 0.7); moon.position.set(-200, 400, 300); scene.add(moon);
 
@@ -106,18 +109,19 @@ const CASE_IMGS = ['ozon-fandom-kv-1', 'ozon-fandom-real-1', 'ozon-fandom-real-2
 // ---------- город ----------
 const TOWER = { w: 80, h: 260, d: 40 };
 function buildCity() {
+  // минималистичные корпуса по рефу 1: тело — матовый чёрный с редкими тусклыми окнами,
+  // на нём плиты глянцевого кремового, рёбра красного стекла и чёрные надстройки
   const geo = new THREE.BoxGeometry(1, 1, 1); geo.translate(0, 0.5, 0);
-  const mats = [0.10, 0.18, 0.05, 0.25].map((share, i) => {
+  const mats = [0.05, 0.09, 0.03, 0.12].map((share, i) => {
     const tex = windowsTexture(100 + i, share); tex.repeat.set(2, 3);
-    return new THREE.MeshStandardMaterial({ color: 0x8a8a96, map: tex, emissiveMap: tex, emissive: 0xffffff, emissiveIntensity: 1.25, roughness: 0.85, metalness: 0.1 });
+    return new THREE.MeshStandardMaterial({ color: 0x3a3b42, map: tex, emissiveMap: tex, emissive: 0xffffff, emissiveIntensity: 0.5, roughness: 0.9, metalness: 0.05 });
   });
   const cells = [];
   for (let x = -330; x <= 330; x += 26) for (let z = -330; z <= 760; z += 26) {
     if (Math.abs(x) < 20 && z > -20) continue;               // улица
     if (Math.abs(x) < 62 && Math.abs(z) < 42) continue;      // площадь у башни
     if (Math.abs(z - 150) < 15) continue;                    // перекрёсток
-    if (x < -18 && x > -116 && Math.abs(z - ALLEY.z) < 10) continue;   // переулок
-    if (x < -98 && x > -182 && z > 214 && z < 296) continue;            // площадь
+    if (Math.abs(x) < 38 && z > 165 && z < 425) continue;    // кварталы: тротуары шире под зоны
     if (Math.abs(x) < 20 && z > 690) continue;               // торец проспекта под бриф
     if (Math.abs(x) > 22 && Math.abs(x) < 80 && ATL_SCREENS.some(([, sd, zz]) => Math.sign(x) === sd && Math.abs(z - zz) < 28)) continue; // небоскрёбы atl
     if (rand() < 0.12) continue;
@@ -132,22 +136,35 @@ function buildCity() {
     list.forEach((c, i) => { dummy.position.set(c.x, 0, c.z); dummy.scale.set(c.w, c.h, c.d); dummy.updateMatrix(); im.setMatrixAt(i, dummy.matrix); });
     scene.add(im);
   });
+  // акценты: плиты, рёбра, надстройки — три InstancedMesh по материалам
+  const acc = { cream: [], glass: [], matte: [] };
+  cells.forEach(c => {
+    const toStreet = -Math.sign(c.x) || 1, r = rand;
+    if (r() < 0.45) acc.cream.push([c.x + toStreet * (c.w / 2 + 0.6), c.h * (0.25 + r() * 0.3), c.z + (r() - .5) * c.d * 0.4, 1.2, c.h * (0.5 + r() * 0.55), c.d * (0.25 + r() * 0.35)]);
+    if (r() < 0.32) acc.glass.push([c.x + (r() - .5) * c.w * 0.6, c.h * (0.35 + r() * 0.3), c.z + c.d / 2 + 1.6, 0.7, c.h * (0.4 + r() * 0.5), 3.2 + r() * 3]);
+    if (r() < 0.4) { const k = 0.4 + r() * 0.35, hh = 5 + r() * 16; acc.matte.push([c.x + (r() - .5) * c.w * 0.3, c.h + hh / 2, c.z + (r() - .5) * c.d * 0.3, c.w * k, hh, c.d * k]); }
+  });
+  const box = new THREE.BoxGeometry(1, 1, 1);
+  for (const [k, list] of Object.entries(acc)) {
+    const im = new THREE.InstancedMesh(box, MAT[k], list.length);
+    list.forEach(([x, y, z, w, h, d], i) => { dummy.position.set(x, y, z); dummy.scale.set(w, h, d); dummy.updateMatrix(); im.setMatrixAt(i, dummy.matrix); });
+    scene.add(im);
+  }
   // экраны на фасадах вдоль улицы — на них крутятся наши кейсы
-  const screens = [];
-  cells.filter(c => Math.abs(c.x) < 50 && c.z > -10 && c.z < 680).forEach((c, i) => {
-    if (rand() < 0.35) return;
+  cells.filter(c => Math.abs(c.x) < 60 && c.z > -10 && c.z < 680).forEach((c, i) => {
+    if (rand() < 0.45) return;
     const tw = 7 + rand() * 6, th = tw * (rand() < .5 ? 0.62 : 1.6);
     const mat = new THREE.MeshBasicMaterial({ map: caseTexture(CASE_IMGS[i % CASE_IMGS.length]), toneMapped: false });
-    mat.color.setScalar(1.6);
+    mat.color.setScalar(1.3);
     const m = new THREE.Mesh(new THREE.PlaneGeometry(tw, th), mat);
     const side = Math.sign(c.x) || 1;
     m.position.set(c.x - side * (c.w / 2 + 0.2), Math.min(c.h - th / 2 - 2, 10 + rand() * 40), c.z);
     m.rotation.y = -side * Math.PI / 2;
-    scene.add(m); screens.push(m);
+    scene.add(m);
   });
   // неоновые вертикальные вывески
-  const neonMat = new THREE.MeshBasicMaterial({ color: RED, toneMapped: false }); neonMat.color.multiplyScalar(3);
-  for (let i = 0; i < 70; i++) {
+  const neonMat = new THREE.MeshBasicMaterial({ color: RED, toneMapped: false }); neonMat.color.multiplyScalar(2.4);
+  for (let i = 0; i < 50; i++) {
     const c = cells[(rand() * cells.length) | 0]; if (Math.abs(c.x) > 120) continue;
     const m = new THREE.Mesh(new THREE.BoxGeometry(0.6, 6 + rand() * 18, 0.6), neonMat);
     m.position.set(c.x + c.w / 2 * (rand() < .5 ? 1 : -1), 8 + rand() * c.h * 0.7, c.z + c.d / 2);
@@ -157,10 +174,11 @@ function buildCity() {
   const ground = new THREE.Mesh(new THREE.PlaneGeometry(5000, 5000), new THREE.MeshStandardMaterial({ color: 0x0c0d12, roughness: 0.35, metalness: 0.6 }));
   ground.rotation.x = -Math.PI / 2; scene.add(ground);
   for (let z = 50; z < 690; z += 12) {
+    if (z > 292 && z < 425) continue;   // в спортивном квартале — беговые дорожки
     const l = new THREE.Mesh(new THREE.PlaneGeometry(0.4, 5), new THREE.MeshBasicMaterial({ color: 0x3a3a44 }));
     l.rotation.x = -Math.PI / 2; l.position.set(0, 0.05, z); scene.add(l);
   }
-  [80, 170, 260, 350, 440, 520, 600, 660].forEach((z, i) => {
+  [80, 520, 600, 660].forEach((z, i) => {
     const pl = new THREE.PointLight(i % 2 ? RED : 0xff5533, 420, 60, 1.8); pl.position.set(i % 2 ? 12 : -12, 14, z); scene.add(pl);
   });
 }
@@ -168,17 +186,17 @@ function buildCity() {
 // ---------- башня, вентиляторы, логотип ----------
 const fans = { blades: null, list: [], speed: 0.6 };
 function buildTower() {
-  const tex = windowsTexture(7, 0.04); tex.repeat.set(2, 1);
-  const mat = new THREE.MeshStandardMaterial({ color: 0x6a6c78, map: tex, emissiveMap: tex, emissive: 0xffffff, emissiveIntensity: 0.6, roughness: 0.6, metalness: 0.4 });
+  const tex = windowsTexture(7, 0.02); tex.repeat.set(2, 1);
+  const mat = new THREE.MeshStandardMaterial({ color: 0x2a2b30, map: tex, emissiveMap: tex, emissive: 0xffffff, emissiveIntensity: 0.35, roughness: 0.9, metalness: 0.05 });
   const body = new THREE.Mesh(new THREE.BoxGeometry(TOWER.w, TOWER.h, TOWER.d), mat); body.position.y = TOWER.h / 2; scene.add(body);
-  const crown = new THREE.Mesh(new THREE.BoxGeometry(TOWER.w * 0.7, 18, TOWER.d * 0.7), mat); crown.position.y = TOWER.h + 9; scene.add(crown);
+  const crown = new THREE.Mesh(new THREE.BoxGeometry(TOWER.w * 0.7, 18, TOWER.d * 0.7), MAT.matte); crown.position.y = TOWER.h + 9; scene.add(crown);
   const mast = new THREE.Mesh(new THREE.CylinderGeometry(0.6, 1, 40), new THREE.MeshStandardMaterial({ color: 0x333333 })); mast.position.y = TOWER.h + 38; scene.add(mast);
   const tip = new THREE.Mesh(new THREE.SphereGeometry(1.4), new THREE.MeshBasicMaterial({ color: RED, toneMapped: false })); tip.position.y = TOWER.h + 59; scene.add(tip); fans.tip = tip;
-  // красная кромка по углам
-  const edge = new THREE.MeshBasicMaterial({ color: RED, toneMapped: false }); edge.color.multiplyScalar(2.5);
-  [[-1, -1], [1, -1], [-1, 1], [1, 1]].forEach(([sx, sz]) => {
-    const e = new THREE.Mesh(new THREE.BoxGeometry(0.8, TOWER.h, 0.8), edge); e.position.set(sx * TOWER.w / 2, TOWER.h / 2, sz * TOWER.d / 2); scene.add(e);
-  });
+  // без неона: кремовая глянцевая плита по левому краю фасада и два стеклянных ребра справа
+  const cs = new THREE.Mesh(new THREE.BoxGeometry(8, TOWER.h * 0.82, 3), MAT.cream); cs.position.set(-TOWER.w / 2 - 2, TOWER.h * 0.41, TOWER.d / 2 - 4); scene.add(cs);
+  [0, 5].forEach(dz => { const f = new THREE.Mesh(new THREE.BoxGeometry(0.8, TOWER.h * 0.6, 6), MAT.glass); f.position.set(TOWER.w / 2 + 0.4, TOWER.h * 0.5, TOWER.d / 2 - 6 - dz * 3); scene.add(f); });
+  const cap = new THREE.Mesh(new THREE.BoxGeometry(TOWER.w + 4, 3, TOWER.d + 4), MAT.cream); cap.position.y = TOWER.h + 1.5; scene.add(cap);
+
 
   // вентиляторы: корпуса — один InstancedMesh, лопасти — второй, их матрицы крутим каждый кадр
   const slots = [];
@@ -219,7 +237,7 @@ function updateFans(dt, power) {
     }
   });
   fans.blades.instanceMatrix.needsUpdate = true;
-  fans.housing.material.emissiveIntensity = power * 2.2;
+  fans.housing.material.emissiveIntensity = 0;
   // воздух: частицы вылетают из вентиляторов наружу
   const { p, seeds, g, mat } = fans.air;
   mat.opacity = power * 0.55;
@@ -261,7 +279,7 @@ async function buildLogo() {
   const depth = 10;
   const geo = new THREE.ExtrudeGeometry(shapes, { depth, bevelEnabled: false, curveSegments: 8 });
   geo.translate(-cx, -cy, 0);
-  logo.mat = new THREE.MeshStandardMaterial({ color: 0x3a0a0a, emissive: RED, emissiveIntensity: 0.05, roughness: 0.4, side: THREE.DoubleSide });
+  logo.mat = new THREE.MeshPhysicalMaterial({ color: RED, emissive: RED, emissiveIntensity: 0.1, roughness: 0.2, clearcoat: 1, clearcoatRoughness: 0.06, side: THREE.DoubleSide });
   const mesh = new THREE.Mesh(geo, logo.mat);
   logo.group = new THREE.Group(); logo.group.add(mesh);
   logo.group.scale.set(S, -S, S);
@@ -275,16 +293,16 @@ async function buildLogo() {
   const ib = new THREE.Box2(); iskraPts.forEach(pt => ib.expandByPoint(pt));
   const icx = (ib.min.x + ib.max.x) / 2, icy = (ib.min.y + ib.max.y) / 2;
   const iShape = new THREE.Shape(iskraPts.map(pt => new THREE.Vector2(pt.x - icx, -(pt.y - icy))));
-  const igeo = new THREE.ExtrudeGeometry(iShape, { depth: 18, bevelEnabled: true, bevelThickness: 2.5, bevelSize: 1.6, bevelSegments: 3, curveSegments: 6 });
-  igeo.translate(0, 0, -9); igeo.computeVertexNormals();
-  const imat = new THREE.MeshPhysicalMaterial({ color: RED, emissive: RED, emissiveIntensity: 0.4, roughness: 0.2, metalness: 0.3, clearcoat: 1, clearcoatRoughness: 0.06 });
+  const igeo = new THREE.ExtrudeGeometry(iShape, { depth: 10, bevelEnabled: false, curveSegments: 8 });
+  igeo.translate(0, 0, -5); igeo.computeVertexNormals();
+  const imat = new THREE.MeshPhysicalMaterial({ color: RED, emissive: RED, emissiveIntensity: 0.4, roughness: 0.2, metalness: 0.3, clearcoat: 1, clearcoatRoughness: 0.06, side: THREE.DoubleSide });
   iskra = new THREE.Mesh(igeo, imat);
-  iskra.userData.slotScale = S * 0.9;
+  iskra.userData.slotScale = S * 0.998;
   scene.add(iskra);
   const key = new THREE.PointLight(0xffe0d0, 260, 0, 1.2); scene.add(key); iskra.userData.key = key;
   logo.group.updateMatrixWorld(true);
   slotWorld.set(icx - cx, icy - cy, depth / 2).applyMatrix4(logo.group.matrixWorld);
-  const glow = new THREE.PointLight(RED, 0, 120, 1.6); glow.position.copy(slotWorld).add(new THREE.Vector3(0, -6, 40)); scene.add(glow); logo.glow = glow;
+  const glow = new THREE.PointLight(0xffe8dc, 0, 260, 1.2); glow.position.copy(slotWorld).add(new THREE.Vector3(0, -14, 120)); scene.add(glow); logo.glow = glow;
 }
 
 // ---------- разделы на улице ----------
@@ -321,36 +339,20 @@ function buildSections() {
   wall('assets/cases/ozon-fandom-real-2.jpg', 36, 15, 0, -12, 0);
   wall('assets/cases/ozon-fandom-kv-1.jpg', 24, 15, -18, 0, Math.PI / 2);
   const spot = new THREE.SpotLight(0xffffff, 3000, 80, 0.7, 0.5); spot.position.set(10, 30, 20); spot.target = floor; diorama.add(spot);
-  diorama.position.set(-142, 0, 240); diorama.rotation.y = -1.2;
   const zl = new THREE.PointLight(0xffe8dc, 420, 45, 2); zl.position.set(10, 16, 6); diorama.add(zl); diorama.userData.case = 'fandom'; scene.add(diorama); clickable.push(diorama);
   // если рядом лежит модель зоны (glb), она заменяет коллаж из кадров
   new GLTFLoader().loadAsync('assets/models/ozon-corp.glb').then(gltf => {
     const model = gltf.scene;
     model.traverse(o => { if (o.isMesh) { o.material.side = THREE.DoubleSide; o.material.envMapIntensity = 0; } });
     const box = new THREE.Box3().setFromObject(model), size = box.getSize(new THREE.Vector3());
-    model.scale.setScalar(34 / Math.max(size.x, size.z));
+    model.scale.setScalar(26 / Math.max(size.x, size.z));
     box.setFromObject(model); const c = box.getCenter(new THREE.Vector3());
     model.position.set(-c.x, 1.2 - box.min.y, -c.z);
     diorama.children.forEach(ch => { if (ch !== floor && !ch.isLight) ch.visible = false; });
     diorama.add(model);
   }).catch(() => {});
 
-  buildAlley();
-
-  // ещё две btl-зоны на проспекте: ozon селект и купола «балтики 7»
-  const sel = new THREE.Group();
-  const sf = new THREE.Mesh(new THREE.BoxGeometry(26, 1, 14), floor.material); sf.position.y = 0.5; sel.add(sf);
-  const sw = new THREE.Mesh(new THREE.PlaneGeometry(26, 14.6), new THREE.MeshStandardMaterial({ map: caseTexture('assets/cases/ozon-select-1.jpg', false), emissiveMap: caseTexture('assets/cases/ozon-select-1.jpg', false), emissive: 0xffffff, emissiveIntensity: 0.7 }));
-  sw.position.set(0, 8.3, -6.8); sel.add(sw);
-  const glass = new THREE.Mesh(new THREE.BoxGeometry(8, 9, 0.4), new THREE.MeshStandardMaterial({ color: 0xbfe8dd, transparent: true, opacity: 0.35, emissive: 0x7fd8c0, emissiveIntensity: 0.4 })); glass.position.set(6, 5.5, 2); sel.add(glass);
-  sel.position.set(-8, 0, 300); sel.rotation.y = Math.PI - 0.45; scene.add(sel);
-  const domes = new THREE.Group();
-  [[-7, 0, 6, RED], [6, -3, 5, CREAM], [2, 8, 4, RED]].forEach(([x, z, r, col]) => {
-    const d = new THREE.Mesh(new THREE.SphereGeometry(r, 32, 16, 0, Math.PI * 2, 0, Math.PI / 2), new THREE.MeshStandardMaterial({ color: col, emissive: col, emissiveIntensity: 0.25, roughness: 0.4 }));
-    d.position.set(x, 0, z); domes.add(d);
-  });
-  const db = new THREE.Mesh(new THREE.PlaneGeometry(16, 10), new THREE.MeshBasicMaterial({ map: caseTexture('assets/cases/baltika7-domes-1.jpg', false), toneMapped: false })); db.position.set(-4, 14, -6); domes.add(db);
-  domes.position.set(8, 0, 385); domes.rotation.y = -0.4; scene.add(domes);
+  buildQuarters();
 
   // atl: эфир над городом — гигантские экраны на небоскрёбах, на них кейсы
   const tmat = new THREE.MeshStandardMaterial({ color: 0x6a6c78, map: windowsTexture(55, 0.06), emissiveMap: windowsTexture(55, 0.06), emissive: 0xffffff, emissiveIntensity: 0.7, roughness: 0.7 });
@@ -377,83 +379,118 @@ function buildSections() {
   board(textTexture(['бриф', 'ответим за рабочий день'], { label: '{08} · oxygen', bg: '#F40709', color: '#111111', accent: -1 }), 50, 25, V(0, 22, 700), Math.PI);
 }
 
-// ---------- азиатский переулок: ozon corp, хроники ижоры, треснутые ----------
-const ALLEY = { z: 250, x0: -20, x1: -112 };
+// ---------- кварталы на одной улице: азиатский → стык (хроники ижоры) → спортивный ----------
+// у каждого квартала лаконичное, но яркое оформление: несколько крупных узнаваемых форм, а не мелкий декор
+const Q = { asia: [168, 268], joint: 282, sport: [295, 420] };
 const webtoon = { tex: null };
-function buildAlley() {
-  // ворота на входе — две стойки и две балки, глянцевый красный и матовый чёрный
+const vsign = (txt, x, y, z, col, bg = '#111111', w = 2.6) => {
+  const c = document.createElement('canvas'); c.width = 128; c.height = 512; const g = c.getContext('2d');
+  g.fillStyle = bg; g.fillRect(0, 0, 128, 512); g.strokeStyle = col; g.lineWidth = 6; g.strokeRect(6, 6, 116, 500);
+  g.fillStyle = col; g.font = '700 84px "Hiragino Sans","Apple SD Gothic Neo","Noto Sans CJK JP",sans-serif'; g.textAlign = 'center';
+  [...txt].forEach((ch, i) => g.fillText(ch, 64, 100 + i * 96));
+  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace;
+  const m = new THREE.Mesh(new THREE.PlaneGeometry(w, w * 4), new THREE.MeshBasicMaterial({ map: t, toneMapped: false, side: THREE.DoubleSide }));
+  m.material.color.setScalar(col === '#E1D9CF' ? 0.85 : 1.3);
+  m.position.set(x, y, z); m.rotation.y = x > 0 ? -Math.PI / 2 : Math.PI / 2; scene.add(m); return m;
+};
+function plate(url, w, h, pos, ry, cls) {
+  const m = new THREE.Mesh(new THREE.PlaneGeometry(w, h), new THREE.MeshBasicMaterial({ map: caseTexture(url, false), toneMapped: false }));
+  m.position.copy(pos); m.rotation.y = ry; scene.add(m); if (cls) { m.userData.case = cls; clickable.push(m); } return m;
+}
+function buildQuarters() {
+  // ===== азиатский квартал: ворота поперёк проспекта, гирлянды фонарей, вертикальные вывески
   const gate = new THREE.Group();
-  [-6.5, 6.5].forEach(dz => { const p = new THREE.Mesh(new THREE.CylinderGeometry(0.7, 0.8, 16, 16), MAT.gloss); p.position.set(0, 8, dz); gate.add(p); });
-  const top = new THREE.Mesh(new THREE.BoxGeometry(1.6, 1.4, 18), MAT.matte); top.position.y = 16.4; gate.add(top);
-  const top2 = new THREE.Mesh(new THREE.BoxGeometry(1.2, 0.9, 15), MAT.gloss); top2.position.y = 14; gate.add(top2);
-  gate.position.set(ALLEY.x0 - 2, 0, ALLEY.z); scene.add(gate);
-  // фонари и провода вдоль переулка
+  [-21, 21].forEach(x => { const p = new THREE.Mesh(new THREE.CylinderGeometry(1, 1.15, 24, 20), MAT.gloss); p.position.set(x, 12, 0); gate.add(p); });
+  const t1 = new THREE.Mesh(new THREE.BoxGeometry(52, 2, 2.4), MAT.matte); t1.position.y = 24.6; gate.add(t1);
+  const t2 = new THREE.Mesh(new THREE.BoxGeometry(46, 1.4, 1.6), MAT.gloss); t2.position.y = 21; gate.add(t2);
+  const t3 = new THREE.Mesh(new THREE.BoxGeometry(6, 4, 0.6), MAT.cream); t3.position.y = 22.8; gate.add(t3);
+  gate.position.set(0, 0, Q.asia[0] + 6); scene.add(gate);
   const lantGeo = new THREE.CylinderGeometry(0.9, 0.9, 1.8, 12), lantMat = new THREE.MeshStandardMaterial({ color: RED, emissive: RED, emissiveIntensity: 0.9 });
-  const capMat = MAT.matte, capGeo = new THREE.CylinderGeometry(0.95, 0.95, 0.25, 12);
-  const wire = new THREE.LineBasicMaterial({ color: 0x2a2a30 });
-  for (let x = ALLEY.x0 - 6; x > ALLEY.x1; x -= 7) {
-    [-6.2, 6.2].forEach((dz, k) => {
-      const y = 8.5 + ((x * 7 + k * 3) % 3);
-      const l = new THREE.Mesh(lantGeo, lantMat); l.position.set(x, y, ALLEY.z + dz * 0.75); scene.add(l);
-      [0.95, -0.95].forEach(o => { const c = new THREE.Mesh(capGeo, capMat); c.position.set(x, y + o, ALLEY.z + dz * 0.75); scene.add(c); });
+  const capGeo = new THREE.CylinderGeometry(0.95, 0.95, 0.25, 12), wire = new THREE.LineBasicMaterial({ color: 0x2a2a30 });
+  for (let z = Q.asia[0] + 18; z < Q.asia[1]; z += 13) {
+    const pts = []; for (let i = 0; i <= 8; i++) { const x = -34 + i * 8.5, y = 25 - Math.sin(i / 8 * Math.PI) * 3; pts.push(V(x, y, z)); }
+    scene.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints(pts), wire));
+    pts.slice(1, -1).forEach((p, i) => {
+      const l = new THREE.Mesh(lantGeo, lantMat); l.position.set(p.x, p.y - 1.4, z); scene.add(l);
+      [0.95, -0.95].forEach(o => { const c = new THREE.Mesh(capGeo, MAT.matte); c.position.set(p.x, p.y - 1.4 + o, z); scene.add(c); });
     });
-    const g = new THREE.BufferGeometry().setFromPoints([V(x + 3, 13, ALLEY.z - 9), V(x + 1, 11.5, ALLEY.z), V(x - 1, 13.5, ALLEY.z + 9)]);
-    scene.add(new THREE.Line(g, wire));
   }
-  // вертикальные вывески: японский и корейский, как в наших кейсах
-  const vsign = (txt, x, y, z, side, col, bg = '#111111') => {
-    const c = document.createElement('canvas'); c.width = 128; c.height = 512; const g = c.getContext('2d');
-    g.fillStyle = bg; g.fillRect(0, 0, 128, 512); g.strokeStyle = col; g.lineWidth = 6; g.strokeRect(6, 6, 116, 500);
-    g.fillStyle = col; g.font = '700 84px "Hiragino Sans","Apple SD Gothic Neo","Noto Sans CJK JP",sans-serif'; g.textAlign = 'center';
-    [...txt].forEach((ch, i) => g.fillText(ch, 64, 100 + i * 96));
-    const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace;
-    const m = new THREE.Mesh(new THREE.PlaneGeometry(2.6, 10.4), new THREE.MeshBasicMaterial({ map: t, toneMapped: false })); m.material.color.setScalar(col === '#E1D9CF' ? 0.85 : 1.3);
-    m.position.set(x, y, z); m.rotation.y = side > 0 ? Math.PI : 0; scene.add(m);
-  };
-  vsign('いらっしゃい', -28, 12, ALLEY.z - 8.6, -1, '#F40709');
-  vsign('オゾン社', -44, 13, ALLEY.z + 8.6, 1, '#E1D9CF');
-  vsign('漫画喫茶', -60, 12, ALLEY.z - 8.6, -1, '#E1D9CF', '#F40709');
-  vsign('연대기', -76, 11, ALLEY.z + 8.6, 1, '#F40709');
-  vsign('ガチャ', -92, 12, ALLEY.z - 8.6, -1, '#F40709');
-  vsign('만화', -86, 11, ALLEY.z + 8.6, 1, '#E1D9CF');
-  // площадь: мощение и подсветка
-  const plaza = new THREE.Mesh(new THREE.PlaneGeometry(80, 76), new THREE.MeshStandardMaterial({ color: 0x141418, roughness: 0.3, metalness: 0.5 }));
-  plaza.rotation.x = -Math.PI / 2; plaza.position.set(-140, 0.04, 255); scene.add(plaza);
-  [[-130, 245], [-150, 270], [-120, 275]].forEach(([x, z]) => { const l = new THREE.PointLight(0xff3a2a, 160, 40, 2); l.position.set(x, 12, z); scene.add(l); });
-
-  // хроники ижоры: вертикальный экран-вебтун на чёрной плите, лента листается сама
-  const c = document.createElement('canvas'); c.width = 512; c.height = 2048; const g = c.getContext('2d');
-  g.fillStyle = '#111'; g.fillRect(0, 0, 512, 2048);
-  const tex = new THREE.CanvasTexture(c); tex.colorSpace = THREE.SRGBColorSpace; tex.wrapT = THREE.RepeatWrapping; tex.repeat.set(1, 0.38); webtoon.tex = tex;
-  ['izhora-47-1', 'izhora-48-1', 'izhora-48-2'].forEach((n, i) => {
-    const img = new Image(); img.onload = () => { const h = 512 * img.height / img.width; g.drawImage(img, 0, i * 682 + (682 - Math.min(h, 660)) / 2, 512, Math.min(h, 660)); tex.needsUpdate = true; }; img.src = `assets/cases/${n}.jpg`;
-  });
-  const wt = new THREE.Group();
-  const back = new THREE.Mesh(new THREE.BoxGeometry(13, 30, 2), MAT.matte); back.position.set(0, 15, -1.2); wt.add(back);
-  const scr = new THREE.Mesh(new THREE.PlaneGeometry(10, 26), new THREE.MeshBasicMaterial({ map: tex })); scr.position.set(0, 15, 0); wt.add(scr);
-  scr.userData.case = 'izhora'; clickable.push(scr);
-  slabs(wt, 13, 30, 7); wt.children.slice(2).forEach(b => b.position.y += 15);
-  wt.position.set(-163, 0, 268); wt.rotation.y = Math.PI / 2 + 0.25; scene.add(wt);
-
-  // треснутые: автомат с капсулами — кремовый глянец, стеклянный купол, капсулы
+  [['いらっしゃい', -36.5, 14, 190, '#F40709'], ['オゾン社', 36.5, 16, 200, '#E1D9CF'], ['漫画喫茶', -36.5, 15, 232, '#E1D9CF', '#F40709'], ['ガチャ', 36.5, 13, 248, '#F40709'], ['連続', 36.5, 20, 176, '#E1D9CF']]
+    .forEach(a => vsign(...a));
+  // ozon corp — на правом тротуаре (в кадре слева), лицом к проспекту
+  diorama.position.set(24, 0, 214); diorama.rotation.y = 1.94;
+  // треснутые — автомат с 26 капсулами и постер на левом тротуаре
   const ga = new THREE.Group();
   const base = new THREE.Mesh(new THREE.BoxGeometry(5, 6, 5), MAT.cream); base.position.y = 3; ga.add(base);
   const slot = new THREE.Mesh(new THREE.BoxGeometry(2, 1.2, 0.3), MAT.matte); slot.position.set(0, 2.4, 2.55); ga.add(slot);
   const dome = new THREE.Mesh(new THREE.SphereGeometry(3.2, 32, 24), new THREE.MeshPhysicalMaterial({ color: 0xffffff, transparent: true, opacity: 0.18, roughness: 0.05, clearcoat: 1, depthWrite: false })); dome.position.y = 9; ga.add(dome);
   const cr = mulberry(3);
-  for (let i = 0; i < 26; i++) {   // 26 героев — 26 капсул
-    const cap = new THREE.Mesh(new THREE.SphereGeometry(0.55, 12, 8), cr() < 0.5 ? MAT.gloss : MAT.cream);
-    const a = cr() * Math.PI * 2, rr = cr() * 2.3, y = 7 + cr() * 2.2; cap.position.set(Math.cos(a) * rr, y, Math.sin(a) * rr); ga.add(cap);
-  }
-  const poster = new THREE.Mesh(new THREE.PlaneGeometry(9, 12), new THREE.MeshBasicMaterial({ map: caseTexture('assets/cases/treschnutye-1.jpg', false), toneMapped: false }));
-  poster.position.set(-7, 8, -1); poster.rotation.y = 0.3; ga.add(poster);
-  ga.position.set(-122, 0, 278); ga.rotation.y = 2.6; ga.userData.case = 'treschnutye'; scene.add(ga); clickable.push(ga);
+  for (let i = 0; i < 26; i++) { const cap = new THREE.Mesh(new THREE.SphereGeometry(0.55, 12, 8), cr() < 0.5 ? MAT.gloss : MAT.cream); const a = cr() * Math.PI * 2, rr = cr() * 2.3; cap.position.set(Math.cos(a) * rr, 7 + cr() * 2.2, Math.sin(a) * rr); ga.add(cap); }
+  ga.position.set(-24, 0, 242); ga.rotation.y = Math.PI / 2; ga.userData.case = 'treschnutye'; scene.add(ga); clickable.push(ga);
+  plate('assets/cases/treschnutye-1.jpg', 14, 18, V(-36.4, 11, 236), Math.PI / 2, 'treschnutye');
+  const al = new THREE.PointLight(0xff3a2a, 260, 50, 2); al.position.set(-10, 14, 225); scene.add(al);
+  const al2 = new THREE.PointLight(0xffe8dc, 420, 45, 2); al2.position.set(10, 16, 205); scene.add(al2);
+
+  // ===== стык: хроники ижоры — вебтун-башня, наполовину манхва, наполовину стадион
+  const c = document.createElement('canvas'); c.width = 512; c.height = 2048; const g = c.getContext('2d');
+  g.fillStyle = '#111'; g.fillRect(0, 0, 512, 2048);
+  const tex = new THREE.CanvasTexture(c); tex.colorSpace = THREE.SRGBColorSpace; tex.wrapT = THREE.RepeatWrapping; tex.repeat.set(1, 0.38); webtoon.tex = tex;
+  ['izhora-47-1', 'izhora-48-1', 'izhora-48-2'].forEach((n, i) => { const img = new Image(); img.onload = () => { const h = Math.min(512 * img.height / img.width, 660); g.drawImage(img, 0, i * 682 + (682 - h) / 2, 512, h); tex.needsUpdate = true; }; img.src = `assets/cases/${n}.jpg`; });
+  const wt = new THREE.Group();
+  const back = new THREE.Mesh(new THREE.BoxGeometry(2, 34, 14), MAT.matte); back.position.set(-1.2, 17, 0); wt.add(back);
+  const scr = new THREE.Mesh(new THREE.PlaneGeometry(10.5, 28), new THREE.MeshBasicMaterial({ map: tex })); scr.material.color.setScalar(0.62); scr.position.set(0, 17, 0); scr.rotation.y = Math.PI / 2; wt.add(scr);
+  scr.userData.case = 'izhora'; clickable.push(scr);
+  const fin1 = new THREE.Mesh(new THREE.BoxGeometry(3, 30, 0.8), MAT.glass); fin1.position.set(0.5, 15, -7.8); wt.add(fin1);
+  const fin2 = new THREE.Mesh(new THREE.BoxGeometry(3, 20, 0.8), MAT.cream); fin2.position.set(0.5, 10, 7.8); wt.add(fin2);
+  wt.position.set(-30, 0, Q.joint); scene.add(wt);
+  vsign('연대기', -36.5, 14, Q.joint - 12, '#F40709');
+
+  // ===== спортивный квартал: беговые дорожки на асфальте, мачты прожекторов, финишная арка, табло, пьедестал, купола
+  const lane = new THREE.MeshBasicMaterial({ color: 0xd8d0c6 }), laneR = new THREE.MeshBasicMaterial({ color: RED });
+  for (let i = -3; i <= 3; i++) { const l = new THREE.Mesh(new THREE.PlaneGeometry(0.35, Q.sport[1] - Q.sport[0]), i === 0 ? laneR : lane); l.rotation.x = -Math.PI / 2; l.position.set(i * 4.5, 0.06, (Q.sport[0] + Q.sport[1]) / 2); scene.add(l); }
+  for (let i = -3; i < 3; i++) { const n = new THREE.Mesh(new THREE.PlaneGeometry(2.4, 2.4), new THREE.MeshBasicMaterial({ map: textTexture([String(i + 4)], { w: 256, h: 256, bg: '#0c0d12' }), transparent: true })); n.rotation.x = -Math.PI / 2; n.position.set(i * 4.5 + 2.25, 0.07, Q.sport[0] + 4); scene.add(n); }
+  // финишная арка: две стойки и шахматная лента
+  const ck = document.createElement('canvas'); ck.width = 512; ck.height = 64; const cg = ck.getContext('2d');
+  for (let x = 0; x < 32; x++) for (let y = 0; y < 4; y++) { cg.fillStyle = (x + y) % 2 ? '#111' : '#E1D9CF'; cg.fillRect(x * 16, y * 16, 16, 16); }
+  const ckt = new THREE.CanvasTexture(ck); ckt.colorSpace = THREE.SRGBColorSpace;
+  const arch = new THREE.Group();
+  [-17, 17].forEach(x => { const p = new THREE.Mesh(new THREE.BoxGeometry(2.4, 18, 2.4), MAT.gloss); p.position.set(x, 9, 0); arch.add(p); });
+  const band = new THREE.Mesh(new THREE.BoxGeometry(36.8, 3.2, 1.6), [MAT.matte, MAT.matte, MAT.matte, MAT.matte, new THREE.MeshBasicMaterial({ map: ckt }), new THREE.MeshBasicMaterial({ map: ckt })]); band.position.y = 19.6; arch.add(band);
+  const fin = new THREE.Mesh(new THREE.PlaneGeometry(14, 3.2), new THREE.MeshBasicMaterial({ map: textTexture(['финиш'], { w: 1024, h: 230, bg: '#F40709', color: '#111111', accent: -1 }), toneMapped: false })); fin.position.set(0, 23.2, -0.85); fin.rotation.y = Math.PI; arch.add(fin);
+  arch.position.set(0, 0, Q.sport[0] + 10); scene.add(arch);
+  // мачты прожекторов
+  for (let z = Q.sport[0] + 20; z < Q.sport[1]; z += 34) [-34, 34].forEach(x => {
+    const m = new THREE.Group();
+    const pole = new THREE.Mesh(new THREE.BoxGeometry(1, 42, 1), MAT.matte); pole.position.y = 21; m.add(pole);
+    const head = new THREE.Mesh(new THREE.BoxGeometry(7, 4.5, 1), MAT.matte); head.position.set(0, 43, 0); m.add(head);
+    const lamps = new THREE.Mesh(new THREE.PlaneGeometry(6.4, 3.9), new THREE.MeshBasicMaterial({ color: new THREE.Color(0xfff2e4).multiplyScalar(2.2), toneMapped: false })); lamps.position.set(0, 43, 0.55); m.add(lamps);
+    m.position.set(x, 0, z); m.rotation.y = x > 0 ? -Math.PI / 2 - 0.3 : Math.PI / 2 + 0.3; m.lookAt(0, 43, z + 20); scene.add(m);
+  });
+  const sl = new THREE.PointLight(0xfff2e4, 520, 70, 1.8); sl.position.set(0, 26, 345); scene.add(sl);
+  // табло: g-drive шёлковый путь и авангард
+  const sb = new THREE.Group();
+  const sbBack = new THREE.Mesh(new THREE.BoxGeometry(2, 18, 30), MAT.matte); sb.add(sbBack);
+  slabs(sb, 30, 18, 99); sb.children.slice(1).forEach(b => { b.rotation.y = Math.PI / 2; b.position.set(-b.position.z, b.position.y, b.position.x); });
+  sb.position.set(31, 22, 340); scene.add(sb);
+  plate('assets/cases/gdrive-silk-road-1.jpg', 28, 16, V(29.9, 22, 340), -Math.PI / 2, 'gdrive');
+  plate('assets/cases/avangard-1.jpg', 16, 22, V(-36.4, 15, 330), Math.PI / 2, 'avangard');
+  // пьедестал 1-2-3 — кремовый глянец
+  [[0, 5, '1'], [-6, 3.4, '2'], [6, 2.2, '3']].forEach(([x, h, n]) => {
+    const b = new THREE.Mesh(new THREE.BoxGeometry(5.6, h, 5), MAT.cream); b.position.set(-24, h / 2, 362 + x); scene.add(b);
+    const t = new THREE.Mesh(new THREE.PlaneGeometry(2.6, 2.6), new THREE.MeshBasicMaterial({ map: textTexture([n], { w: 256, h: 256, bg: '#E1D9CF', color: '#F40709' }) })); t.position.set(-21.15, h - 1.4, 362 + x); t.rotation.y = Math.PI / 2; scene.add(t);
+  });
+  plate('assets/cases/gdrive-ironstar-1.jpg', 12, 16, V(-36.4, 12, 366), Math.PI / 2, 'ironstar');
+  // купола «балтики 7» — чм-2018
+  const domes = new THREE.Group();
+  [[-7, 0, 6, RED], [6, -3, 5, CREAM], [2, 8, 4, RED]].forEach(([x, z, r, col]) => { const d = new THREE.Mesh(new THREE.SphereGeometry(r, 32, 16, 0, Math.PI * 2, 0, Math.PI / 2), col === RED ? MAT.gloss : MAT.cream); d.position.set(x, 0, z); domes.add(d); });
+  domes.position.set(22, 0, 398); domes.userData.case = 'baltika7'; scene.add(domes); clickable.push(domes);
+  plate('assets/cases/baltika7-domes-1.jpg', 16, 10, V(36.4, 12, 404), -Math.PI / 2, 'baltika7');
 }
 
 // ---------- сценарий скролла ----------
 // p — доля прокрутки 0..1. Между ключами — плавная интерполяция, поэтому на каждом ключе камера как бы «присаживается»
 const V = (x, y, z) => new THREE.Vector3(x, y, z);
-const GO = { reel: 0.48, cross: 0.57, btl: 0.62, alley: 0.68, atl: 0.70, awards: 0.84, about: 0.9, brief: 1 };
+const GO = { reel: 0.48, cross: 0.57, btl: 0.62, alley: 0.65, sport: 0.775, atl: 0.70, awards: 0.84, about: 0.9, brief: 1 };
 const FORK = 0.592;
 let CAM = {}, ISK = [], route = null;
 function buildTimeline() {
@@ -480,14 +517,18 @@ function buildTimeline() {
   ];
   // две ветки после перекрёстка: btl идёт по земле вдоль зон, atl поднимается к экранам небоскрёбов
   CAM.btl = [...head,
-    { p: 0.62, pos: V(4, 12, 205), look: V(-30, 10, 250) },
-    { p: 0.645, pos: V(-10, 10, 250), look: V(-80, 9, 251) },
-    { p: 0.672, pos: V(-102, 17, 262), look: V(-146, 7, 252) },
-    { p: 0.69, pos: V(-106, 18, 266), look: V(-146, 7, 252) },
-    { p: 0.715, pos: V(10, 13, 262), look: V(-8, 8, 300) },
-    { p: 0.74, pos: V(10, 13, 266), look: V(-8, 8, 300) },
-    { p: 0.785, pos: V(-10, 16, 345), look: V(6, 5, 385) },
-    { p: 0.805, pos: V(-10, 16, 349), look: V(6, 5, 385) },
+    { p: 0.615, pos: V(0, 14, 150), look: V(0, 13, 215) },
+    { p: 0.64, pos: V(-8, 11, 192), look: V(22, 7, 214) },
+    { p: 0.655, pos: V(-8, 11, 196), look: V(22, 7, 214) },
+    { p: 0.68, pos: V(8, 10, 222), look: V(-26, 8, 240) },
+    { p: 0.692, pos: V(8, 10, 225), look: V(-26, 8, 240) },
+    { p: 0.715, pos: V(10, 13, 262), look: V(-29, 16, 282) },
+    { p: 0.727, pos: V(10, 13, 265), look: V(-29, 16, 282) },
+    { p: 0.75, pos: V(0, 12, 285), look: V(0, 12, 330) },
+    { p: 0.772, pos: V(-6, 15, 318), look: V(30, 18, 342) },
+    { p: 0.785, pos: V(4, 13, 345), look: V(-28, 10, 364) },
+    { p: 0.805, pos: V(-8, 13, 372), look: V(24, 6, 400) },
+    { p: 0.815, pos: V(-8, 13, 375), look: V(24, 6, 400) },
     ...tail];
   CAM.atl = [...head,
     { p: 0.64, pos: V(0, 60, 220), look: V(-28, 95, 335) },
@@ -540,7 +581,7 @@ const openModal = html => { modalBody.innerHTML = html; modal.classList.add('on'
 const closeModal = () => modal.classList.remove('on');
 document.getElementById('modalClose').addEventListener('click', closeModal);
 const routeBtn = document.getElementById('routeBtn');
-const WORD = { reel: 'фильм', cross: 'развилка', btl: 'btl', alley: 'переулок', atl: 'atl', awards: 'награды', about: 'о нас', brief: 'бриф' };
+const WORD = { reel: 'фильм', cross: 'развилка', btl: 'btl', alley: 'азиатский квартал', sport: 'спорт', atl: 'atl', awards: 'награды', about: 'о нас', brief: 'бриф' };
 const curtain = document.getElementById('curtain'), curtainWord = document.getElementById('curtainWord');
 const goTo = key => {
   closeModal(); if (orbitOn) closeOrbit();
@@ -582,7 +623,7 @@ canvas.addEventListener('pointermove', e => { if (!orbitOn) canvas.style.cursor 
 // ---------- 2D-слой: микротекст, простые формы по сетке, вайп заголовка ----------
 const micro = document.getElementById('micro'), microL = document.getElementById('microL'), wipe = document.getElementById('wipe');
 const sqs = [...document.querySelectorAll('.sq')];
-const INDEX = [['{00}', 'вход', 0], ['{01}', 'искра', 0.1], ['{02}', 'фильм', 0.45], ['{03}', 'развилка', 0.53], ['{04}', 'btl', 0.6, 'btl'], ['{05}', 'atl', 0.6, 'atl'], ['{06}', 'награды', 0.81], ['{07}', 'о нас', 0.87], ['{08}', 'бриф', 0.94]];
+const INDEX = [['{00}', 'вход', 0], ['{01}', 'искра', 0.1], ['{02}', 'фильм', 0.45], ['{03}', 'развилка', 0.53], ['{04}', 'азиатский квартал', 0.6, 'btl'], ['{04}', 'хроники ижоры', 0.705, 'btl'], ['{04}', 'спортивный квартал', 0.74, 'btl'], ['{05}', 'atl', 0.6, 'atl'], ['{06}', 'награды', 0.81], ['{07}', 'о нас', 0.87], ['{08}', 'бриф', 0.94]];
 let lastStage = '', sqT = 0, frameN = 0;
 function hud2d(p, time) {
   frameN++;
@@ -651,9 +692,9 @@ function frame() {
   iskra.userData.key.intensity = 260 * (1 - landed);
 
   // неон загорается с миганием, вентиляторы раздувают
-  const flick = landed > 0 && landed < 1 ? (Math.sin(time * 60) > 0 ? 1 : 0.2) : 1;
-  logo.mat.emissiveIntensity = 0.05 + landed * 1.5 * flick;
-  logo.glow.intensity = landed * 220 * flick;
+  // после посадки свечение Искры гаснет до уровня логотипа: она становится его частью
+  iskra.material.emissiveIntensity = 0.4 + (0.1 - 0.4) * landed;
+  logo.glow.intensity = 420;   // ровный тёплый свет на вывеску, без мигания
   fans.tip.visible = Math.sin(time * 3) > 0;
   updateFans(dt, landed);
 
