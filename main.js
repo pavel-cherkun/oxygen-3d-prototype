@@ -675,13 +675,13 @@ function buildQuarters() {
   const disc = new THREE.Mesh(new THREE.CylinderGeometry(7, 7.6, 1.2, 48), MAT.graphite); disc.position.set(0, 0.6, Z.lion); scene.add(disc);
   const blueM = new THREE.MeshBasicMaterial({ color: new THREE.Color(0x3a6bff).multiplyScalar(1.6), toneMapped: false });
   const halo = new THREE.Mesh(new THREE.TorusGeometry(7.3, 0.14, 8, 96), blueM); halo.rotation.x = Math.PI / 2; halo.position.set(0, 1.25, Z.lion); scene.add(halo);
-  const ls = new THREE.SpotLight(0xc8d8ff, 1100, 70, 0.5, 0.6); ls.position.set(-6, 34, Z.lion - 16); ls.target.position.set(0, 6, Z.lion); scene.add(ls, ls.target);
-  const lf = new THREE.PointLight(0x3a6bff, 160, 30, 2); lf.position.set(0, 9, Z.lion + 6); scene.add(lf);
+  const ls = new THREE.SpotLight(0xdde6ff, 700, 70, 0.5, 0.6); ls.position.set(-6, 34, Z.lion - 16); ls.target.position.set(0, 6, Z.lion); scene.add(ls, ls.target);
+  const lf = new THREE.PointLight(0xe8ecff, 110, 34, 2); lf.position.set(2, 11, Z.lion - 10); scene.add(lf);
   gltfLoader.loadAsync('assets/models/lion-dance.glb').then(gltf => {
-    const m = gltf.scene; m.scale.setScalar(5.2); m.position.set(0, 1.2, Z.lion); m.rotation.y = Math.PI;
+    const m = gltf.scene, bb = new THREE.Box3().setFromObject(m), k = 16 / (bb.max.y - bb.min.y); m.scale.setScalar(k); m.position.set(0, 1.2 - bb.min.y * k, Z.lion); m.rotation.y = Math.PI;
     // мех: бархатный отлив (sheen) поверх цвета — грива и шкура читаются пушистыми, а не пластиковыми
     m.traverse(o => { if (!o.isMesh) return; const s = o.material; o.frustumCulled = false;
-      o.material = new THREE.MeshPhysicalMaterial({ color: s.color, map: s.map, roughness: Math.max(0.5, s.roughness), sheen: s.roughness > 0.5 ? 1 : 0, sheenColor: s.color.clone().lerp(new THREE.Color(0xffffff), 0.5), sheenRoughness: 0.4 }); });
+      o.material = new THREE.MeshPhysicalMaterial({ color: s.color, map: s.map, normalMap: s.normalMap, roughness: Math.max(0.6, s.roughness), sheen: 1, sheenColor: new THREE.Color(0x7d9cff), sheenRoughness: 0.5 }); });
     m.userData.case = 'lion'; scene.add(m); clickable.push(m);
     lionDance.mixer = new THREE.AnimationMixer(m); gltf.animations.forEach(a => lionDance.mixer.clipAction(a).play());
   }).catch(e => console.warn('lion', e));
