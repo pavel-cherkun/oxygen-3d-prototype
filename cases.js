@@ -1,0 +1,66 @@
+// Кейсы по шаблону страницы кейса из прототипа Антона v0.4: шапка, паспорт, задача и идея, как сделали, результат, «хочу так же».
+// Факты — из портфолио ATL и BTL 20_26. Где в портфолио нет данных, стоит «—», не придумываем.
+const C = 'assets/cases/';
+export const CASES = {
+  fandom: {
+    dir: 'btl', title: 'фандом фест', awards: ['silver · silver mercury', 'bronze · silver mercury', 'bronze · red apple'],
+    pass: { клиент: 'Ozon', год: '—', отрасль: 'e-commerce', формат: 'бренд-зона · фандом фест ВКонтакте · 15 000 гостей' },
+    task: '15 тысяч фанатов аниме, комиксов, игр, k-pop и косплея. стенд с логотипом тут не работает — нужно стать частью культуры',
+    idea: 'бренд вошёл в фестиваль не рекламой, а декорацией мира: киберпанк-мегаполис на уикенд и корпорация OZON CORP',
+    how: [[C + 'ozon-fandom-3d-1.jpg', 'зона до первого гостя', 'общий вид, проверка маршрутов'], [C + 'ozon-fandom-kv-1.jpg', 'даже надписи на стенах придумали заранее', 'концепт-арт закрывает всё'], [C + 'ozon-fandom-real-2.jpg', 'вот как это работало живьём', 'поток гостей в часы пик']],
+    result: [['15 000', 'гостей зоны'], ['3', 'награды за одну зону']],
+    model: true,
+  },
+  treschnutye: {
+    dir: 'atl', title: 'треснутые', awards: ['silver · silver mercury', 'bronze · silver mercury', 'bronze · red apple', 'bronze · e+', 'silver · perspectum'],
+    pass: { клиент: '«Дикси»', год: '2023', отрасль: 'ритейл', формат: 'федеральная кампания' },
+    task: 'подарки за чек дают все — по лицензии и с детскими инфлюенсерами. нам достались 26 героев без имени и истории',
+    idea: 'построили целый мир вокруг игрушек: легенда, характер и суперсила у каждого из 26 героев. вместо инфлюенсеров — контент, в который хочется вернуться',
+    how: [[C + 'treschnutye-1.jpg', 'без селебрити. совсем', 'комикс, сериал, лэндинг, tv-ролик, айдентика и POSM']],
+    result: [['10 000', 'копий комикса за месяц — вдвое выше нормы рынка'], ['~500', 'вариантов сценариев в аудио-квесте с Марусей'], ['8', 'фестивальных номинаций у одной кампании']],
+  },
+  zaklinateli: {
+    dir: 'atl', title: 'заклинатели', awards: ['gold · silver mercury', 'bronze · red apple'],
+    pass: { клиент: '«Дикси»', год: '2024—2025', отрасль: 'ритейл', формат: 'федеральная кампания' },
+    task: 'поймать семью в пик зимнего сезона — до попкорна',
+    idea: 'трейлер блокбастера, только это не кино, а акция: тизер запустили в кинотеатрах, плюс пять пятисекундных адаптаций для цифровых экранов',
+    how: [[C + 'zaklinateli-1.jpg', 'трейлер блокбастера', 'cinematic-ролик и тизер'], [C + 'zaklinateli-kv-1.jpg', 'ключевой визуал', 'коллекция героев акции'], [C + 'zaklinateli-kv-2.jpg', 'лэндинг', 'копирайт и макеты страниц']],
+    result: [['gold', 'silver mercury'], ['5 × 5 с', 'адаптаций для цифровых экранов']],
+  },
+  derbent: {
+    dir: 'atl', title: 'дербент — город историй', awards: ['gold · red apple'],
+    pass: { клиент: 'МО «Город Дербент»', год: '2023', отрасль: 'территория', формат: 'брендинг территории' },
+    task: 'древнейший город России: 5000 лет, семь национальностей и три религии, крепость в списке ЮНЕСКО',
+    idea: 'платформа бренда — о сюжетах, что случились здесь и ещё случатся. формы улиц легли в основу логотипа и фирменного шрифта',
+    how: [[C + 'derbent-1.jpg', 'город историй', 'ролики, шрифт, брендбук, платформа'], [C + 'derbent-street-1.jpg', 'фирстиль живёт на улицах, а не в PDF', 'навигация, сувениры, транспорт и остановки']],
+    result: [['5', 'наград за один бренд'], ['gold', 'red apple · бренд территории']],
+  },
+};
+export const ORDER = { btl: ['fandom'], atl: ['treschnutye', 'zaklinateli', 'derbent'] };
+
+export function renderCase(id) {
+  const c = CASES[id], list = ORDER[c.dir], next = list[(list.indexOf(id) + 1) % list.length];
+  return `<span class="t">{кейс} · ${c.dir}</span>
+  <h1>${c.title}</h1>
+  <div class="tags"><a href="#" data-go="${c.dir}">${c.dir}</a>${c.awards.map(a => `<a href="#" data-go="awards">${a}</a>`).join('')}</div>
+  <div class="pass">${Object.entries(c.pass).map(([k, v]) => `<div><span class="t">${k}</span><br>${v}</div>`).join('')}</div>
+  <div class="ti"><div><span class="t">задача</span><p>${c.task}</p></div><div><span class="t">идея</span><p>${c.idea}</p></div></div>
+  <span class="t">как сделали</span>
+  <div class="gal">${c.how.map(([src, h, d]) => `<figure><img src="${src}" alt="${c.title}: ${h}"><figcaption><b>${h}</b><br><span class="t">${d}</span></figcaption></figure>`).join('')}</div>
+  <span class="t">результат</span>
+  <div class="res">${c.result.map(([n, d]) => `<div><b>${n}</b>${d}</div>`).join('')}</div>
+  <p class="lead" style="font-size:26px">нужен похожий результат?</p>
+  <button class="btn" data-brief="${c.dir}" data-brief-case="${c.title}">хочу так же</button>
+  ${c.model ? '<button class="btn ghost" id="caseOrbit">покрутить зону в 3D ↻</button>' : ''}
+  ${next !== id ? `<button class="btn ghost" data-case="${next}">следующий кейс: ${CASES[next].title} →</button>` : ''}
+  <button class="btn ghost" data-go="${c.dir}">все кейсы ${c.dir}</button>`;
+}
+
+export const MODALS = {
+  reel: `<span class="t">{02} шоурил 2026</span><h1>шоурил</h1>
+    <video src="assets/oxygen_promo_v2.mp4" controls autoplay playsinline poster="assets/showreel-poster.webp" style="width:100%;display:block"></video>
+    <p class="t" style="margin-top:10px">фильм бренда из гайдлайна 20_26 · 40 секунд · 2560×1440. шоурила 2026 пока нет — когда будет, встанет сюда и на башню</p>`,
+  jobs: `<span class="t">{вакансии}</span><h1>ищем людей</h1>
+    <p class="lead" style="font-size:26px;max-width:700px">структура страницы — по прототипу Антона: 4 факта о работе, позиции с фильтром по отделам (позиция · отдел · город · вилка), «нет своей — пришлите портфолио», как нанимаем: отклик → звонок → тестовое → решение</p>
+    <p class="t" style="margin-top:16px">прототип: список вакансий и условия даёт hr, в макете Антона стоят заглушки</p>`,
+};

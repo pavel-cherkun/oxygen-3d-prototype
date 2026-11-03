@@ -1,0 +1,237 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Oxygen — прототип 3D</title>
+<meta name="description" content="Oxygen — рекламное агентство полного цикла, Санкт-Петербург. BTL, ATL, креатив и продакшн. Прототип 3D-главной.">
+<link rel="icon" href="assets/iskra.svg">
+<style>
+@font-face{font-family:"TT";src:url("assets/fonts/tiktok-sans.woff2") format("woff2");font-weight:300 900;font-display:swap}
+@font-face{font-family:"AP";src:url("assets/fonts/anonymous-pro.woff2") format("woff2");font-display:swap}
+:root{--bg:#111111;--cream:#E1D9CF;--red:#F40709;--mute:#8d867e}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{background:var(--bg);color:var(--cream)}
+body{font:400 17px/1.45 "TT",system-ui,sans-serif;font-variation-settings:"opsz" 36,"wdth" 100;overflow-x:hidden}
+canvas#gl{position:fixed;inset:0;width:100vw;height:100vh;display:block;z-index:0}
+#scroll{height:2200vh;position:relative;z-index:-1}
+body.orbit #scroll{display:none}
+.t{font-family:"AP",monospace;color:var(--red);font-size:13px;letter-spacing:.02em}
+header{position:fixed;top:0;left:0;right:0;z-index:5;display:flex;align-items:center;justify-content:space-between;padding:20px 28px;pointer-events:none}
+header>*{pointer-events:auto}
+header img{height:26px;display:block}
+nav{display:flex;gap:22px;align-items:center}
+nav a{color:var(--cream);text-decoration:none;font-size:15px;opacity:.85}
+nav a:hover{opacity:1}
+nav a.cta{border:1px solid var(--red);padding:7px 14px;border-radius:40px;opacity:1}
+.hud{position:fixed;z-index:5;pointer-events:none}
+.hud.bl{left:28px;bottom:22px}
+.hud.br{right:28px;bottom:22px;text-align:right}
+.hud.tl{left:28px;top:70px}
+.ov{position:fixed;z-index:4;opacity:0;pointer-events:none;transition:none;max-width:520px}
+.ov.on{pointer-events:auto}
+.ov h1{font-weight:520;font-size:clamp(54px,8.4vw,132px);line-height:.92;margin:14px 0 0}
+.ov h2{font-weight:520;font-size:clamp(36px,4.6vw,64px);line-height:.98;margin:10px 0 14px}
+.ov p{font-size:19px;line-height:1.35}
+.ov .lead{font-weight:420;font-size:clamp(20px,2vw,28px);line-height:1.2}
+.left{left:28px;bottom:14vh}
+.right{right:28px;bottom:14vh}
+.center{left:50%;bottom:12vh;transform:translateX(-50%);text-align:left}
+.panel{background:rgba(17,17,17,.78);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);padding:22px 24px 24px}
+.case{display:grid;grid-template-columns:120px 1fr;gap:14px;margin-top:14px;align-items:start}
+.case img{width:120px;height:80px;object-fit:cover;display:block}
+.case b{font-weight:520}
+.row{border-top:1px solid #2a2a2a;padding:10px 0;display:flex;justify-content:space-between;gap:16px}
+.row:last-child{border-bottom:1px solid #2a2a2a}
+.btn{display:inline-flex;align-items:center;gap:10px;margin-top:16px;background:var(--red);color:var(--bg);border:0;font:520 16px "TT",sans-serif;padding:12px 18px;border-radius:40px;cursor:pointer}
+.btn.ghost{background:transparent;color:var(--cream);border:1px solid #444}
+form{display:grid;gap:10px;margin-top:14px}
+input,textarea{background:transparent;border:0;border-bottom:1px solid #444;color:var(--cream);font:400 17px "TT",sans-serif;padding:8px 0;outline:none}
+input::placeholder,textarea::placeholder{color:var(--mute)}
+#orbitUi{position:fixed;inset:0;z-index:6;display:none;pointer-events:none}
+body.orbit #orbitUi{display:block}
+body.orbit .ov,body.orbit .hud.tl{display:none}
+#orbitUi .panel{position:absolute;left:28px;bottom:28px;max-width:420px;pointer-events:auto}
+#orbitUi .hint{position:absolute;right:28px;bottom:28px}
+#loader{position:fixed;inset:0;z-index:10;background:var(--bg);display:flex;align-items:center;justify-content:center;flex-direction:column;gap:16px;transition:opacity .4s ease-out}
+#loader img{width:64px;animation:spin 1.6s cubic-bezier(.2,.8,.3,1) infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+#loader.done{opacity:0;pointer-events:none}
+@media(max-width:760px){nav a:not(.cta){display:none}.left,.right{left:16px;right:16px;bottom:8vh;max-width:none}.center{left:16px;right:16px;transform:none}header{padding:16px}.hud.bl,.hud.tl{left:16px}.hud.br{right:16px}.ov p{font-size:16px}}
+.choice{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:16px}
+.choice button{background:rgba(17,17,17,.8);border:1px solid #333;color:var(--cream);text-align:left;padding:18px;cursor:pointer;font:400 15px "TT",sans-serif}
+.choice button b{display:block;font-weight:520;font-size:44px;line-height:1;margin:6px 0 8px}
+.choice button:hover{border-color:var(--red)}
+.list button{all:unset;cursor:pointer;display:flex;justify-content:space-between;gap:16px;width:100%;border-top:1px solid #2a2a2a;padding:10px 0}
+.list button:hover span:first-child{color:#fff;text-decoration:underline}
+.list:last-child button:last-child{border-bottom:1px solid #2a2a2a}
+.chips{display:flex;flex-wrap:wrap;gap:6px;margin:10px 0}
+.chips span{border:1px solid #333;padding:4px 10px;border-radius:30px;font-size:14px}
+.nums{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin:12px 0}
+.nums b{display:block;font-weight:520;font-size:30px;font-variation-settings:"opsz" 36,"wdth" 100,"slnt" -6}
+footer.ft{display:flex;gap:18px;margin-top:16px;padding-top:12px;border-top:1px solid #2a2a2a;flex-wrap:wrap}
+footer.ft a{color:var(--cream);font-size:14px}
+select{background:#111;border:0;border-bottom:1px solid #444;color:var(--cream);font:400 17px "TT",sans-serif;padding:8px 0}
+#modal{position:fixed;inset:0;z-index:20;background:rgba(10,10,10,.96);overflow:auto;display:none}
+#modal.on{display:block}
+#modal .wrap{max-width:1100px;margin:0 auto;padding:90px 28px 80px}
+#modal h1{font-weight:520;font-size:clamp(48px,7vw,104px);line-height:.92;margin:12px 0 16px}
+#modal .tags a{color:var(--cream);border:1px solid #444;border-radius:30px;padding:5px 12px;margin-right:6px;text-decoration:none;font-size:14px}
+#modal .pass{display:flex;gap:28px;flex-wrap:wrap;margin:26px 0;padding:14px 0;border-top:1px solid #2a2a2a;border-bottom:1px solid #2a2a2a}
+#modal .ti{display:grid;grid-template-columns:1fr 1fr;gap:32px;margin:28px 0}
+#modal .ti p{font-size:22px;line-height:1.25}
+#modal .gal{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:14px;margin:18px 0 30px}
+#modal .gal figure img{width:100%;display:block;aspect-ratio:16/10;object-fit:cover}
+#modal figcaption{margin-top:6px;font-size:15px}
+#modal .res{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:18px;margin:18px 0 34px}
+#modal .res b{display:block;font-weight:520;font-size:clamp(44px,5vw,72px);line-height:1;font-variation-settings:"opsz" 36,"wdth" 100,"slnt" -6;color:var(--red)}
+#modal .close{position:fixed;top:20px;right:28px;z-index:21}
+@media(max-width:760px){.choice{grid-template-columns:1fr}#modal .ti{grid-template-columns:1fr}#modal .wrap{padding:80px 16px}}
+</style>
+<script type="importmap">
+{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.169.0/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.169.0/examples/jsm/"}}
+</script>
+</head>
+<body>
+<div id="loader"><img src="assets/iskra.svg" alt=""><span class="t">{загрузка} · 20_26</span></div>
+<canvas id="gl"></canvas>
+
+<header>
+  <img src="assets/logo.svg" alt="Oxygen">
+  <nav>
+    <a href="#" data-go="btl">btl</a><a href="#" data-go="atl">atl</a><a href="#" data-go="awards">награды</a><a href="#" data-go="about">о нас</a><a href="#" data-modal="jobs">вакансии</a><a href="#" data-go="brief">контакты</a><a href="#" class="cta" data-go="brief">есть задача</a>
+  </nav>
+</header>
+<div class="hud tl t">спб 59°n · 30°e</div>
+<div class="hud bl t" id="hudStage">{00} вход</div>
+<button class="hud t" id="routeBtn" data-go="cross" style="display:none;left:28px;bottom:44px;pointer-events:auto;background:none;border:0;cursor:pointer;text-decoration:underline"></button>
+<div class="hud br t"><span id="hudPct">000</span>% · 20_26</div>
+
+<!-- текст живёт в HTML: его видят поисковики и нейросети, 3D только иллюстрирует -->
+<section class="ov left" data-a="0" data-b="0.05">
+  <span class="t">рекламное агентство полного цикла · санкт-петербург</span>
+  <h1>топливо<br>ваших идей</h1>
+  <p class="lead" style="margin-top:18px">btl и atl в одних руках</p>
+  <button class="btn" data-go="brief">есть задача</button> <button class="btn ghost" data-go="reel">смотреть шоурил</button>
+</section>
+
+<section class="ov right" data-a="0.12" data-b="0.27">
+  <span class="t">{01} манифест</span>
+  <p class="lead" style="margin-top:12px">у каждого бренда есть огонь.<br>чаще всего он тлеет — в отчётах,<br>согласованиях и «давайте аккуратнее»</p>
+</section>
+
+<section class="ov left" data-a="0.36" data-b="0.43">
+  <span class="t">{01} манифест</span>
+  <p class="lead" style="margin-top:12px">мы не приносим огонь со стороны:<br>находим ваш и даём ему дышать</p>
+</section>
+
+<section class="ov right panel" data-a="0.45" data-b="0.51">
+  <span class="t">{02} шоурил</span>
+  <h2>фильм бренда</h2>
+  <p>фильм бренда на экране главной башни. по клику — окно с видео и звуком</p>
+  <button class="btn" data-modal="reel">смотреть ▶</button>
+</section>
+
+<section class="ov center" data-a="0.535" data-b="0.62" style="width:min(760px,calc(100vw - 32px))">
+  <span class="t">{03} перекрёсток · с чем пришли? дальше листается выбранный маршрут</span>
+  <div class="choice">
+    <button data-go="btl"><span class="t">проспект ↓</span><b>btl</b>там, где покупатель уже держит продукт в руках</button>
+    <button data-go="atl"><span class="t">эфир ↑</span><b>atl</b>эфир, наружка, digital</button>
+  </div>
+</section>
+
+<section class="ov right panel" data-a="0.60" data-b="0.68" data-route="btl">
+  <span class="t">{04} btl · главный проспект</span>
+  <h2>btl</h2>
+  <p>там, где покупатель уже держит продукт в руках</p>
+  <div class="chips"><span>промо и семплинг</span><span>ивенты</span><span>trade-маркетинг</span><span>POSM и спецпроекты</span><span>MICE</span></div>
+  <div class="list">
+    <button data-case="fandom"><span>фандом фест · ozon</span><span class="t">3 награды</span></button>
+    <button disabled><span>бренд-зона · ozon селект</span><span class="t">кейс в работе</span></button>
+    <button disabled><span>чм-2018 · балтика 7</span><span class="t">кейс в работе</span></button>
+  </div>
+  <button class="btn" id="openOrbit">покрутить зону в 3D ↻</button>
+  <button class="btn ghost" data-brief="btl">есть задача на btl</button>
+  <p class="t" style="margin-top:10px">лучше работает вместе с atl → <a href="#" data-go="atl" style="color:inherit">эфир</a></p>
+</section>
+
+<section class="ov left panel" data-a="0.66" data-b="0.815" data-route="atl">
+  <span class="t">{05} atl · эфир над городом</span>
+  <h2>atl</h2>
+  <p>эфир, наружка, digital. кейсы — на экранах небоскрёбов, нажмите на экран или строку</p>
+  <div class="chips"><span>тв и olv</span><span>наружка</span><span>радио и аудио</span><span>digital-кампании</span><span>кино</span></div>
+  <div class="list">
+    <button data-case="treschnutye"><span>треснутые · дикси</span><span class="t">5 наград</span></button>
+    <button data-case="zaklinateli"><span>заклинатели · дикси</span><span class="t">gold · silver mercury</span></button>
+    <button data-case="derbent"><span>дербент — город историй</span><span class="t">gold · red apple</span></button>
+  </div>
+  <button class="btn ghost" data-brief="atl">есть задача на atl</button>
+  <p class="t" style="margin-top:10px">лучше работает вместе с btl → <a href="#" data-go="btl" style="color:inherit">проспект</a></p>
+</section>
+
+<section class="ov left panel" data-a="0.70" data-b="0.815" data-route="btl">
+  <span class="t">{04} btl · дальше по проспекту</span>
+  <h2>ещё зоны</h2>
+  <div class="list">
+    <button disabled><span>ozon селект · бренд-зона fashion</span><span class="t">кейс в работе</span></button>
+    <button disabled><span>балтика 7 · чм-2018 · купола на парковках</span><span class="t">кейс в работе</span></button>
+    <button disabled><span>g-drive · ралли «шёлковый путь»</span><span class="t">кейс в работе</span></button>
+    <button disabled><span>фк «зенит» · 100 лет клубу</span><span class="t">кейс в работе</span></button>
+  </div>
+  <button class="btn ghost" data-brief="btl">есть задача на btl</button>
+</section>
+
+<section class="ov right panel" data-a="0.815" data-b="0.865">
+  <span class="t">{06} награды</span>
+  <h2>за что давали металл</h2>
+  <div class="list">
+    <button data-case="treschnutye"><span>треснутые · дикси</span><span class="t">silver ×2 · bronze ×3</span></button>
+    <button data-case="zaklinateli"><span>заклинатели · дикси</span><span class="t">gold · bronze</span></button>
+    <button data-case="derbent"><span>дербент</span><span class="t">gold · red apple</span></button>
+    <button data-case="fandom"><span>фандом фест · ozon</span><span class="t">silver · bronze ×2</span></button>
+  </div>
+  <p class="t" style="margin-top:10px">4 gold · 6 silver · 6 bronze · 4 short-list · silver mercury · red apple · e+ · white square · perspectum</p>
+</section>
+
+<section class="ov left panel" data-a="0.875" data-b="0.925">
+  <span class="t">{07} о нас</span>
+  <h2>кто мы</h2>
+  <div class="nums"><div><b>2007</b><span class="t">год основания</span></div><div><b>52</b><span class="t">в штате</span></div><div><b>вся рф</b><span class="t">дом — петербург</span></div></div>
+  <p>на фасаде — команда: люди, с которыми вы будете работать, по имени и в лицо</p>
+  <div class="list">
+    <button disabled><span>презентация агентства · pdf</span><span class="t">для тендера</span></button>
+    <button disabled><span>реквизиты · документы</span><span class="t">для закупки</span></button>
+    <button data-modal="jobs"><span>хотите к нам?</span><span class="t">вакансии →</span></button>
+  </div>
+</section>
+
+<section class="ov right panel" data-a="0.945" data-b="1.01" id="brief" style="width:min(460px,calc(100vw - 32px))">
+  <span class="t">{08} бриф</span>
+  <h2>есть задача?</h2>
+  <form id="briefForm" onsubmit="event.preventDefault();this.innerHTML='<p>прототип: данные никуда не отправлены</p>'">
+    <select id="briefDir"><option value="">направление</option><option value="btl">btl</option><option value="atl">atl</option><option value="?">пока не знаю</option></select>
+    <input id="briefCase" placeholder="по мотивам кейса" style="display:none">
+    <input placeholder="имя *" required><input placeholder="компания"><input placeholder="телефон или почта *" required>
+    <textarea rows="2" placeholder="задача в двух словах *" required></textarea>
+    <button class="btn" style="justify-self:start">отправить</button>
+  </form>
+  <footer class="ft t"><a href="#">new business</a><a href="#">пресса</a><a href="#" data-modal="jobs">ищем людей →</a></footer>
+</section>
+
+<div id="orbitUi">
+  <div class="panel">
+    <span class="t">{04} btl · кейс</span>
+    <h2 style="font-weight:520;font-size:40px;line-height:1;margin:8px 0 10px">фандом фест</h2>
+    <p>бренд-зона ozon на фестивале vk. крутите мышью или пальцем, колесо — ближе и дальше</p>
+    <p class="t" style="margin-top:10px">модель собрана Higgsfield по рендеру из презентации. в рабочей версии — экспорт из исходника визуализации</p>
+    <button class="btn" data-case="fandom">страница кейса</button> <button class="btn ghost" id="closeOrbit">← на проспект</button>
+  </div>
+  <div class="hint t">drag · zoom</div>
+</div>
+
+<div id="modal"><button class="btn ghost close" id="modalClose">закрыть ✕</button><div class="wrap" id="modalBody"></div></div>
+
+<div id="scroll"></div>
+<script type="module" src="main.js"></script>
+</body>
+</html>
