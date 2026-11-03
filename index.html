@@ -72,6 +72,32 @@ body.orbit .ov,body.orbit .hud.tl{display:none}
 footer.ft{display:flex;gap:18px;margin-top:16px;padding-top:12px;border-top:1px solid #2a2a2a;flex-wrap:wrap}
 footer.ft a{color:var(--cream);font-size:14px}
 select{background:#111;border:0;border-bottom:1px solid #444;color:var(--cream);font:400 17px "TT",sans-serif;padding:8px 0}
+/* 2D-слой по рефу 4: сетка, микротекст, простые формы */
+#grid2d{position:fixed;inset:0;z-index:2;pointer-events:none;background-image:linear-gradient(to right,rgba(225,217,207,.05) 1px,transparent 1px),linear-gradient(to bottom,rgba(225,217,207,.05) 1px,transparent 1px);background-size:calc(100vw/12) calc(100vw/12)}
+.sq{position:fixed;z-index:3;width:7px;height:7px;background:var(--red);pointer-events:none;transition:left .45s cubic-bezier(.2,.8,.2,1),top .45s cubic-bezier(.2,.8,.2,1)}
+.tick{position:fixed;z-index:3;width:14px;height:14px;border-color:rgba(225,217,207,.5);border-style:solid;pointer-events:none}
+#micro{position:fixed;right:28px;top:76px;z-index:5;text-align:right;line-height:1.55;pointer-events:none;font-size:11px}
+#micro .on{color:var(--cream)}
+#microL{position:fixed;left:28px;top:96px;z-index:5;pointer-events:none;font-size:11px;line-height:1.55;color:var(--mute)}
+#wipe{position:fixed;left:0;right:0;top:50%;z-index:7;pointer-events:none;white-space:nowrap;font-weight:520;font-size:22vw;line-height:.8;translate:0 -50%;color:transparent;-webkit-text-stroke:1px rgba(244,7,9,.7);transform:translateX(100%)}
+#wipe.go{animation:wipe 1.4s cubic-bezier(.2,.8,.2,1) forwards}
+@keyframes wipe{0%{transform:translateX(100%)}35%{transform:translateX(6%)}65%{transform:translateX(-6%)}100%{transform:translateX(-110%)}}
+#curtain{position:fixed;inset:0;z-index:15;background:var(--red);transform:scaleY(0);transform-origin:bottom;pointer-events:none;display:flex;align-items:center;padding-left:28px}
+#curtain b{font-weight:520;font-size:16vw;color:var(--bg);line-height:.85}
+#curtain.in{transition:transform .32s cubic-bezier(.7,0,.3,1);transform:scaleY(1)}
+#curtain.out{transition:transform .45s cubic-bezier(.2,.8,.2,1);transform:scaleY(0);transform-origin:top}
+/* развилка: экран на всю высоту, два больших пункта */
+#fork{left:0;right:0;top:0;bottom:0;max-width:none;display:grid;grid-template-columns:1fr 1fr}
+#fork button{all:unset;cursor:pointer;position:relative;display:flex;flex-direction:column;justify-content:flex-end;padding:0 28px 12vh;border-right:1px solid rgba(225,217,207,.12);background:linear-gradient(to top,rgba(17,17,17,.88),rgba(17,17,17,.15) 70%);transition:background .25s ease-out}
+#fork button:hover{background:linear-gradient(to top,rgba(244,7,9,.85),rgba(244,7,9,.12) 75%)}
+#fork button b{display:block;font-weight:520;font-size:clamp(110px,17vw,260px);line-height:.8;margin:8px 0 18px}
+#fork button p{font-size:20px;max-width:30ch}
+#fork .ask{position:absolute;left:50%;top:15vh;translate:-50% 0;text-align:center;z-index:2;pointer-events:none}
+#fork .ask h2{margin:8px 0 0}
+#fork .arr{display:inline-block;animation:bob 1.2s ease-in-out infinite}
+@keyframes bob{50%{translate:0 6px}}
+#fork.pulse button{animation:pulse .5s ease-out 2}
+@keyframes pulse{50%{background:rgba(244,7,9,.45)}}
 #modal{position:fixed;inset:0;z-index:20;background:rgba(10,10,10,.96);overflow:auto;display:none}
 #modal.on{display:block}
 #modal .wrap{max-width:1100px;margin:0 auto;padding:90px 28px 80px}
@@ -86,7 +112,7 @@ select{background:#111;border:0;border-bottom:1px solid #444;color:var(--cream);
 #modal .res{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:18px;margin:18px 0 34px}
 #modal .res b{display:block;font-weight:520;font-size:clamp(44px,5vw,72px);line-height:1;font-variation-settings:"opsz" 36,"wdth" 100,"slnt" -6;color:var(--red)}
 #modal .close{position:fixed;top:20px;right:28px;z-index:21}
-@media(max-width:760px){.choice{grid-template-columns:1fr}#modal .ti{grid-template-columns:1fr}#modal .wrap{padding:80px 16px}}
+@media(max-width:760px){#fork{grid-template-columns:1fr}#fork button{padding-bottom:4vh}#micro,#microL{display:none}.choice{grid-template-columns:1fr}#modal .ti{grid-template-columns:1fr}#modal .wrap{padding:80px 16px}}
 </style>
 <script type="importmap">
 {"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.169.0/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.169.0/examples/jsm/"}}
@@ -95,6 +121,12 @@ select{background:#111;border:0;border-bottom:1px solid #444;color:var(--cream);
 <body>
 <div id="loader"><img src="assets/iskra.svg" alt=""><span class="t">{загрузка} · 20_26</span></div>
 <canvas id="gl"></canvas>
+<div id="grid2d"></div>
+<div class="tick" style="left:20px;top:64px;border-width:1px 0 0 1px"></div><div class="tick" style="right:20px;top:64px;border-width:1px 1px 0 0"></div><div class="tick" style="left:20px;bottom:14px;border-width:0 0 1px 1px"></div><div class="tick" style="right:20px;bottom:14px;border-width:0 1px 1px 0"></div>
+<div class="sq"></div><div class="sq"></div><div class="sq"></div><div class="sq"></div>
+<div id="micro" class="t"></div><div id="microL" class="t"></div>
+<div id="wipe"></div>
+<div id="curtain"><b id="curtainWord"></b></div>
 
 <header>
   <img src="assets/logo.svg" alt="Oxygen">
@@ -113,6 +145,7 @@ select{background:#111;border:0;border-bottom:1px solid #444;color:var(--cream);
   <h1>топливо<br>ваших идей</h1>
   <p class="lead" style="margin-top:18px">btl и atl в одних руках</p>
   <button class="btn" data-go="brief">есть задача</button> <button class="btn ghost" data-go="reel">смотреть шоурил</button>
+  <p class="t" style="margin-top:18px"><a href="#" data-go="awards" style="color:inherit">16 металлов · заклинатели — gold · дербент — gold · треснутые — 5 наград →</a></p>
 </section>
 
 <section class="ov right" data-a="0.12" data-b="0.27">
@@ -132,27 +165,31 @@ select{background:#111;border:0;border-bottom:1px solid #444;color:var(--cream);
   <button class="btn" data-modal="reel">смотреть ▶</button>
 </section>
 
-<section class="ov center" data-a="0.535" data-b="0.62" style="width:min(760px,calc(100vw - 32px))">
-  <span class="t">{03} перекрёсток · с чем пришли? дальше листается выбранный маршрут</span>
-  <div class="choice">
-    <button data-go="btl"><span class="t">проспект ↓</span><b>btl</b>там, где покупатель уже держит продукт в руках</button>
-    <button data-go="atl"><span class="t">эфир ↑</span><b>atl</b>эфир, наружка, digital</button>
-  </div>
+<section class="ov" id="fork" data-a="0.535" data-b="0.62">
+  <div class="ask"><span class="t">{03} перекрёсток</span><h2>с чем пришли?</h2><p class="t" style="margin-top:6px">выберите маршрут — дальше скролл пойдёт по нему <span class="arr">↓</span></p></div>
+  <button data-go="btl"><span class="t">{04} проспект · на земле</span><b>btl</b><p>там, где покупатель уже держит продукт в руках: зоны, ивенты, промо, спецпроекты</p></button>
+  <button data-go="atl"><span class="t">{05} эфир · над городом</span><b>atl</b><p>эфир, наружка, digital: кампании на экранах небоскрёбов</p></button>
 </section>
 
-<section class="ov right panel" data-a="0.60" data-b="0.68" data-route="btl">
+<section class="ov right panel" data-a="0.60" data-b="0.645" data-route="btl">
   <span class="t">{04} btl · главный проспект</span>
   <h2>btl</h2>
   <p>там, где покупатель уже держит продукт в руках</p>
   <div class="chips"><span>промо и семплинг</span><span>ивенты</span><span>trade-маркетинг</span><span>POSM и спецпроекты</span><span>MICE</span></div>
+  <p class="t">сворачиваем в переулок ←</p>
+</section>
+
+<section class="ov left panel" data-a="0.655" data-b="0.705" data-route="btl" style="max-width:420px">
+  <span class="t">{04} btl · переулок</span>
+  <h2>азиатский переулок</h2>
+  <p>три кейса, где мы зашли в аниме, манхву и киберпанк изнутри культуры</p>
   <div class="list">
-    <button data-case="fandom"><span>фандом фест · ozon</span><span class="t">3 награды</span></button>
-    <button disabled><span>бренд-зона · ozon селект</span><span class="t">кейс в работе</span></button>
-    <button disabled><span>чм-2018 · балтика 7</span><span class="t">кейс в работе</span></button>
+    <button data-case="fandom"><span>ozon corp · фандом фест</span><span class="t">3 награды</span></button>
+    <button data-case="izhora"><span>хроники ижоры · зенит</span><span class="t">вебтун</span></button>
+    <button data-case="treschnutye"><span>треснутые · дикси</span><span class="t">5 наград</span></button>
   </div>
-  <button class="btn" id="openOrbit">покрутить зону в 3D ↻</button>
+  <button class="btn" id="openOrbit">покрутить ozon corp в 3D ↻</button>
   <button class="btn ghost" data-brief="btl">есть задача на btl</button>
-  <p class="t" style="margin-top:10px">лучше работает вместе с atl → <a href="#" data-go="atl" style="color:inherit">эфир</a></p>
 </section>
 
 <section class="ov left panel" data-a="0.66" data-b="0.815" data-route="atl">
@@ -169,14 +206,14 @@ select{background:#111;border:0;border-bottom:1px solid #444;color:var(--cream);
   <p class="t" style="margin-top:10px">лучше работает вместе с btl → <a href="#" data-go="btl" style="color:inherit">проспект</a></p>
 </section>
 
-<section class="ov left panel" data-a="0.70" data-b="0.815" data-route="btl">
+<section class="ov left panel" data-a="0.715" data-b="0.815" data-route="btl">
   <span class="t">{04} btl · дальше по проспекту</span>
   <h2>ещё зоны</h2>
   <div class="list">
     <button disabled><span>ozon селект · бренд-зона fashion</span><span class="t">кейс в работе</span></button>
     <button disabled><span>балтика 7 · чм-2018 · купола на парковках</span><span class="t">кейс в работе</span></button>
     <button disabled><span>g-drive · ралли «шёлковый путь»</span><span class="t">кейс в работе</span></button>
-    <button disabled><span>фк «зенит» · 100 лет клубу</span><span class="t">кейс в работе</span></button>
+    <button data-case="izhora"><span>фк «зенит» · 100 лет клубу</span><span class="t">хроники ижоры</span></button>
   </div>
   <button class="btn ghost" data-brief="btl">есть задача на btl</button>
 </section>
@@ -191,6 +228,10 @@ select{background:#111;border:0;border-bottom:1px solid #444;color:var(--cream);
     <button data-case="fandom"><span>фандом фест · ozon</span><span class="t">silver · bronze ×2</span></button>
   </div>
   <p class="t" style="margin-top:10px">4 gold · 6 silver · 6 bronze · 4 short-list · silver mercury · red apple · e+ · white square · perspectum</p>
+  <span class="t" style="display:block;margin-top:14px">рейтинги</span>
+  <div class="row"><span>adindex · качество услуг</span><span class="t">3 место</span></div>
+  <div class="row"><span>акар · брендинг, 2022</span><span class="t">4 место</span></div>
+  <div class="row"><span>national event services rating</span><span class="t">топ</span></div>
 </section>
 
 <section class="ov left panel" data-a="0.875" data-b="0.925">
@@ -215,6 +256,11 @@ select{background:#111;border:0;border-bottom:1px solid #444;color:var(--cream);
     <textarea rows="2" placeholder="задача в двух словах *" required></textarea>
     <button class="btn" style="justify-self:start">отправить</button>
   </form>
+  <div style="margin-top:14px">
+    <div class="row"><span>new business</span><span class="t">имя · почта — от риты</span></div>
+    <div class="row"><span>пресса · hr</span><span class="t">почты — от риты</span></div>
+    <div class="row"><span>санкт-петербург</span><span class="t">адрес → на карте</span></div>
+  </div>
   <footer class="ft t"><a href="#">new business</a><a href="#">пресса</a><a href="#" data-modal="jobs">ищем людей →</a></footer>
 </section>
 

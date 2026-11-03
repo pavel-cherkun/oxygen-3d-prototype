@@ -11,6 +11,14 @@ export const CASES = {
     result: [['15 000', 'гостей зоны'], ['3', 'награды за одну зону']],
     model: true,
   },
+  izhora: {
+    dir: 'btl', title: 'хроники ижоры', awards: [],
+    pass: { клиент: 'ФК «Зенит»', год: '2025', отрасль: 'спорт', формат: 'спецпроект · 100 лет клубу' },
+    task: 'юбилей клуба, который обычно отмечают буклетом',
+    idea: 'юбилей в жанре вебтуна — история со своей мифологией в стиле славянского фэнтези и манхвы о Семаге и его воинах. сделали вместе с Яндекс Плюс и Кинопоиском',
+    how: [[C + 'izhora-47-1.jpg', 'юбилей в жанре вебтуна', 'комикс-вебтун'], [C + 'izhora-48-1.jpg', 'ключевой визуал', 'проект к столетию'], [C + 'izhora-48-2.jpg', 'читать, слушать, смотреть', 'три формата одной истории']],
+    result: [['3', 'формата одной истории: вебтун, аудиоверсия, анимированный ролик']],
+  },
   treschnutye: {
     dir: 'atl', title: 'треснутые', awards: ['silver · silver mercury', 'bronze · silver mercury', 'bronze · red apple', 'bronze · e+', 'silver · perspectum'],
     pass: { клиент: '«Дикси»', год: '2023', отрасль: 'ритейл', формат: 'федеральная кампания' },
@@ -36,13 +44,13 @@ export const CASES = {
     result: [['5', 'наград за один бренд'], ['gold', 'red apple · бренд территории']],
   },
 };
-export const ORDER = { btl: ['fandom'], atl: ['treschnutye', 'zaklinateli', 'derbent'] };
+export const ORDER = { btl: ['fandom', 'izhora'], atl: ['treschnutye', 'zaklinateli', 'derbent'] };
 
 export function renderCase(id) {
   const c = CASES[id], list = ORDER[c.dir], next = list[(list.indexOf(id) + 1) % list.length];
   return `<span class="t">{кейс} · ${c.dir}</span>
   <h1>${c.title}</h1>
-  <div class="tags"><a href="#" data-go="${c.dir}">${c.dir}</a>${c.awards.map(a => `<a href="#" data-go="awards">${a}</a>`).join('')}</div>
+  <div class="tags"><a href="#" data-go="${c.dir}">${c.dir}</a>${c.awards.length ? '' : ''}${c.awards.map(a => `<a href="#" data-go="awards">${a}</a>`).join('')}</div>
   <div class="pass">${Object.entries(c.pass).map(([k, v]) => `<div><span class="t">${k}</span><br>${v}</div>`).join('')}</div>
   <div class="ti"><div><span class="t">задача</span><p>${c.task}</p></div><div><span class="t">идея</span><p>${c.idea}</p></div></div>
   <span class="t">как сделали</span>
