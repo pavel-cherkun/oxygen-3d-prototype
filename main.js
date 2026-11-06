@@ -334,11 +334,12 @@ const ATL_SCREENS = [['izhora', 1, 398], ['avangard', -1, 520], ['derbent', 1, 6
 // носители: плоский экран и красная рамка вокруг него
 const board = (tex, w, h, pos, ry) => { const m = new THREE.Mesh(new THREE.PlaneGeometry(w, h), new THREE.MeshBasicMaterial({ map: tex, toneMapped: false })); m.position.copy(pos); m.rotation.y = ry; scene.add(m); return m; };
 const rim = (w, h, pos, ry) => { const g = new THREE.Mesh(new THREE.PlaneGeometry(w + 1.6, h + 1.6), new THREE.MeshBasicMaterial({ color: new THREE.Color(RED).multiplyScalar(2.5), toneMapped: false })); g.position.copy(pos); g.rotation.y = ry; g.translateZ(-0.05); scene.add(g); };
+const promo = { v: null, started: false };
 function buildSections() {
 
   // площадь: экран шоурила
-  const video = Object.assign(document.createElement('video'), { src: 'assets/oxygen_promo_v2.mp4', muted: true, loop: true, playsInline: true, autoplay: true, crossOrigin: 'anonymous' });
-  video.play().catch(() => addEventListener('pointerdown', () => video.play(), { once: true }));
+  const video = Object.assign(document.createElement('video'), { src: 'assets/oxygen_promo_v2.mp4', muted: true, loop: true, playsInline: true, crossOrigin: 'anonymous', preload: 'none' });
+  promo.v = video;   // шоурил качается, когда камера начинает спуск к башне, а не при открытии страницы
   const vtex = new THREE.VideoTexture(video); vtex.colorSpace = THREE.SRGBColorSpace;
   const reelPos = V(0, 30, TOWER.d / 2 + 0.8);
   rim(64, 36, reelPos, 0);
@@ -385,7 +386,7 @@ function buildSections() {
     }
     const src = `assets/cases/${CASES[id].how[0][0].split('/').pop()}`;
     if (id === 'tevredens') {   // у tevredens на экране ролик из кейса
-      const v = Object.assign(document.createElement('video'), { src: 'assets/tevredens.mp4', muted: true, loop: true, playsInline: true, crossOrigin: 'anonymous', preload: 'auto' });
+      const v = Object.assign(document.createElement('video'), { src: 'assets/tevredens.mp4', muted: true, loop: true, playsInline: true, crossOrigin: 'anonymous', preload: 'none' });
       const vt = new THREE.VideoTexture(v); vt.colorSpace = THREE.SRGBColorSpace;
       const { g } = screenAt(vt, 28, 15.75, pos, cam, id); aiClips.push({ g, v, y: g.position.y, ph: 0, still: true });
     } else screenAt(caseTexture(src, false, 1024, 614), 28, 16.8, pos, cam, id);
@@ -927,7 +928,7 @@ function updateQuarters(time) {
   updateDixy(time);
   aiClips.forEach(c => {
     c.g.position.y = c.y + Math.sin(time * 0.7 + c.ph) * 0.6;
-    const near = c.g.position.distanceTo(camera.position) < 140;
+    const near = c.g.position.distanceTo(camera.position) < 220;   // ролик качается и стартует только на подлёте
     if (c.still) c.g.position.y = c.y;
     if (near && c.v.paused) c.v.play().catch(() => {}); else if (!near && !c.v.paused) c.v.pause();
   });
@@ -960,7 +961,7 @@ function buildDixyTowers() {
     const back = new THREE.Mesh(new THREE.BoxGeometry(W + 2.2, H + 2.2, 1), MAT.matte); back.position.set(0, 6 + H / 2, -1.2); g.add(back);
     const rimO = new THREE.Mesh(new THREE.PlaneGeometry(W + 1.2, H + 1.2), oGlow); rimO.position.set(0, 6 + H / 2, -0.6); g.add(rimO);
     let tex;
-    if (id === 'zaklinateli') { const v = Object.assign(document.createElement('video'), { src: 'assets/zaklinateli.mp4', muted: true, loop: true, playsInline: true, crossOrigin: 'anonymous', preload: 'auto' }); tex = new THREE.VideoTexture(v); tex.colorSpace = THREE.SRGBColorSpace; aiClips.push({ g, v, y: g.position.y, ph: 0, still: true }); }
+    if (id === 'zaklinateli') { const v = Object.assign(document.createElement('video'), { src: 'assets/zaklinateli.mp4', muted: true, loop: true, playsInline: true, crossOrigin: 'anonymous', preload: 'none' }); tex = new THREE.VideoTexture(v); tex.colorSpace = THREE.SRGBColorSpace; aiClips.push({ g, v, y: g.position.y, ph: 0, still: true }); }
     else tex = caseTexture(`assets/cases/${id}-1.jpg`, false, 1024, 576);
     const scr = new THREE.Mesh(new THREE.PlaneGeometry(W, H), new THREE.MeshBasicMaterial({ map: tex })); scr.material.color.setScalar(0.85); scr.position.set(0, 6 + H / 2, -0.5); g.add(scr); scr.userData.case = id; clickable.push(scr);
     const lab = new THREE.Mesh(new THREE.PlaneGeometry(28, 28 * 0.156), new THREE.MeshBasicMaterial({ map: labelTex('дикси · ' + CASES[id].title, CASES[id].awards[0] || CASES[id].pass.формат) })); lab.position.set(-W / 2 + 14, 6 + H + 3.4, -0.5); g.add(lab);
@@ -1085,7 +1086,7 @@ function buildAiTowers() {
     const slit = new THREE.Mesh(new THREE.BoxGeometry(0.4, 130, 0.4), slitM); slit.position.set(tx - side * 9.1, 70, z + 3.4); scene.add(slit);
     const head = new THREE.Mesh(new THREE.SphereGeometry(5, 32, 20), MAT.chrome); head.position.set(tx, 158, z); scene.add(head);
     const ring = new THREE.Mesh(new THREE.TorusGeometry(9, 0.35, 10, 96), slitM); ring.position.set(tx, 158, z); ring.rotation.x = Math.PI / 2 + 0.25; scene.add(ring); aiRings.push(ring);
-    const v = Object.assign(document.createElement('video'), { src: `assets/ai-${clip}.mp4`, muted: true, loop: true, playsInline: true, crossOrigin: 'anonymous', preload: 'auto' });
+    const v = Object.assign(document.createElement('video'), { src: `assets/ai-${clip}.mp4`, muted: true, loop: true, playsInline: true, crossOrigin: 'anonymous', preload: 'none' });
     const vt = new THREE.VideoTexture(v); vt.colorSpace = THREE.SRGBColorSpace;
     const cam = aiCam(side, z), { g } = screenAt(vt, 28, 15.75, V(side * 22, 96, z), cam, id);
     aiClips.push({ g, v, y: g.position.y, ph: i, still: true });
@@ -1615,6 +1616,7 @@ function frame() {
   updateWebtoon(time);
   updateQuarters(time);
   updateAtmosphere(time, dt);
+  if (promo.v && !promo.started && pSm > 0.3) { promo.started = true; promo.v.play().catch(() => addEventListener('pointerdown', () => promo.v.play(), { once: true })); }
   hud2d(pSm, time);
   updateOverlay(pSm);
   composer.render();
