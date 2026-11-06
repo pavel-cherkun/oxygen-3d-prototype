@@ -268,7 +268,7 @@ export const MODALS = {
   reel: `<span class="t">{02} шоурил 2026</span><h1>шоурил</h1>
     <video src="assets/oxygen_promo_v2.mp4" controls autoplay playsinline poster="assets/showreel-poster.webp" style="width:100%;display:block"></video>
     <p class="t" style="margin-top:10px">фильм бренда из гайдлайна 20_26 · 40 секунд · 2560×1440. шоурила 2026 пока нет — когда будет, встанет сюда и на башню</p>`,
-  jobs: `<span class="t">{вакансии}</span><h1>ищем людей</h1>
+  jobs: `<span class="t">{вакансии}</span><h1>ищем тех, кто превращает чужие искры в пламя</h1>
     <p class="lead" style="font-size:26px;max-width:700px">структура страницы — по прототипу Антона: 4 факта о работе, позиции с фильтром по отделам (позиция · отдел · город · вилка), «нет своей — пришлите портфолио», как нанимаем: отклик → звонок → тестовое → решение</p>
     <p class="t" style="margin-top:16px">прототип: список вакансий и условия даёт hr, в макете Антона стоят заглушки</p>`,
 };

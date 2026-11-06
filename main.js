@@ -578,6 +578,51 @@ function tiggo(n = 13) {
   add(new THREE.BoxGeometry(0.04, 0.06, 1.7), tl, -2.39, 1.12, 0);
   return car;
 }
+// реальные машины со sketchfab (cc by): ford mustang gt convertible 2018 — adrianaflak09, chery tiggo 8 pro — niev.
+// модель приводится к длине len, нос по +x, колёса на y = 0; брендинг — наклейками поверх кузова
+const carCache = {};
+function carModel(file, len, flip, dress) {
+  const g = new THREE.Group();
+  (carCache[file] ||= gltfLoader.loadAsync(`assets/models/cars/${file}.glb`)).then(gl => {
+    const m = gl.scene.clone(true), b = new THREE.Box3().setFromObject(m), sz = b.getSize(new THREE.Vector3());
+    m.rotation.y = (sz.z > sz.x ? -Math.PI / 2 : 0) + (flip ? Math.PI : 0);
+    const w = new THREE.Group(); w.add(m); w.updateMatrixWorld(true);
+    const b2 = new THREE.Box3().setFromObject(w), s2 = b2.getSize(new THREE.Vector3()), k = len / s2.x;
+    w.scale.setScalar(k); w.position.set(-(b2.min.x + b2.max.x) / 2 * k, -b2.min.y * k, -(b2.min.z + b2.max.z) / 2 * k);
+    m.traverse(o => { if (o.isMesh && o.material && /paint|carpaint/i.test(o.material.name)) { o.material.envMap = MAT.chrome.envMap; o.material.envMapIntensity = 0.9; } });
+    g.add(w); dress && dress(g, len, s2.y * k, s2.z * k);
+  }).catch(e => console.warn(file, e));
+  return g;
+}
+const dmat = t => new THREE.MeshBasicMaterial({ map: t, transparent: true, depthWrite: false, toneMapped: false, polygonOffset: true, polygonOffsetFactor: -2 });
+function mustangIronStar() {
+  return carModel('mustang', 4.8, false, (g, L, H, W) => {
+    const door = decalTex(512, 220, (c) => { c.fillStyle = '#fff'; c.font = 'italic 800 150px TT, sans-serif'; c.fillText('G', 40, 150); gdrive(c, 30, 200, 34); c.fillRect(218, 40, 5, 160); ironstar(c, 245, 120, 78); });
+    const fender = decalTex(512, 110, (c) => ironstar(c, 20, 86, 74)), rear = decalTex(512, 90, (c) => gdrive(c, 20, 70, 66));
+    [1, -1].forEach(sd => { const z = sd * (W / 2 + 0.015), ry = sd > 0 ? 0 : Math.PI;
+      const a = new THREE.Mesh(new THREE.PlaneGeometry(1.2, 0.52), dmat(door)); a.position.set(-0.15, 0.62, z); a.rotation.y = ry; g.add(a);
+      const f = new THREE.Mesh(new THREE.PlaneGeometry(0.9, 0.19), dmat(fender)); f.position.set(1.45, 0.78, z); f.rotation.y = ry; g.add(f);
+      const r = new THREE.Mesh(new THREE.PlaneGeometry(0.8, 0.14), dmat(rear)); r.position.set(-1.7, 0.78, z); r.rotation.y = ry; g.add(r); });
+    // табло со временем гонки над задними сиденьями
+    const c = document.createElement('canvas'); c.width = 512; c.height = 128; ledTimer.c = c; ledTimer.g = c.getContext('2d');
+    ledTimer.t = new THREE.CanvasTexture(c); ledTimer.t.colorSpace = THREE.SRGBColorSpace; drawTimer(3738);
+    const board = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.34, 1.3), MAT.matte); board.position.set(-1.0, H + 0.45, 0); g.add(board);
+    const scr = new THREE.Mesh(new THREE.PlaneGeometry(1.24, 0.3), new THREE.MeshBasicMaterial({ map: ledTimer.t, toneMapped: false })); scr.position.set(-1.045, H + 0.45, 0); scr.rotation.y = -Math.PI / 2; g.add(scr);
+    [-0.45, 0.45].forEach(z => { const p = new THREE.Mesh(new THREE.CylinderGeometry(0.025, 0.025, 0.6, 8), MAT.chrome); p.position.set(-1.0, H + 0.08, z); g.add(p); });
+  });
+}
+function tiggoPress(n) {
+  return carModel('tiggo8', 4.7, false, (g, L, H, W) => {
+    tiggoTex.hood ||= decalTex(512, 400, (c, w, h) => { c.fillStyle = '#ff6a10'; c.fillRect(0, 0, w, h); c.save(); c.translate(w / 2, h / 2); c.rotate(-Math.PI / 2); gdrive(c, -150, 30, 78); c.restore(); });
+    const hood = new THREE.Mesh(new THREE.PlaneGeometry(1.15, W * 0.86), new THREE.MeshStandardMaterial({ map: tiggoTex.hood, roughness: 0.5, polygonOffset: true, polygonOffsetFactor: -2 }));
+    hood.rotation.set(-Math.PI / 2, 0, 0); hood.rotateY(0.13); hood.position.set(1.6, H * 0.665, 0); g.add(hood);
+    tiggoTex.door ||= decalTex(512, 120, (c) => gdrive(c, 20, 92, 92, '#ff6a10'));
+    tiggoTex.plate = decalTex(200, 240, (c) => { c.fillStyle = '#f2efe9'; c.fillRect(0, 0, 200, 240); c.fillStyle = '#ff6a10'; c.fillRect(0, 0, 200, 46); c.fillStyle = '#111'; c.font = '800 92px TT, sans-serif'; c.textAlign = 'center'; c.fillText(String(n), 100, 160); c.font = '22px AP, monospace'; c.fillText('MEDIA', 100, 210); });
+    [1, -1].forEach(sd => { const z = sd * (W / 2 + 0.015), ry = sd > 0 ? 0 : Math.PI;
+      const d = new THREE.Mesh(new THREE.PlaneGeometry(1.05, 0.25), dmat(tiggoTex.door)); d.position.set(0.55, 0.62, z); d.rotation.y = ry; g.add(d);
+      const p = new THREE.Mesh(new THREE.PlaneGeometry(0.38, 0.46), dmat(tiggoTex.plate)); p.position.set(-0.75, 0.8, z); p.rotation.y = ry; g.add(p); });
+  });
+}
 function goose() {
   const g = new THREE.Group(), b = new THREE.MeshStandardMaterial({ color: 0x8c8378, roughness: 0.85 }), beak = new THREE.MeshStandardMaterial({ color: 0xff7a10, roughness: 0.5 });
   const add = (geo, m, x, y, z, rz = 0) => { const o = new THREE.Mesh(geo, m); o.position.set(x, y, z); o.rotation.z = rz; g.add(o); return o; };
@@ -725,7 +770,7 @@ function buildQuarters() {
   const ttb = new THREE.Mesh(new THREE.CylinderGeometry(8.5, 8.8, 0.8, 64), MAT.matte); ttb.position.y = 0.4; tt.add(ttb);
   const redM = new THREE.MeshBasicMaterial({ color: new THREE.Color(RED).multiplyScalar(1.6), toneMapped: false });
   const ttr = new THREE.Mesh(new THREE.TorusGeometry(8.6, 0.14, 8, 96), redM); ttr.rotation.x = Math.PI / 2; ttr.position.y = 0.85; tt.add(ttr);
-  const shelby = brandedMustang(); shelby.scale.setScalar(2.1); shelby.position.y = 0.8; tt.add(shelby); spinners.push({ o: shelby, k: 0.25 });
+  const shelby = mustangIronStar(); shelby.scale.setScalar(2.1); shelby.position.y = 0.8; tt.add(shelby); spinners.push({ o: shelby, k: 0.25 });
   shelby.userData.case = 'ironstar'; clickable.push(shelby);
   const cl = new THREE.SpotLight(0xffe8dc, 2400, 60, 0.55, 0.6); cl.position.set(6, 26, Z.iron - 18); cl.target = tt; scene.add(cl);
   stand('ironstar', ['gdrive-ironstar-1'], Z.iron + 4, { x: -15 });
@@ -744,7 +789,7 @@ function buildQuarters() {
     pic.userData.case = 'gdrive'; clickable.push(pic);
   });
   const track = new THREE.Mesh(new THREE.RingGeometry(10.6, 11.2, 96), new THREE.MeshBasicMaterial({ color: 0x6a2410 })); track.rotation.x = -Math.PI / 2; track.scale.set(1.3, 0.6, 1); track.position.set(0, 0.07, Z.silk - 2); scene.add(track);
-  for (let i = 0; i < 5; i++) { const c = tiggo(11 + i); c.scale.setScalar(1.25); c.userData.case = 'gdrive'; clickable.push(c); scene.add(c); rally.push({ c, ph: i / 5 * Math.PI * 2 }); }   // 5 экипажей пресс-тура
+  for (let i = 0; i < 5; i++) { const c = tiggoPress(11 + i); c.scale.setScalar(1.25); c.userData.case = 'gdrive'; clickable.push(c); scene.add(c); rally.push({ c, ph: i / 5 * Math.PI * 2 }); }   // 5 экипажей пресс-тура
   const sl2 = new THREE.PointLight(0xffd8b0, 700, 50, 1.6); sl2.position.set(0, 12, Z.silk - 4); scene.add(sl2);
   plate('assets/cases/avangard-1.jpg', 16, 22, V(-36.4, 15, 424), Math.PI / 2 + 0.6, 'avangard');
 

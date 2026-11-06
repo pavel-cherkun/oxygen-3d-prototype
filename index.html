@@ -124,7 +124,7 @@ select{background:#111;border:0;border-bottom:1px solid #444;color:var(--cream);
 </script>
 </head>
 <body>
-<div id="loader"><img src="assets/iskra.svg" alt=""><span class="t">{загрузка} · 20_26</span></div>
+<div id="loader"><img src="assets/iskra.svg" alt=""><span class="t">сколько кислорода…<br>нужно вашему огню</span></div>
 <canvas id="gl"></canvas>
 <div id="grid2d"></div>
 <div class="tick" style="left:20px;top:64px;border-width:1px 0 0 1px"></div><div class="tick" style="right:20px;top:64px;border-width:1px 1px 0 0"></div><div class="tick" style="left:20px;bottom:14px;border-width:0 0 1px 1px"></div><div class="tick" style="right:20px;bottom:14px;border-width:0 1px 1px 0"></div>
@@ -146,21 +146,24 @@ select{background:#111;border:0;border-bottom:1px solid #444;color:var(--cream);
 
 <!-- текст живёт в HTML: его видят поисковики и нейросети, 3D только иллюстрирует -->
 <section class="ov left" data-a="0" data-b="0.05">
-  <span class="t">рекламное агентство полного цикла · санкт-петербург</span>
+  <span class="t">ai-first рекламное агентство · санкт-петербург</span>
   <h1>топливо<br>ваших идей</h1>
-  <p class="lead" style="margin-top:18px">btl и atl в одних руках</p>
+  <p class="lead" style="margin-top:18px;max-width:30ch">федеральные кампании, бренд-зоны и ивенты, продакшн полного цикла. здесь идеи разгораются, а не тлеют в рутине</p>
   <button class="btn" data-go="brief">есть задача</button> <button class="btn ghost" data-go="reel">смотреть шоурил</button>
   <p class="t" style="margin-top:18px"><a href="#" data-go="awards" style="color:inherit">16 металлов · заклинатели — gold · дербент — gold · треснутые — 5 наград →</a></p>
 </section>
 
 <section class="ov right" data-a="0.12" data-b="0.27">
-  <span class="t">{01} манифест</span>
-  <p class="lead" style="margin-top:12px">у каждого бренда есть огонь.<br>чаще всего он тлеет — в отчётах,<br>согласованиях и «давайте аккуратнее»</p>
+  <span class="t">{01} как работаем</span>
+  <p class="lead" style="margin-top:12px">берём на себя скучное<br>и возвращаем интересное</p>
+  <p style="margin-top:10px;max-width:40ch">провести концепцию через сорок носителей, три подрядчика и два круга правок, не растеряв драйв, — в этом мы так же устойчивы, как в креативе</p>
+  <p class="lead" style="margin-top:18px">раскручиваем то, что в брифе<br>только намечалось</p>
 </section>
 
 <section class="ov left" data-a="0.36" data-b="0.43">
-  <span class="t">{01} манифест</span>
-  <p class="lead" style="margin-top:12px">мы не приносим огонь со стороны:<br>находим ваш и даём ему дышать</p>
+  <span class="t">{01} как работаем</span>
+  <p class="lead" style="margin-top:12px">вам есть что показать —<br>мы делаем так, чтобы это заметили</p>
+  <p style="margin-top:10px;max-width:40ch">после этого рекламу перестают терпеть и начинают пересматривать</p>
 </section>
 
 <section class="ov right panel" data-a="0.45" data-b="0.51">
@@ -172,8 +175,8 @@ select{background:#111;border:0;border-bottom:1px solid #444;color:var(--cream);
 
 <section class="ov" id="fork" data-a="0.535" data-b="0.62">
   <div class="ask"><span class="t">{03} перекрёсток</span><h2>с чем пришли?</h2><p class="t" style="margin-top:6px">выберите маршрут: наверх или вниз — дальше скролл пойдёт по нему</p></div>
-  <button data-go="atl" class="up"><span class="t">{05} эфир · над городом ↑</span><b>atl</b><p>эфир, наружка, digital: кампании на экранах небоскрёбов</p></button>
-  <button data-go="btl"><span class="t">{04} проспект · на земле ↓</span><b>btl</b><p>там, где покупатель уже держит продукт в руках: зоны, ивенты, промо, спецпроекты</p></button>
+  <button data-go="atl" class="up"><span class="t">{05} эфир · над городом ↑</span><b>atl</b><p>кампании, которые продолжаются без нас: вселенные, бренд-платформы, сезонные рамки и ai-продакшн</p></button>
+  <button data-go="btl"><span class="t">{04} проспект · на земле ↓</span><b>btl</b><p>гости приходят зрителями — и становятся участниками: фестивали, гонки, марафоны, промо</p></button>
 </section>
 
 
@@ -192,7 +195,7 @@ select{background:#111;border:0;border-bottom:1px solid #444;color:var(--cream);
 
 <section class="ov right panel" data-a="0.935" data-b="0.965">
   <span class="t">{06} награды</span>
-  <h2>за что давали металл</h2>
+  <h2>оценили не только клиенты</h2>
   <div class="list">
     <button data-case="treschnutye"><span>треснутые · дикси</span><span class="t">silver ×2 · bronze ×3</span></button>
     <button data-case="zaklinateli"><span>заклинатели · дикси</span><span class="t">gold · bronze</span></button>
@@ -208,10 +211,10 @@ select{background:#111;border:0;border-bottom:1px solid #444;color:var(--cream);
 
 
 <section class="ov right panel" data-a="0.982" data-b="1.01" id="brief" style="width:min(460px,calc(100vw - 32px))">
-  <span class="t">{08} бриф</span>
-  <h2>есть задача?</h2>
+  <span class="t">{07} бриф · горит? раздуем</span>
+  <h2>с чем вы приходите?</h2>
   <form id="briefForm" onsubmit="event.preventDefault();this.innerHTML='<p>прототип: данные никуда не отправлены</p>'">
-    <select id="briefDir"><option value="">направление</option><option value="btl">btl</option><option value="atl">atl</option><option value="?">пока не знаю</option></select>
+    <select id="briefDir"><option value="">выберите задачу</option><option value="atl">нужна кампания к запуску</option><option value="tender">скоро тендер</option><option value="btl">нужно мероприятие или промо</option><option value="audience">хотим выйти на новую аудиторию</option><option value="special">нужен спецпроект</option></select>
     <input id="briefCase" placeholder="по мотивам кейса" style="display:none">
     <input placeholder="имя *" required><input placeholder="компания"><input placeholder="телефон или почта *" required>
     <textarea rows="2" placeholder="задача в двух словах *" required></textarea>
@@ -222,7 +225,7 @@ select{background:#111;border:0;border-bottom:1px solid #444;color:var(--cream);
     <div class="row"><span>пресса · hr</span><span class="t">почты — от риты</span></div>
     <div class="row"><span>санкт-петербург</span><span class="t">адрес → на карте</span></div>
   </div>
-  <footer class="ft t"><a href="#">new business</a><a href="#">пресса</a><a href="#" data-modal="jobs">ищем людей →</a></footer>
+  <footer class="ft t"><a href="#">new business</a><a href="#">пресса</a><a href="#" data-modal="jobs">ищем тех, кто превращает чужие искры в пламя →</a></footer>
 </section>
 
 <div id="orbitUi">
