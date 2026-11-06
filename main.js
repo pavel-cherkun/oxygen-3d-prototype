@@ -8,6 +8,7 @@ import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { DRACOLoader } from 'three/addons/loaders/DRACOLoader.js';
+import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 const gltfLoader = new GLTFLoader().setDRACOLoader(new DRACOLoader().setDecoderPath('https://cdn.jsdelivr.net/npm/three@0.169.0/examples/jsm/libs/draco/gltf/'));
 import { CASES, renderCase, MODALS } from './cases.js';
 
@@ -20,10 +21,10 @@ const clamp01 = t => Math.min(1, Math.max(0, t));
 // ---------- рендер ----------
 const canvas = document.getElementById('gl');
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: false, powerPreference: 'high-performance' });
-renderer.setPixelRatio(Math.min(devicePixelRatio, 1.5));
+renderer.setPixelRatio(Math.min(devicePixelRatio, 1.25));
 renderer.setSize(innerWidth, innerHeight);
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
-renderer.toneMappingExposure = 1.05;
+renderer.toneMappingExposure = 1.12;
 
 const scene = new THREE.Scene();
 scene.fog = new THREE.FogExp2(0x1a1f2e, 0.0026);
@@ -32,7 +33,7 @@ const camera = new THREE.PerspectiveCamera(50, innerWidth / innerHeight, 0.5, 25
 
 const composer = new EffectComposer(renderer);
 composer.addPass(new RenderPass(scene, camera));
-const bloom = new UnrealBloomPass(new THREE.Vector2(innerWidth, innerHeight), 0.8, 0.5, 0.72);
+const bloom = new UnrealBloomPass(new THREE.Vector2(innerWidth / 2, innerHeight / 2), 0.55, 0.45, 0.84);   // половинное разрешение: быстрее и мягче, без пересветов
 composer.addPass(bloom);
 composer.addPass(new OutputPass());
 
@@ -43,7 +44,7 @@ import('three/addons/environments/RoomEnvironment.js').then(({ RoomEnvironment }
   set(MAT.cream, 0.5); set(MAT.gloss, 0.6); set(MAT.glass, 0.8); set(MAT.glassO, 0.8);
   const later = () => { if (!logo.mat || !iskra) return setTimeout(later, 200); set(logo.mat, 0.45); set(iskra.material, 0.5); }; later();
 });
-scene.add(new THREE.HemisphereLight(0x6a3a4a, 0x140608, 0.55));
+scene.add(new THREE.HemisphereLight(0x8a5060, 0x1a0a0c, 0.95));
 const moon = new THREE.DirectionalLight(0x8090c0, 0.7); moon.position.set(-200, 400, 300); scene.add(moon);
 
 function skyTexture() {
@@ -60,10 +61,10 @@ const MAT = {
   cream: new THREE.MeshPhysicalMaterial({ color: 0x8c8378, roughness: 0.3, clearcoat: 1, clearcoatRoughness: 0.08 }),   // приглушённый кремовый, чтобы под светом не уходил в белый
   graphite: new THREE.MeshPhysicalMaterial({ color: 0x2a2a2f, roughness: 0.25, metalness: 0.3, clearcoat: 1, clearcoatRoughness: 0.06 }),
   // стекло как в рефе 1: настоящее пропускание света, лёгкая матовость, тонировка в толще
-  glass: new THREE.MeshPhysicalMaterial({ color: 0xff3a24, transmission: 1, thickness: 2.2, roughness: 0.18, ior: 1.45, attenuationColor: new THREE.Color(RED), attenuationDistance: 2.5, emissive: RED, emissiveIntensity: 0.12, clearcoat: 1, clearcoatRoughness: 0.05 }),
-  glassO: new THREE.MeshPhysicalMaterial({ color: 0xff7a2a, transmission: 1, thickness: 1.6, roughness: 0.24, ior: 1.45, attenuationColor: new THREE.Color(0xff5a10), attenuationDistance: 3, emissive: 0xff5a10, emissiveIntensity: 0.1, clearcoat: 1 }),
+  glass: new THREE.MeshPhysicalMaterial({ color: 0xff3a24, transparent: true, opacity: 0.55, roughness: 0.15, emissive: RED, emissiveIntensity: 0.18, clearcoat: 1, clearcoatRoughness: 0.05, depthWrite: false }),
+  glassO: new THREE.MeshPhysicalMaterial({ color: 0xff7a2a, transparent: true, opacity: 0.6, roughness: 0.2, emissive: 0xff5a10, emissiveIntensity: 0.16, clearcoat: 1, depthWrite: false }),
   // хром y2k: отражает тёмную комнату с красными полосами света (карта отражений — в buildAtmosphere)
-  chrome: new THREE.MeshPhysicalMaterial({ color: 0xffd6d6, metalness: 1, roughness: 0.07, clearcoat: 1, envMapIntensity: 1.6 }),
+  chrome: new THREE.MeshPhysicalMaterial({ color: 0xffe4e4, metalness: 1, roughness: 0.1, clearcoat: 1, envMapIntensity: 2.2 }),
   gloss: new THREE.MeshPhysicalMaterial({ color: RED, roughness: 0.18, clearcoat: 1, clearcoatRoughness: 0.05, emissive: RED, emissiveIntensity: 0.12 }),
 };
 // плиты разной толщины вокруг носителя — как в кинетическом 3D-наборе
@@ -189,7 +190,7 @@ function buildCity() {
   }
   // мокрая улица
   const ground = new THREE.Mesh(new THREE.PlaneGeometry(5000, 5000), new THREE.MeshStandardMaterial({ color: 0x0c0d12, roughness: 0.35, metalness: 0.6, envMapIntensity: 0.04 }));
-  ground.rotation.x = -Math.PI / 2; scene.add(ground);
+  ground.rotation.x = -Math.PI / 2; scene.add(ground); CITY.ground = ground;
   for (let z = 50; z < 930; z += 12) {
     if (z > 292 && z < 712) continue;   // в спортивном квартале — беговые дорожки
     const l = new THREE.Mesh(new THREE.PlaneGeometry(0.4, 5), new THREE.MeshBasicMaterial({ color: 0x3a3a44 }));
@@ -431,7 +432,6 @@ function vitrine(id, img, side, z, prop) {
     const hat = new THREE.Group(); const crown = new THREE.Mesh(new THREE.CylinderGeometry(1.1, 1.3, 1, 24), new THREE.MeshStandardMaterial({ color: 0x8fb3ff, roughness: 0.9 })); hat.add(crown);
     const brim = new THREE.Mesh(new THREE.CylinderGeometry(2.1, 2.1, 0.12, 32), crown.material); brim.position.y = -0.45; hat.add(brim); hat.position.set(3.4, 1.2, 0.8); p.add(hat);
   }
-  const l = new THREE.PointLight(0xffe2c8, 140, 22, 2); l.position.set(0, 12, 2); g.add(l);
   g.userData.case = id; clickable.push(g);
 }
 // ---------- стенд кейса посреди улицы: крупный главный кадр, под ним ряд кадров, сверху табличка ----------
@@ -452,13 +452,12 @@ function stand(id, imgs, z, { x = 0, big = 1 } = {}) {
   add(new THREE.BoxGeometry(W + 2, 1.4, 5), MAT.graphite, 0, 0.7, -1.2);
   add(new THREE.BoxGeometry(W, H, 0.8), MAT.matte, 0, y0 + H / 2, -0.5);
   [-1, 1].forEach(sd => add(new THREE.CylinderGeometry(0.28, 0.28, H + 3, 16), MAT.chrome, sd * (W / 2 + 0.3), y0 + H / 2 + 0.6, -0.3));
-  add(new THREE.BoxGeometry(W, 0.3, 0.9), new THREE.MeshBasicMaterial({ color: new THREE.Color(RED).multiplyScalar(1.5), toneMapped: false }), 0, y0 + H + 0.15, -0.5);
+  const cap = add(new THREE.CylinderGeometry(0.45, 0.45, W + 1.2, 20), MAT.chrome, 0, y0 + H + 0.3, -0.3); cap.rotation.z = Math.PI / 2;
   const pic = (src, w, h, px, py) => { const m = add(new THREE.PlaneGeometry(w, h), new THREE.MeshBasicMaterial({ map: caseTexture(`assets/cases/${src}.jpg`, false, 1024, 640) }), px, py, 0); m.material.color.setScalar(0.78); m.userData.case = id; clickable.push(m); };
   pic(imgs[0], HW, HH, 0, y0 + rowH + 0.8 + HH / 2);
   rest.forEach((src, i) => pic(src, tw, th, (i - (rest.length - 1) / 2) * (tw + gap), y0 + 0.8 + th / 2));
   const c = CASES[id];
   add(new THREE.PlaneGeometry(16, 2.5), new THREE.MeshBasicMaterial({ map: labelTex(c.title, `${c.pass.клиент} · ${c.pass.год}`) }), -W / 2 + 8, y0 + H + 1.75, 0);
-  const l = new THREE.PointLight(0xffe8dc, 120, 30, 2); l.position.set(0, H * 0.6, 9); g.add(l);
   return g;
 }
 // shelby: минимальный фастбэк по рефу 1 — чёрный кузов-плита, двойные красные полосы, тёмное стекло
@@ -712,7 +711,6 @@ function buildQuarters() {
   const blueM = new THREE.MeshBasicMaterial({ color: new THREE.Color(0x3a6bff).multiplyScalar(1.6), toneMapped: false });
   const halo = new THREE.Mesh(new THREE.TorusGeometry(7.3, 0.14, 8, 96), blueM); halo.rotation.x = Math.PI / 2; halo.position.set(0, 1.25, Z.lion); scene.add(halo);
   const ls = new THREE.SpotLight(0xdde6ff, 700, 70, 0.5, 0.6); ls.position.set(-6, 34, Z.lion - 16); ls.target.position.set(0, 6, Z.lion); scene.add(ls, ls.target);
-  const lf = new THREE.PointLight(0xe8ecff, 110, 34, 2); lf.position.set(2, 11, Z.lion - 10); scene.add(lf);
   gltfLoader.loadAsync('assets/models/lion-dance.glb').then(gltf => {
     const m = gltf.scene, bb = new THREE.Box3().setFromObject(m), k = 16 / (bb.max.y - bb.min.y); m.scale.setScalar(k); m.position.set(0, 1.2 - bb.min.y * k, Z.lion); m.rotation.y = Math.PI;
     // мех: бархатный отлив (sheen) поверх цвета — грива и шкура читаются пушистыми, а не пластиковыми
@@ -786,7 +784,6 @@ function buildQuarters() {
   [-1, 1].forEach(s => { const a = new THREE.Mesh(new THREE.CapsuleGeometry(0.22, 1.5, 4, 8), MAT.graphite); a.position.set(s * 1, 1, 0); a.rotation.z = s * 2.3; jumper.add(a); const l = a.clone(); l.position.set(s * 0.5, -1.7, 0.3); l.rotation.set(s * 0.6, 0, s * 0.3); jumper.add(l); });
   jumper.position.y = 5; bt.add(jumper); spinners.push({ o: jumper, k: 0.5 });
   bt.userData.case = 'megafon'; clickable.push(bt);
-  const btl = new THREE.PointLight(0xe8fff0, 220, 26, 2); btl.position.set(0, 9, 0); bt.add(btl);
   stand('megafon', ['megafon-1', 'megafon-zone-1', 'megafon-zone-2', 'megafon-bullet-1'], Z.mega, { x: -15 });
   stand('mice', ['mice-1', 'mice-details-1', 'mice-details-2', 'mice-out-1'], Z.mice, { x: -15 });
   // лапки гуся: как на заводе «балтики», ведут вдоль квартала
@@ -795,7 +792,6 @@ function buildQuarters() {
   const pt = new THREE.CanvasTexture(pc); const pm = new THREE.MeshBasicMaterial({ map: pt, transparent: true, depthWrite: false });
   for (let z = Q.event[0] + 6, k = 0; z < Q.event[1]; z += 4, k++) { const p = new THREE.Mesh(new THREE.PlaneGeometry(1.6, 1.6), pm); p.rotation.x = -Math.PI / 2; p.rotation.z = Math.PI; p.position.set((k % 2 ? 1.2 : -1.2) + Math.sin(z * 0.08) * 6 + 14, 0.07, z); scene.add(p); }
   plate('assets/cases/megafon-travel-1.jpg', 14, 18, V(36.4, 12, 590), -Math.PI / 2 - 0.6, 'megafonTravel');
-  const el = new THREE.PointLight(0xfff0e0, 300, 50, 2); el.position.set(-4, 18, Z.mega); scene.add(el);
 
   // т-банк «чёрный пояс по it» — в азиатском квартале: заглушка под 3d-модель зоны — круглый павильон под тентом, арка-тории и стенд с фото зоны
   const TY = new THREE.MeshStandardMaterial({ color: 0xffdd2d, roughness: 0.5 }), tg = new THREE.Group(); tg.position.set(1, 0, Z.tb - 10); tg.scale.setScalar(0.85); scene.add(tg);
@@ -807,7 +803,6 @@ function buildQuarters() {
   const nuki = new THREE.Mesh(new THREE.BoxGeometry(6.2, 0.4, 0.5), TY); nuki.position.y = 5.2; tor.add(nuki);
   tor.position.set(0, 0, -10.6); tg.add(tor);
   const start = new THREE.Mesh(new THREE.CylinderGeometry(2.4, 2.6, 0.8, 32), MAT.matte); start.position.y = 0.4; tg.add(start);
-  const tl2 = new THREE.PointLight(0xffe8a0, 260, 30, 2); tl2.position.set(0, 6, 0); tg.add(tl2);
   tg.userData.case = 'tbank'; clickable.push(tg);
   stand('tbank', ['tbank-zone-1', 'tbank-zone-top-1', 'tbank-road-1', 'tbank-cover-1'], Z.tb, { x: -15 });
 
@@ -1063,7 +1058,8 @@ function dataTex(seed) {
 // реф 11: хромовые шипы y2k — ветви из сужающихся конусов, шипы и звёздные блики на концах
 function chromeThorn(seed, mat) {
   const r = mulberry(seed), g = new THREE.Group(), cone = new THREE.ConeGeometry(1, 1, 10, 1, true); cone.translate(0, 0.5, 0);
-  const seg = (a, b, r0) => { const d = b.clone().sub(a), m = new THREE.Mesh(cone, mat); m.position.copy(a); m.scale.set(r0, d.length(), r0); m.quaternion.setFromUnitVectors(V(0, 1, 0), d.normalize()); g.add(m); };
+  const parts = [], o = new THREE.Object3D();   // все конусы дерева склеиваются в одну геометрию — один вызов отрисовки
+  const seg = (a, b, r0) => { const d = b.clone().sub(a); o.position.copy(a); o.scale.set(r0, d.length(), r0); o.quaternion.setFromUnitVectors(V(0, 1, 0), d.normalize()); o.updateMatrix(); parts.push(cone.clone().applyMatrix4(o.matrix)); };
   const grow = (p, dir, len, rad, depth) => {
     let cur = p.clone(); const n = 5;
     for (let i = 0; i < n; i++) {
@@ -1075,23 +1071,21 @@ function chromeThorn(seed, mat) {
     else FX.sparks.push({ p: cur, ph: r() * 6, s: 2 + r() * 3 });
   };
   grow(V(0, 0, 0), V(0, 1, 0), 22, 1.1, 2);
+  g.add(new THREE.Mesh(mergeGeometries(parts), mat));
   return g;
 }
 function buildAtmosphere() {
   const r = mulberry(2026);
   // небо и туман: красный горизонт, туман густеет к земле
-  scene.background = skyStars(); scene.fog = new THREE.FogExp2(0x1f0507, 0.0029);
+  scene.background = skyStars(); scene.fog = new THREE.FogExp2(0x1d0608, 0.0023);
   // отражения для хрома: тёмная комната с красными и белыми полосами света
   const envScene = new THREE.Scene(); envScene.background = new THREE.Color(0x040203);
-  [[RED, 0, 6, -12, 30, 3], [0xffe0e0, 9, 2, -10, 3, 18], [RED, -10, -4, 8, 20, 2], [0xffffff, 0, 12, 10, 6, 6]].forEach(([c, x, y, z, w, h]) => { const p = new THREE.Mesh(new THREE.PlaneGeometry(w, h), new THREE.MeshBasicMaterial({ color: c, side: THREE.DoubleSide })); p.position.set(x, y, z); p.lookAt(0, 0, 0); envScene.add(p); });
+  [[RED, 0, 6, -12, 30, 4], [0xffe0e0, 9, 2, -10, 4, 18], [RED, -10, -4, 8, 20, 3], [0xffffff, 0, 12, 10, 10, 8], [0xffd0d0, -12, 6, -4, 3, 20], [RED, 12, -8, 4, 16, 6]].forEach(([c, x, y, z, w, h]) => { const p = new THREE.Mesh(new THREE.PlaneGeometry(w, h), new THREE.MeshBasicMaterial({ color: c, side: THREE.DoubleSide })); p.position.set(x, y, z); p.lookAt(0, 0, 0); envScene.add(p); });
   const chromeEnv = new THREE.PMREMGenerator(renderer).fromScene(envScene, 0.02).texture;
   MAT.chrome.envMap = chromeEnv; MAT.chrome.needsUpdate = true; const chrome = MAT.chrome;
 
-  // реф 6 и 13: мокрый асфальт — тусклое зеркало вдоль проспекта, в нём горят неон и экраны
-  if (innerWidth > 760) import('three/addons/objects/Reflector.js').then(({ Reflector }) => {
-    const m = new Reflector(new THREE.PlaneGeometry(84, 1000), { textureWidth: innerWidth * 0.45 | 0, textureHeight: innerHeight * 0.45 | 0, color: 0x2c272a, clipBias: 0.003 });
-    m.rotation.x = -Math.PI / 2; m.position.set(0, 0.025, 480); scene.add(m);
-  });
+  // реф 6 и 13: мокрый асфальт — гладкий металлизированный слой отражает красно-белую комнату, без второго рендера сцены
+  CITY.ground.material = new THREE.MeshStandardMaterial({ color: 0x0b0a0d, roughness: 0.16, metalness: 0.85, envMap: chromeEnv, envMapIntensity: 0.45 });
 
   // реф 6, 7: дождь вокруг камеры
   const N = 4200, rp = new Float32Array(N * 6);
@@ -1099,14 +1093,6 @@ function buildAtmosphere() {
   const rg = new THREE.BufferGeometry(); rg.setAttribute('position', new THREE.BufferAttribute(rp, 3));
   FX.rain = new THREE.LineSegments(rg, new THREE.LineBasicMaterial({ color: 0xffb0b0, transparent: true, opacity: 0.2, depthWrite: false, blending: THREE.AdditiveBlending, fog: false }));
   FX.rain.frustumCulled = false; scene.add(FX.rain);
-
-  // реф 14: слои красного тумана между небоскрёбами — видно сверху, с маршрута atl
-  const cloud = canvasTex(512, 512, (g) => { const q = mulberry(14); g.clearRect(0, 0, 512, 512); for (let i = 0; i < 140; i++) { const x = q() * 512, y = q() * 512, rr = 30 + q() * 90, cg = g.createRadialGradient(x, y, 0, x, y, rr); cg.addColorStop(0, 'rgba(255,40,40,.22)'); cg.addColorStop(1, 'rgba(255,40,40,0)'); g.fillStyle = cg; g.fillRect(x - rr, y - rr, rr * 2, rr * 2); } });
-  cloud.wrapS = cloud.wrapT = THREE.RepeatWrapping; cloud.repeat.set(3, 3);
-  [[62, 0.2], [128, 0.12]].forEach(([y, o], i) => { const t = cloud.clone(); t.needsUpdate = true; const m = new THREE.Mesh(new THREE.PlaneGeometry(1600, 1600), new THREE.MeshBasicMaterial({ map: t, transparent: true, opacity: o, depthWrite: false, blending: THREE.AdditiveBlending, fog: false })); m.rotation.x = -Math.PI / 2; m.position.set(0, y, 400); scene.add(m); FX.fog.push({ t, k: 0.004 + i * 0.003 }); });
-  // реф 13: низкий туман у асфальта
-  const mistM = new THREE.SpriteMaterial({ map: softDot, color: 0x8a1a1e, transparent: true, opacity: 0.22, depthWrite: false, blending: THREE.AdditiveBlending });
-  for (let i = 0; i < 90; i++) { const s = new THREE.Sprite(mistM); s.scale.set(30 + r() * 30, 7 + r() * 5, 1); s.position.set((r() - 0.5) * 70, 2 + r() * 4, 120 + r() * 820); scene.add(s); FX.mist.push({ s, x: s.position.x, ph: r() * 6 }); }
 
   // реф 4, 5: город плотнее — пожарные лестницы, кондиционеры, буквы на крышах, неон, колонны данных на фасадах у улицы
   const near = CITY.cells.filter(c => Math.abs(c.x) < 75 && c.z > -20 && c.z < 980 && Math.abs(c.x) - c.w / 2 > 18);
@@ -1179,7 +1165,7 @@ function buildAtmosphere() {
   decal('{04} азия', 16, 8, -12, 172, Math.PI); decal('{04} спорт', 16, 8, -12, 300, Math.PI); decal('{04} ивент', 16, 8, -12, 486, Math.PI); decal('{04} мерч', 16, 8, -12, 606, Math.PI); decal('{06} награды', 16, 8, 0, 730, Math.PI);
 
   // реф 11: хромовые шипы y2k на площади, на перекрёстке, у квартала мерча и над ai-кварталом
-  [[-44, 0, 74, 1.2], [46, 0, 80, 1.0], [-24, 0, 170, 0.8], [25, 0, 174, 0.85], [-28, 0, 610, 0.6], [0, 132, 610, 0.9]].forEach(([x, y, z, k], i) => { const t = chromeThorn(31 + i, chrome); t.position.set(x, y, z); t.scale.setScalar(k); t.rotation.y = i; scene.add(t); t.updateMatrixWorld(true); FX.sparks.filter(s => !s.w).forEach(s => { s.w = s.p.clone().applyMatrix4(t.matrixWorld); }); });
+  [[-44, 0, 74, 1.2], [46, 0, 80, 1.0], [-24, 0, 170, 0.8], [25, 0, 174, 0.85], [-28, 0, 610, 0.6], [0, 132, 610, 0.9], [-31, 0, Z.tb + 8, 0.55], [-31, 0, Z.foot + 6, 0.5], [-31, 0, Z.mega + 6, 0.5], [30, 0, Z.silk - 30, 0.6], [-31, 0, Z.mice + 6, 0.5]].forEach(([x, y, z, k], i) => { const t = chromeThorn(31 + i, chrome); t.position.set(x, y, z); t.scale.setScalar(k); t.rotation.y = i; scene.add(t); t.updateMatrixWorld(true); FX.sparks.filter(s => !s.w).forEach(s => { s.w = s.p.clone().applyMatrix4(t.matrixWorld); }); });
   const sparkM = new THREE.SpriteMaterial({ map: starFlare, color: 0xffeaea, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, fog: false });
   FX.sparks.forEach(s => { s.sp = new THREE.Sprite(sparkM); s.sp.position.copy(s.w); scene.add(s.sp); });
 
@@ -1191,7 +1177,7 @@ function buildAtmosphere() {
   });
   // реф 6, 15, 16 и пин: матовая красная колонна-голограмма, за стеклом танцует силуэт льва
   const holo = new THREE.Group(); holo.position.set(-96, 0, 520); scene.add(holo);
-  const glassCol = new THREE.Mesh(new THREE.BoxGeometry(34, 120, 16), new THREE.MeshPhysicalMaterial({ color: 0xff4040, transmission: 1, roughness: 0.62, thickness: 3, ior: 1.3, attenuationColor: new THREE.Color(RED), attenuationDistance: 6, emissive: RED, emissiveIntensity: 0.08 }));
+  const glassCol = new THREE.Mesh(new THREE.BoxGeometry(34, 120, 16), new THREE.MeshStandardMaterial({ color: 0xff3030, transparent: true, opacity: 0.68, roughness: 0.9, emissive: RED, emissiveIntensity: 0.35, depthWrite: false }));
   glassCol.position.y = 92; holo.add(glassCol);
   const back = new THREE.Mesh(new THREE.PlaneGeometry(34, 120), new THREE.MeshBasicMaterial({ color: new THREE.Color(RED).multiplyScalar(1.4), toneMapped: false })); back.position.set(0, 92, -7.5); holo.add(back);
   const base = new THREE.Mesh(new THREE.BoxGeometry(40, 32, 22), MAT.matte); base.position.y = 16; holo.add(base);
@@ -1216,8 +1202,6 @@ function updateAtmosphere(time, dt) {
     for (let i = 0; i < p.length; i += 6) { p[i + 1] -= dt * 70; p[i + 4] -= dt * 70; if (p[i + 1] < cy - 55) { p[i + 1] += 110; p[i + 4] += 110; } else if (p[i + 1] > cy + 60) { p[i + 1] -= 110; p[i + 4] -= 110; } }
     a.needsUpdate = true; FX.rain.position.set(camera.position.x, 0, camera.position.z);
   }
-  FX.fog.forEach(f => { f.t.offset.x = time * f.k; f.t.offset.y = time * f.k * 0.6; });
-  FX.mist.forEach(m => { m.s.position.x = m.x + Math.sin(time * 0.15 + m.ph) * 6; });
   FX.leds.forEach(l => { l.t.offset.y = (time * l.k) % 1; });
   FX.sparks.forEach(s => { s.sp && s.sp.scale.setScalar(s.s * (0.6 + 0.5 * Math.max(0, Math.sin(time * 2.2 + s.ph)))); });
   FX.train.forEach(t => { t.car.position.set(((time * 26 + t.k * 13.4) % 520) - 260, t.y, t.z); });
@@ -1517,5 +1501,6 @@ addEventListener('resize', () => {
 history.scrollRestoration = 'manual'; scrollTo(0, 0);
 await Promise.all([document.fonts.load('520 100px TT'), document.fonts.load('20px AP')]);
 buildCity(); buildTower(); await buildLogo(); buildSections(); buildAtmosphere(); buildTimeline();
+window.__three = { renderer, scene };   // для отладки производительности
 document.getElementById('loader').classList.add('done');
 frame();
