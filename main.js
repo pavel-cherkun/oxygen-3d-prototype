@@ -1479,6 +1479,31 @@ function closeOrbit() {
 }
 document.getElementById('closeOrbit').addEventListener('click', closeOrbit);
 
+// ---------- временные обзорные виды на кварталы: камера отдельно от скролла, крутится мышью ----------
+const VIEWS = {
+  asia: { t: V(0, 8, 228), p: V(0, 82, 120) },
+  dixy: { t: V(-48, 64, 330), p: V(18, 104, 236) },
+  sport: { t: V(0, 6, 400), p: V(0, 72, 276) },
+  merch: { t: V(0, 8, 662), p: V(0, 46, 568) },
+  ai: { t: V(0, 96, 622), p: V(0, 150, 506) },
+};
+let viewKey = null;
+function openView(key) {
+  if (orbitOn && !viewKey) closeOrbit();
+  if (!viewKey) savedScroll = scrollY;
+  viewKey = key; orbitOn = true; document.body.classList.add('qview');
+  orbit?.dispose(); orbit = new OrbitControls(camera, canvas); orbit.enableDamping = true;
+  orbit.minDistance = 10; orbit.maxDistance = 260; orbit.maxPolarAngle = Math.PI * 0.49;
+  orbit.target.copy(VIEWS[key].t); camera.position.copy(VIEWS[key].p); orbit.update();
+  document.querySelectorAll('#views [data-view]').forEach(b => b.classList.toggle('on', b.dataset.view === key));
+}
+function closeView() {
+  if (!viewKey) return; viewKey = null; orbitOn = false; orbit.dispose(); orbit = null; document.body.classList.remove('qview');
+  document.querySelectorAll('#views [data-view]').forEach(b => b.classList.remove('on'));
+  requestAnimationFrame(() => scrollTo(0, savedScroll));
+}
+document.getElementById('views').addEventListener('click', e => { const b = e.target.closest('[data-view]'); if (!b) return; b.dataset.view === 'off' ? closeView() : openView(b.dataset.view); });
+
 const ISK_RED = new THREE.Color(RED), ISK_BLACK = new THREE.Color(0x0d0d0f), LOGO_DARK = new THREE.Color(0x1a0707);
 // ---------- цикл ----------
 let pSm = 0, mouse = new THREE.Vector2(), mouseSm = new THREE.Vector2();

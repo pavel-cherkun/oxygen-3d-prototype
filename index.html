@@ -118,6 +118,9 @@ select{background:#111;border:0;border-bottom:1px solid #444;color:var(--cream);
 #modal .res b{display:block;font-weight:520;font-size:clamp(44px,5vw,72px);line-height:1;font-variation-settings:"opsz" 36,"wdth" 100,"slnt" -6;color:var(--red)}
 #modal .close{position:fixed;top:20px;right:28px;z-index:21}
 @media(max-width:760px){#fork{grid-template-columns:1fr}#fork button{padding-bottom:4vh}#micro,#microL{display:none}.choice{grid-template-columns:1fr}#modal .ti{grid-template-columns:1fr}#modal .wrap{padding:80px 16px}}
+#views{position:fixed;left:50%;bottom:14px;translate:-50% 0;z-index:9;display:flex;gap:6px;align-items:center;font-size:11px;background:rgba(17,17,17,.7);backdrop-filter:blur(10px);padding:5px 8px;border:1px solid rgba(225,217,207,.12)}
+#views button{all:unset;cursor:pointer;color:var(--cream);padding:3px 8px;border:1px solid rgba(225,217,207,.2)}#views button:hover,#views button.on{background:var(--red);border-color:var(--red)}
+body.qview .ov,body.qview #orbitUi,body.qview #wipe{display:none!important}
 </style>
 <script type="importmap">
 {"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.169.0/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.169.0/examples/jsm/"}}
@@ -239,6 +242,8 @@ select{background:#111;border:0;border-bottom:1px solid #444;color:var(--cream);
   <div class="hint t">drag · zoom</div>
 </div>
 
+<!-- временно: обзорные виды на кварталы для работы над сценой -->
+<div id="views" class="t"><span>виды:</span><button data-view="asia">азия</button><button data-view="dixy">дикси</button><button data-view="sport">спорт</button><button data-view="merch">мерч</button><button data-view="ai">ai</button><button data-view="off">✕</button></div>
 <div id="modal"><button class="btn ghost close" id="modalClose">закрыть ✕</button><div class="wrap" id="modalBody"></div></div>
 
 <div id="scroll"></div>
