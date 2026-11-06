@@ -131,7 +131,7 @@ function buildCity() {
     if (Math.abs(x) < 62 && Math.abs(z) < 42) continue;      // площадь у башни
     if (Math.abs(z - 150) < 15) continue;                    // перекрёсток
     if (Math.abs(x) < 40 && z > 165 && z < 716) continue;    // кварталы: тротуары шире под зоны
-    if (x < -22 && x > -80 && z > 314 && z < 486) continue;   // три башни дикси
+    if (x < -22 && x > -80 && z > 198 && z < 432) continue;   // три башни дикси
     if (Math.abs(x) > 22 && Math.abs(x) < 70 && AI_TOWERS.some(([, , sd, zz]) => Math.sign(x) === sd && Math.abs(z - zz) < 22)) continue; // башни ai
     if (Math.abs(x) < 20 && z > 930) continue;               // торец проспекта под бриф
     if (Math.abs(x) > 22 && Math.abs(x) < 80 && ATL_SCREENS.some(([, sd, zz]) => Math.sign(x) === sd && Math.abs(z - zz) < 28)) continue; // небоскрёбы atl
@@ -341,8 +341,6 @@ function buildSections() {
   // перекрёсток: развилка
   const gantry = new THREE.Mesh(new THREE.BoxGeometry(46, 1.4, 1.4), new THREE.MeshStandardMaterial({ color: 0x222228 })); gantry.position.set(0, 27, 150); scene.add(gantry);
   [-22, 22].forEach(x => { const post = new THREE.Mesh(new THREE.BoxGeometry(1.2, 27, 1.2), gantry.material); post.position.set(x, 13.5, 150); scene.add(post); });
-  const sb = board(textTexture(['btl', 'проспект ↓ · продукт в руках'], { label: '{04} · oxygen' }), 20, 10, V(11, 21, 149.3), Math.PI); sb.userData.go = 'btl'; clickable.push(sb);
-  const sa = board(textTexture(['atl', 'эфир ↑ · тв, наружка, digital'], { label: '{05} · oxygen' }), 20, 10, V(-11, 21, 149.3), Math.PI); sa.userData.go = 'atl'; clickable.push(sa);
 
   // btl: бренд-зона ozon
   const floor = new THREE.Mesh(new THREE.BoxGeometry(36, 1.2, 24), new THREE.MeshStandardMaterial({ color: 0x1a1a22, roughness: 0.5, metalness: 0.4 }));
@@ -382,7 +380,11 @@ function buildSections() {
       tagAt(CASES[id].title, 'вебтун · 100 лет «зениту»', V(side * 20, 116, z), cam, 20); return;
     }
     const src = `assets/cases/${CASES[id].how[0][0].split('/').pop()}`;
-    screenAt(caseTexture(src, false, 1024, 614), 28, 16.8, pos, cam, id);
+    if (id === 'tevredens') {   // у tevredens на экране ролик из кейса
+      const v = Object.assign(document.createElement('video'), { src: 'assets/tevredens.mp4', muted: true, loop: true, playsInline: true, crossOrigin: 'anonymous', preload: 'auto' });
+      const vt = new THREE.VideoTexture(v); vt.colorSpace = THREE.SRGBColorSpace;
+      const { g } = screenAt(vt, 28, 15.75, pos, cam, id); aiClips.push({ g, v, y: g.position.y, ph: 0, still: true });
+    } else screenAt(caseTexture(src, false, 1024, 614), 28, 16.8, pos, cam, id);
     tagAt(CASES[id].title, CASES[id].pass.клиент, V(side * 20, 107.5, z), cam, 22);
   });
   buildDixyTowers(); buildAiTowers();
@@ -390,15 +392,44 @@ function buildSections() {
   // награды
   board(textTexture(['16', 'металл: gold · silver · bronze'], { label: '{06} · награды', accent: 0 }), 44, 22, V(19.5, 18, 780), -Math.PI / 2);
 
-  // о нас: команда на фасаде — лист портретов из гайдлайна 20_26: кроп в форме знака, ч/б с красным градиентом, роль моно сверху, имя под ней
-  const ttex = texLoader.load('assets/team/team-guideline.jpg'); ttex.colorSpace = THREE.SRGBColorSpace; ttex.anisotropy = 8;
-  const team = board(ttex, 48, 27, V(-19.5, 20, 840), Math.PI / 2);
-  team.material.toneMapped = true; team.material.color.setScalar(0.95);
-
   // бриф
   board(textTexture(['бриф', 'ответим за рабочий день'], { label: '{08} · oxygen', bg: '#F40709', color: '#111111', accent: -1 }), 50, 25, V(0, 22, 940), Math.PI);
 }
 
+// витрина квартала мерча: подиум, рамка из глянца, стеклянный короб, лайтбокс с кадром кейса на задней стенке, внутри — предмет
+const MERCH = [['selekt', 'ozon-select-1', 1, 622, 'ring'], ['gdriveMerch', 'gdrive-capsule-1', -1, 648, 'tees'], ['oxygenSet', 'oxygen-set-1', 1, 674, 'boxes'], ['lionMerch', '../dp/lion-cover', -1, 700, 'lion']];
+const vtCam = (side, z) => V(-side * 2, 11, z - 30);
+function vitrine(id, img, side, z, prop) {
+  const g = new THREE.Group(); g.position.set(side * 13, 0, z); aim(g, vtCam(side, z)); scene.add(g);
+  const add = (geo, m, x, y, zz) => { const o = new THREE.Mesh(geo, m); o.position.set(x, y, zz); g.add(o); return o; };
+  add(new THREE.BoxGeometry(15, 1.2, 10), MAT.graphite, 0, 0.6, 0);
+  [[-7, -4.6], [7, -4.6], [-7, 4.6], [7, 4.6]].forEach(([x, zz]) => add(new THREE.BoxGeometry(0.4, 13, 0.4), MAT.gloss, x, 7.7, zz));
+  add(new THREE.BoxGeometry(15.4, 1.4, 10.2), MAT.matte, 0, 14.7, 0);
+  add(new THREE.BoxGeometry(14, 0.12, 0.12), new THREE.MeshBasicMaterial({ color: new THREE.Color(0xffd8b0).multiplyScalar(1.3), toneMapped: false }), 0, 13.9, 4.5);
+  add(new THREE.BoxGeometry(14.4, 11.6, 0.6), MAT.matte, 0, 7.6, -4.9);
+  const pic = add(new THREE.PlaneGeometry(13, 8.1), new THREE.MeshBasicMaterial({ map: caseTexture(`assets/cases/${img}.jpg`, false, 1024, 640) }), 0, 8.4, -4.55); pic.material.color.setScalar(0.8);
+  const glass = new THREE.MeshPhysicalMaterial({ color: 0xffffff, transparent: true, opacity: 0.07, roughness: 0.05, clearcoat: 1, depthWrite: false });
+  add(new THREE.BoxGeometry(14, 12.4, 0.1), glass, 0, 7.4, 4.6); [-7, 7].forEach(x => add(new THREE.BoxGeometry(0.1, 12.4, 9.2), glass, x, 7.4, 0));
+  const c = CASES[id]; const lab = add(new THREE.PlaneGeometry(13, 2.03), new THREE.MeshBasicMaterial({ map: labelTex(c.title, c.pass.клиент) }), 0, 16.6, 0.2);
+  const p = new THREE.Group(); p.position.set(0, 1.2, 0.5); g.add(p);
+  if (prop === 'ring') {   // кольцевой свет и модули стены
+    const ring = new THREE.Mesh(new THREE.TorusGeometry(2.6, 0.22, 12, 64), new THREE.MeshBasicMaterial({ color: new THREE.Color(0xffe8f0).multiplyScalar(1.3), toneMapped: false })); ring.position.y = 5.4; p.add(ring);
+    const st = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.1, 3, 8), MAT.graphite); st.position.y = 1.5; p.add(st);
+    [[-4.4, 0], [4.4, 0], [-4.4, 2.6], [4.4, 2.6]].forEach(([x, y]) => { const b = new THREE.Mesh(new THREE.BoxGeometry(2.4, 2.4, 1), y ? MAT.graphite : MAT.glassO); b.position.set(x, 1.3 + y, -1.5); p.add(b); });
+  } else if (prop === 'tees') {   // рейл с футболками капсулы
+    const rail = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.1, 9, 10), MAT.gloss); rail.rotation.z = Math.PI / 2; rail.position.y = 8.2; p.add(rail);
+    const tee = teeGeometry(); [MAT.matte, new THREE.MeshStandardMaterial({ color: 0xff5a10, roughness: 0.8 }), MAT.graphite].forEach((m, i) => { const t = new THREE.Mesh(tee, m); t.scale.setScalar(1.35); t.position.set(-3 + i * 3, 3.3, i * 0.2); p.add(t); swing.push({ o: t, k: 'tee', ph: i }); });
+  } else if (prop === 'boxes') {   // набор «100% креатора»
+    [[MAT.gloss, 5, 2.4, 4, 0, 1.2], [MAT.matte, 4, 1.6, 3.4, 0.2, 3.2], [MAT.glassO, 2.6, 1.4, 2.4, -0.3, 4.7]].forEach(([m, w, h, d, x, y]) => { const b = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), m); b.position.set(x, y, 0); b.rotation.y = x * 0.6; p.add(b); });
+    spinners.push({ o: p.children[2], k: 0.4 });
+  } else {   // мерч льва: худи цвета гривы и панама
+    const t = new THREE.Mesh(teeGeometry(), new THREE.MeshStandardMaterial({ color: 0x1f4fd8, roughness: 0.9 })); t.scale.setScalar(1.5); t.position.set(-1.8, 2.4, 0); p.add(t);
+    const hat = new THREE.Group(); const crown = new THREE.Mesh(new THREE.CylinderGeometry(1.1, 1.3, 1, 24), new THREE.MeshStandardMaterial({ color: 0x8fb3ff, roughness: 0.9 })); hat.add(crown);
+    const brim = new THREE.Mesh(new THREE.CylinderGeometry(2.1, 2.1, 0.12, 32), crown.material); brim.position.y = -0.45; hat.add(brim); hat.position.set(3.4, 1.2, 0.8); p.add(hat);
+  }
+  const l = new THREE.PointLight(0xffe2c8, 140, 22, 2); l.position.set(0, 12, 2); g.add(l);
+  g.userData.case = id; clickable.push(g);
+}
 // ---------- стенд кейса посреди улицы: крупный главный кадр, под ним ряд кадров, сверху табличка ----------
 const aim = (o, cam) => { o.rotation.y = Math.atan2(cam.x - o.position.x, cam.z - o.position.z); return o; };
 function labelTex(txt, sub = '') {
@@ -572,9 +603,9 @@ const atlCam = (side, z) => V(-side * 2, 94, z - 44);
 
 // ---------- кварталы на одной улице: азиатский → стык (хроники ижоры) → спортивный ----------
 // у каждого квартала лаконичное, но яркое оформление: несколько крупных узнаваемых форм, а не мелкий декор
-const Q = { asia: [168, 268], joint: 282, sport: [292, 470], event: [482, 596], shops: [630, 712] };
+const Q = { asia: [168, 268], joint: 282, sport: [292, 470], event: [482, 590], shops: [604, 716] };
 // остановки btl: кейсы стоят посреди улицы
-const Z = { sel: 250, lion: 320, iron: 356, silk: 400, foot: 446, goose: 492, mega: 532, mice: 572, tb: 616, merch: 656, set: 692 };
+const Z = { tb: 248, lion: 320, iron: 356, silk: 400, foot: 446, goose: 492, mega: 532, mice: 572 };
 const webtoon = { tex: null, tops: [], total: 1, win: 1 };
 const lionDance = { mixer: null, t: 0 }, spinners = [], rally = [], swing = [];
 const vsign = (txt, x, y, z, col, bg = '#111111', w = 2.6) => {
@@ -761,7 +792,7 @@ function buildQuarters() {
   plate('assets/cases/megafon-travel-1.jpg', 14, 18, V(36.4, 12, 590), -Math.PI / 2 - 0.6, 'megafonTravel');
   const el = new THREE.PointLight(0xfff0e0, 300, 50, 2); el.position.set(-4, 18, Z.mega); scene.add(el);
 
-  // т-банк «чёрный пояс по it»: заглушка под 3d-модель зоны — круглый павильон под тентом, арка-тории и стенд с фото зоны
+  // т-банк «чёрный пояс по it» — в азиатском квартале: заглушка под 3d-модель зоны — круглый павильон под тентом, арка-тории и стенд с фото зоны
   const TY = new THREE.MeshStandardMaterial({ color: 0xffdd2d, roughness: 0.5 }), tg = new THREE.Group(); tg.position.set(9, 0, Z.tb + 2); scene.add(tg);
   for (let i = 0; i < 10; i++) { const a = i / 10 * Math.PI * 2, p = new THREE.Mesh(new THREE.BoxGeometry(0.5, 7, 0.5), TY); p.position.set(Math.cos(a) * 10, 3.5, Math.sin(a) * 10); tg.add(p); }
   const ringb = new THREE.Mesh(new THREE.TorusGeometry(10, 0.4, 8, 64), TY); ringb.rotation.x = Math.PI / 2; ringb.position.y = 7; tg.add(ringb);
@@ -775,28 +806,17 @@ function buildQuarters() {
   tg.userData.case = 'tbank'; clickable.push(tg);
   stand('tbank', ['tbank-zone-1', 'tbank-zone-top-1', 'tbank-road-1', 'tbank-cover-1'], Z.tb, { x: -10 });
 
-  // ===== мерч — не на стенах, а стендами посреди улицы: вешало с футболками и подиум с набором
-  const rack = new THREE.Group(); rack.position.set(6, 0, Z.merch - 6); scene.add(rack);
-  [-6, 6].forEach(x => { const p = new THREE.Mesh(new THREE.BoxGeometry(0.4, 9, 0.4), MAT.gloss); p.position.set(x, 4.5, 0); rack.add(p); });
-  const rail = new THREE.Mesh(new THREE.CylinderGeometry(0.15, 0.15, 12.4, 10), MAT.gloss); rail.rotation.z = Math.PI / 2; rail.position.y = 8.8; rack.add(rail);
-  const tee = teeGeometry(), teeM = [MAT.matte, new THREE.MeshStandardMaterial({ color: 0xff5a10, roughness: 0.8 }), MAT.graphite, MAT.gloss, MAT.matte];
-  teeM.forEach((m, i) => { const t = new THREE.Mesh(tee, m); t.position.set(-4.4 + i * 2.2, 5, -0.6 + i * 0.3); rack.add(t); swing.push({ o: t, k: 'tee', ph: i }); });
-  rack.userData.case = 'gdriveMerch'; clickable.push(rack);
-  stand('gdriveMerch', ['gdrive-merch-1', 'gdrive-capsule-1', 'gdrive-capsule-2'], Z.merch, { x: -9 });
-  const box = new THREE.Group(); box.position.set(6, 0, Z.set - 6); scene.add(box);
-  const pod = new THREE.Mesh(new THREE.BoxGeometry(9, 2, 7), MAT.graphite); pod.position.y = 1; box.add(pod);
-  [[MAT.gloss, 5, 2.4, 4, 0, 3.2], [MAT.matte, 4, 1.6, 3.4, 0.2, 5.2], [MAT.glassO, 2.6, 1.4, 2.4, -0.3, 6.7]].forEach(([m, w, h, d, x, y]) => { const b = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), m); b.position.set(x, y, 0); b.rotation.y = x * 0.6; box.add(b); });
-  spinners.push({ o: box.children[3], k: 0.4 });
-  box.userData.case = 'oxygenSet'; clickable.push(box);
-  stand('oxygenSet', ['oxygen-set-1'], Z.set, { x: -8 });
-
-  // ozon селект: пораньше и посредине улицы — место под 3d-модель зоны; пока модульная светящаяся стена и стенд
-  const sel = new THREE.Group(); sel.position.set(8, 0, Z.sel - 2); sel.rotation.y = Math.PI; scene.add(sel);
-  const sb = new THREE.Mesh(new THREE.CylinderGeometry(7, 7.4, 1, 48), MAT.graphite); sb.position.y = 0.5; sel.add(sb);
-  const glowM = new THREE.MeshStandardMaterial({ color: 0x2a1a22, emissive: 0xffc8d8, emissiveIntensity: 0.55, roughness: 0.6 });
-  for (let r = 0; r < 3; r++) for (let c = 0; c < 4; c++) { const b = new THREE.Mesh(new THREE.BoxGeometry(2.6, 2.6, 1.2), (r + c) % 3 ? MAT.graphite : glowM); b.position.set(-4.2 + c * 2.8, 2.4 + r * 2.8, 0); sel.add(b); }
-  sel.userData.case = 'selekt'; clickable.push(sel);
-  stand('selekt', ['ozon-select-0', 'ozon-select-1', 'ozon-select-2', 'ozon-select-3'], Z.sel, { x: -9, big: 0.85 });
+  // ===== квартал мерча: потолок из световых балок, подиум-дорожка по центру и четыре витрины по сторонам, к камере углом
+  const qz0 = Q.shops[0], qz1 = Q.shops[1], beams = [];
+  for (let z = qz0 + 4; z < qz1; z += 9) beams.push([0, 19, z]);
+  const beamM = new THREE.MeshBasicMaterial({ color: new THREE.Color(RED).multiplyScalar(1.3), toneMapped: false });
+  const bIm = new THREE.InstancedMesh(new THREE.BoxGeometry(60, 0.35, 0.35), beamM, beams.length), bd = new THREE.Object3D();
+  beams.forEach(([x, y, z], i) => { bd.position.set(x, y, z); bd.updateMatrix(); bIm.setMatrixAt(i, bd.matrix); }); scene.add(bIm);
+  [-30, 30].forEach(x => { const rail = new THREE.Mesh(new THREE.BoxGeometry(0.8, 0.8, qz1 - qz0), MAT.graphite); rail.position.set(x, 19, (qz0 + qz1) / 2); scene.add(rail); });
+  const run = new THREE.Mesh(new THREE.BoxGeometry(8, 0.3, qz1 - qz0), MAT.graphite); run.position.set(0, 0.15, (qz0 + qz1) / 2); scene.add(run);
+  [-4.1, 4.1].forEach(x => { const e = new THREE.Mesh(new THREE.BoxGeometry(0.15, 0.32, qz1 - qz0), new THREE.MeshBasicMaterial({ color: new THREE.Color(0xffd8b0).multiplyScalar(0.55), toneMapped: false })); e.position.set(x, 0.17, (qz0 + qz1) / 2); scene.add(e); });
+  tagAt('квартал мерча', 'упаковка · одежда · наборы', V(0, 23.5, qz0 + 2), V(0, 12, qz0 - 40), 26);
+  MERCH.forEach(([id, img, side, z, prop]) => vitrine(id, img, side, z, prop));
 
   // ===== объёмные слова по рефу 1: буквы — плиты из разных материалов, разъезжаются и собираются по мере подхода
   gltfLoader.loadAsync('assets/models/type.glb').then(gltf => {
@@ -823,7 +843,9 @@ function updateQuarters(time) {
   rally.forEach(r => { const a = time * 0.35 + r.ph, vx = -Math.sin(a) * 14.3, vz = Math.cos(a) * 6.6; r.c.position.set(Math.cos(a) * 14.3, 0, Z.silk - 2 + Math.sin(a) * 6.6); r.c.rotation.y = Math.atan2(-vz, vx); });
   swing.forEach(s => { if (s.k === 'tee') s.o.rotation.y = Math.sin(time * 1.1 + s.ph) * 0.25; else { s.o.rotation.z = Math.sin(time * 3) * 0.04; s.o.userData.neck && (s.o.position.y = Math.abs(Math.sin(time * 3)) * 0.3); } });
   const sec = 3738 + Math.floor(time); if (ledTimer.c && sec !== ledTimer.last) { ledTimer.last = sec; drawTimer(sec); }
-  aiRings.forEach((r, i) => { r.rotation.z = time * 0.5 + i; r.position.y = 158 + Math.sin(time * 0.8 + i) * 1.2; });
+  aiRings.forEach((r, i) => { if (r.portal) { r.portal.rotation.z = time * 0.15; return; } r.rotation.z = time * 0.5 + i; r.position.y = 158 + Math.sin(time * 0.8 + i) * 1.2; });
+  aiNeurons.forEach(a => { a.n.rotation.set(time * a.s, time * a.s * 0.7, 0); a.n.position.y = a.y + Math.sin(time * 0.6 + a.ph) * 2; });
+  if (aiStreams.mesh) aiStreams.list.forEach(([x, y0, z, sp], i) => { _dm.position.set(x, 62 + (y0 + time * sp) % 100, z); _dm.updateMatrix(); aiStreams.mesh.setMatrixAt(i, _dm.matrix); }), aiStreams.mesh.instanceMatrix.needsUpdate = true;
   updateDixy(time);
   aiClips.forEach(c => {
     c.g.position.y = c.y + Math.sin(time * 0.7 + c.ph) * 0.6;
@@ -840,7 +862,7 @@ function updateQuarters(time) {
 
 // ---------- дикси: три отдельные башни, в каждой один открытый этаж-магазин. этажи ступенькой вверх, вокруг летают машины ----------
 // дино (ниже всех), треснутые (выше), заклинатели — настоящий кинозал в самой высокой
-const DIXY = { x: -50, w: 40, d: 44, cz: 400, towers: [['dino', 342, 40, 18, 112], ['treschnutye', 400, 64, 18, 134], ['zaklinateli', 458, 88, 22, 156]] };
+const DIXY = { x: -50, w: 40, d: 44, cz: 315, towers: [['treschnutye', 225, 40, 18, 112], ['dino', 345, 52, 18, 124], ['zaklinateli', 405, 70, 22, 146]] };
 const DIXY_ORANGE = 0xff5a00;
 const cinema = { screen: null, glow: null, video: null }, floaters = [], cars = [];
 function buildDixyTowers() {
@@ -871,65 +893,29 @@ function buildDixyTowers() {
     const hl = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.25, 1.2), new THREE.MeshBasicMaterial({ color: new THREE.Color(0xffd8a8).multiplyScalar(1.5), toneMapped: false })); hl.position.set(2.9, 0, 0); car.add(hl);
     const tl = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.25, 1.4), new THREE.MeshBasicMaterial({ color: new THREE.Color(RED).multiplyScalar(2), toneMapped: false })); tl.position.set(-2.9, 0, 0); car.add(tl);
     scene.add(car);
-    cars.push({ car, y: 52 + i * 11, rx: 34 + (i % 3) * 6, rz: 86 + (i % 2) * 12, sp: 0.06 + (i % 4) * 0.015, ph: i * 0.9, dir: i % 2 ? 1 : -1 });
+    cars.push({ car, y: 48 + i * 11, rx: 34 + (i % 3) * 6, rz: 110 + (i % 2) * 14, sp: 0.06 + (i % 4) * 0.015, ph: i * 0.9, dir: i % 2 ? 1 : -1 });
   }
-}
-function shelf(g, w, h, d, n) {
-  // ряды стеллажей перпендикулярно фасаду, на полках — товары-кубики в фирменных тонах
-  const shelfG = new THREE.BoxGeometry(14, 6, 1.6), prodG = new THREE.BoxGeometry(0.9, 1.1, 0.9);
-  const prods = new THREE.InstancedMesh(prodG, new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.6 }), n * 2 * 3 * 10);
-  const dm = new THREE.Object3D(), cols = [0xff5a00, 0xF40709, 0xe1d9cf, 0x2b2b30, 0xffb000].map(c => new THREE.Color(c)); let k = 0;
-  for (let r = 0; r < n; r++) {
-    const zz = -d / 2 + 10 + r * ((d - 20) / Math.max(1, n - 1));
-    const s = new THREE.Mesh(shelfG, MAT.matte); s.position.set(-6, 3.8, zz); g.add(s);
-    for (let side = -1; side <= 1; side += 2) for (let lv = 0; lv < 3; lv++) for (let i = 0; i < 10; i++) {
-      dm.position.set(-12 + i * 1.3, 1.9 + lv * 1.9, zz + side * 1.1); dm.updateMatrix(); prods.setMatrixAt(k, dm.matrix); prods.setColorAt(k, cols[(i + lv + r) % cols.length]); k++;
-    }
-  }
-  g.add(prods);
-  const lamp = new THREE.Mesh(new THREE.BoxGeometry(30, 0.2, 0.6), new THREE.MeshBasicMaterial({ color: new THREE.Color(0xffa860).multiplyScalar(0.6), toneMapped: false }));
-  [-14, 0, 14].forEach(zz => { const l = lamp.clone(); l.position.set(-4, h - 1.2, zz); g.add(l); });
-  const pl = new THREE.PointLight(0xffc890, 260, 45, 2); pl.position.set(4, h - 3, 0); g.add(pl);
-  const cash = new THREE.Mesh(new THREE.BoxGeometry(3, 2.2, 8), MAT.gloss); cash.position.set(15, 1.9, -18); g.add(cash);
 }
 function buildShopFloor(g, id, w, h, d) {
-  shelf(g, w, h, d, 3);
-  const poster = (src, pw, ph, px, py, pz) => { const m = new THREE.Mesh(new THREE.PlaneGeometry(pw, ph), new THREE.MeshBasicMaterial({ map: caseTexture(src, false) })); m.material.color.setScalar(0.85); m.position.set(px, py, pz); m.rotation.y = Math.PI / 2; g.add(m); m.userData.case = id; clickable.push(m); return m; };
+  // этаж-витрина без лишнего: на задней стене большой экран кейса, в центре один герой-объект, тёплый свет
+  const sh = h - 4.5, sw = sh * 16 / 9;
+  const scr = new THREE.Mesh(new THREE.PlaneGeometry(sw, sh), new THREE.MeshBasicMaterial({ map: caseTexture(`assets/cases/${id}-1.jpg`, false, 1024, 576) }));
+  scr.material.color.setScalar(0.8); scr.position.set(-w / 2 + 1.2, h / 2 + 0.6, 0); scr.rotation.y = Math.PI / 2; g.add(scr); scr.userData.case = id; clickable.push(scr);
+  const pl = new THREE.PointLight(0xffc890, 220, 45, 2); pl.position.set(6, h - 3, 0); g.add(pl);
   if (id === 'dino') {
-    // дино: в центре этажа — мегатирекс, собранный из 12 конструкторов (простые блоки)
-    poster('assets/cases/dino-1.jpg', 20, 12.5, -w / 2 + 1, 9, 14);
+    // мегатирекс, собранный из 12 конструкторов
     const rex = new THREE.Group(), blk = (bw, bh, bd, bx, by, bz, m = MAT.gloss) => { const b = new THREE.Mesh(new THREE.BoxGeometry(bw, bh, bd), m); b.position.set(bx, by, bz); rex.add(b); };
     blk(7, 4, 3, 0, 7, 0); blk(3.5, 3, 2.6, 4.6, 10, 0); blk(2.6, 1.2, 2.2, 6.8, 9.2, 0, MAT.matte); blk(1.2, 5, 1.2, -1.5, 3, 0.9, MAT.matte); blk(1.2, 5, 1.2, 1.5, 3, -0.9, MAT.matte);
     blk(6, 1.6, 1.6, -6, 7.6, 0); blk(3, 1, 1, -10, 8.4, 0); blk(1, 2.2, 0.8, 2.6, 6.2, 1.6, MAT.matte);
-    rex.position.set(6, 0.8, -12); rex.rotation.y = -0.6; g.add(rex); rex.userData.case = 'dino'; clickable.push(rex); floaters.push({ g: rex, y: 0.8, ph: 0, spin: true });
+    rex.position.set(4, 0.8, 4); g.add(rex); rex.userData.case = 'dino'; clickable.push(rex); floaters.push({ g: rex, y: 0.8, ph: 0, spin: true });
   } else {
-    // треснутые: автоматы капсул вдоль витрины и стойки форматов — комикс, сериал, игра, умная колонка
-    poster('assets/cases/treschnutye-1.jpg', 20, 12.5, -w / 2 + 1, 9, 14);
-    for (let i = 0; i < 3; i++) {
-      const ga = new THREE.Group();
-      const base = new THREE.Mesh(new THREE.BoxGeometry(3, 4, 3), MAT.gloss); base.position.y = 2; ga.add(base);
-      const dome = new THREE.Mesh(new THREE.SphereGeometry(1.9, 24, 16), new THREE.MeshPhysicalMaterial({ color: 0xffffff, transparent: true, opacity: 0.16, roughness: 0.05, depthWrite: false })); dome.position.y = 5.8; ga.add(dome);
-      const cr = mulberry(10 + i);
-      for (let c = 0; c < 9; c++) { const cap = new THREE.Mesh(new THREE.SphereGeometry(0.4, 10, 8), cr() < 0.5 ? MAT.gloss : new THREE.MeshStandardMaterial({ color: DIXY_ORANGE })); const a = cr() * 6.3, rr = cr() * 1.3; cap.position.set(Math.cos(a) * rr, 5 + cr() * 1.2, Math.sin(a) * rr); ga.add(cap); }
-      ga.position.set(14, 0.8, -6 + i * 7); g.add(ga); ga.userData.case = 'treschnutye'; clickable.push(ga);
-    }
-    const fmt = (obj, label, py, pz) => {
-      const s = new THREE.Group(); s.add(obj);
-      const l = new THREE.Mesh(new THREE.PlaneGeometry(6, 1.4), new THREE.MeshBasicMaterial({ map: textTexture([label], { w: 1024, h: 230, bg: '#111111' }), toneMapped: false })); l.position.y = -3.6; s.add(l);
-      s.position.set(9, py, pz); s.rotation.y = Math.PI / 2; g.add(s); s.userData.case = 'treschnutye'; clickable.push(s); floaters.push({ g: s, y: py, ph: pz });
-    };
-    const comic = new THREE.Group();
-    [0, 1, 2].forEach(i => { const pg = new THREE.Mesh(new THREE.PlaneGeometry(3.4, 4.6), new THREE.MeshBasicMaterial({ map: caseTexture('assets/cases/treschnutye-1.jpg', false), side: THREE.DoubleSide })); pg.position.set((i - 1) * 1.1, 0, i * 0.1); pg.rotation.z = (i - 1) * 0.18; comic.add(pg); });
-    fmt(comic, 'комикс', 11, -17);
-    const tv = new THREE.Group(); const tb = new THREE.Mesh(new THREE.BoxGeometry(6, 3.8, 0.7), MAT.matte); tb.position.z = -0.4; tv.add(tb);
-    tv.add(new THREE.Mesh(new THREE.PlaneGeometry(5.4, 3.2), new THREE.MeshBasicMaterial({ map: caseTexture('assets/cases/treschnutye-1.jpg') })));
-    fmt(tv, 'сериал', 11, -8.5);
-    const ph = new THREE.Group(); const pb = new THREE.Mesh(new THREE.BoxGeometry(2.4, 4.6, 0.35), MAT.matte); pb.position.z = -0.2; ph.add(pb);
-    ph.add(new THREE.Mesh(new THREE.PlaneGeometry(2.1, 4.1), new THREE.MeshBasicMaterial({ map: caseTexture('assets/cases/treschnutye-1.jpg', false) })));
-    fmt(ph, 'игра', 11, 9);
-    const sp = new THREE.Group(); sp.add(new THREE.Mesh(new THREE.CylinderGeometry(1.2, 1.35, 3, 32), MAT.matte));
-    const ring = new THREE.Mesh(new THREE.TorusGeometry(1.15, 0.12, 12, 48), new THREE.MeshBasicMaterial({ color: 0xb07cff, toneMapped: false })); ring.rotation.x = Math.PI / 2; ring.position.y = 1.55; sp.add(ring); floaters.ring = ring;
-    fmt(sp, 'квест с марусей', 11, 17);
+    // треснутые: один большой автомат с 26 капсулами — по числу героев
+    const ga = new THREE.Group();
+    const base = new THREE.Mesh(new THREE.BoxGeometry(5, 6, 5), MAT.gloss); base.position.y = 3; ga.add(base);
+    const dome = new THREE.Mesh(new THREE.SphereGeometry(3.2, 32, 20), new THREE.MeshPhysicalMaterial({ color: 0xffffff, transparent: true, opacity: 0.14, roughness: 0.05, clearcoat: 1, depthWrite: false })); dome.position.y = 9; ga.add(dome);
+    const cr = mulberry(26), capM = [MAT.gloss, new THREE.MeshStandardMaterial({ color: DIXY_ORANGE, roughness: 0.4 }), MAT.graphite];
+    for (let c = 0; c < 26; c++) { const cap = new THREE.Mesh(new THREE.SphereGeometry(0.62, 14, 10), capM[c % 3]); const a = cr() * 6.3, rr = cr() * 2.2; cap.position.set(Math.cos(a) * rr, 7 + cr() * 2.2, Math.sin(a) * rr); ga.add(cap); }
+    ga.position.set(4, 0.8, 4); g.add(ga); ga.userData.case = 'treschnutye'; clickable.push(ga); floaters.push({ g: ga, y: 0.8, ph: 1, spin: true });
   }
 }
 function buildCinemaFloor(g, w, h, d) {
@@ -981,7 +967,7 @@ function updateDixy(time) {
 // ---------- ai-продакшн наверху: отдельный квартал из четырёх башен-монолитов, у каждой свой кейс и свой ролик ----------
 // минимальная форма «ии»: чёрное тело, световая щель, стеклянная голова и парящий нимб
 const AI_TOWERS = [['aiFonbet', 'fonbet', 1, 572], ['aiMango', 'mango', -1, 602], ['aiLavka', 'lavka', 1, 632], ['aiAlfa', 'alfa', -1, 662]];
-const aiRings = [];
+const aiRings = [], aiNeurons = [], aiStreams = { mesh: null, list: [] }, _dm = new THREE.Object3D();
 const aiCam = (side, z) => V(-side * 2, 96, z - 38);
 function buildAiTowers() {
   const slitM = new THREE.MeshBasicMaterial({ color: new THREE.Color(RED).multiplyScalar(1.8), toneMapped: false });
@@ -1000,12 +986,23 @@ function buildAiTowers() {
     tagAt(CASES[id].title, CASES[id].pass.клиент + ' · ai-продакшн', V(side * 22, 86, z), cam, 22);
   });
   tagAt('ai-продакшн', 'ролики, которых не снимали · четыре кейса', V(0, 124, 556), V(0, 96, 500), 30);
+  // оформление квартала: голографическая сетка под башнями, «нейроны» — каркасные многогранники, потоки данных и портал на входе
+  const grid = new THREE.GridHelper(110, 22, RED, 0x5a1010); grid.position.set(0, 66, 617); grid.material.transparent = true; grid.material.opacity = 0.35; grid.material.depthWrite = false; scene.add(grid);
+  const portal = new THREE.Mesh(new THREE.TorusGeometry(27, 0.5, 12, 128), slitM); portal.position.set(0, 96, 548); scene.add(portal); aiRings.push({ portal });
+  const nr = mulberry(404), edgeM = new THREE.LineBasicMaterial({ color: new THREE.Color(RED).multiplyScalar(1.6), toneMapped: false, transparent: true, opacity: 0.85 });
+  for (let i = 0; i < 16; i++) {
+    const r = 1.2 + nr() * 2.8, n = new THREE.LineSegments(new THREE.EdgesGeometry(new THREE.IcosahedronGeometry(r, nr() < 0.5 ? 0 : 1)), edgeM);
+    n.position.set((nr() - 0.5) * 60, 70 + nr() * 60, 560 + nr() * 110); scene.add(n); aiNeurons.push({ n, s: 0.2 + nr() * 0.6, y: n.position.y, ph: nr() * 6 });
+  }
+  const sg = new THREE.BoxGeometry(0.14, 9, 0.14), sm = new THREE.MeshBasicMaterial({ color: new THREE.Color(0xffd0c0).multiplyScalar(1.2), toneMapped: false, transparent: true, opacity: 0.55 });
+  aiStreams.mesh = new THREE.InstancedMesh(sg, sm, 60); scene.add(aiStreams.mesh);
+  for (let i = 0; i < 60; i++) aiStreams.list.push([(nr() - 0.5) * 70, nr() * 100, 556 + nr() * 120, 8 + nr() * 18]);
 }
 
 // ---------- сценарий скролла ----------
 // p — доля прокрутки 0..1. Между ключами — плавная интерполяция, поэтому на каждом ключе камера как бы «присаживается»
 const V = (x, y, z) => new THREE.Vector3(x, y, z);
-const GO = { reel: 0.48, cross: 0.57, btl: 0.62, alley: 0.642, sport: 0.704, event: 0.813, shops: 0.901, dixy: 0.67, atl: 0.639, ai: 0.815, awards: 0.944, about: 0.967, brief: 1 };
+const GO = { reel: 0.48, cross: 0.57, btl: 0.62, alley: 0.642, sport: 0.704, event: 0.81, shops: 0.87, dixy: 0.638, atl: 0.638, ai: 0.815, awards: 0.944, brief: 1 };
 const FORK = 0.592;
 let CAM = {}, ISK = [], route = null;
 function buildTimeline() {
@@ -1027,8 +1024,6 @@ function buildTimeline() {
   const tail = [
     { p: 0.94, pos: V(0, 10, 745), look: V(19, 16, 780) },
     { p: 0.948, pos: V(0, 10, 750), look: V(19, 16, 780) },
-    { p: 0.962, pos: V(0, 12, 805), look: V(-19, 18, 840) },
-    { p: 0.972, pos: V(0, 12, 808), look: V(-19, 18, 840) },
     { p: 0.988, pos: V(0, 14, 880), look: V(0, 20, 940) },
     { p: 1.00, pos: V(0, 14, 888), look: V(0, 20, 940) },
   ];
@@ -1038,23 +1033,22 @@ function buildTimeline() {
     { p: 0.612, pos: V(0, 14, 150), look: V(0, 13, 215) },
     { p: 0.632, pos: V(-8, 11, 192), look: V(22, 7, 214) },
     { p: 0.652, pos: V(-8, 11, 197), look: V(22, 7, 214) },
-    ...st(0.669, Z.sel), ...st(0.695, Z.lion, 34, 11),
+    ...st(0.668, Z.tb, 38, 13), ...st(0.695, Z.lion, 34, 11),
     { p: 0.713, pos: V(-17, 12, Z.lion + 2), look: V(4, 8, Z.iron) },   // объезд сцены льва
     { p: 0.724, pos: V(-1, 9, Z.iron - 25), look: V(0, 5, Z.iron) }, { p: 0.735, pos: V(1, 9, Z.iron - 22), look: V(0, 5, Z.iron) },
     { p: 0.75, pos: V(4, 17, Z.silk - 33), look: V(8, 9, Z.silk) }, { p: 0.763, pos: V(6, 16, Z.silk - 30), look: V(8, 9, Z.silk) },
     ...st(0.779, Z.foot), ...st(0.803, Z.goose), ...st(0.826, Z.mega), ...st(0.849, Z.mice),
-    ...st(0.872, Z.tb, 38, 13), ...st(0.894, Z.merch), ...st(0.914, Z.set),
+    ...MERCH.flatMap(([, , side, z], i) => { const c = vtCam(side, z); return [{ p: 0.868 + i * 0.016, pos: c, look: V(side * 6, 7, z) }, { p: 0.877 + i * 0.016, pos: c.clone().add(V(0, 0, 3)), look: V(side * 6, 7, z) }]; }),
     ...tail];
   // atl поднимается к экранам и этажам небоскрёбов
-  const sa = (p, side, z) => { const c = atlCam(side, z); return [{ p, pos: c, look: V(side * 16, 95, z) }, { p: p + 0.012, pos: c.clone().add(V(0, 0, 3)), look: V(side * 16, 95, z) }]; };
-  const sai = (p, side, z) => { const c = aiCam(side, z); return [{ p, pos: c, look: V(side * 18, 96, z) }, { p: p + 0.01, pos: c.clone().add(V(0, 0, 3)), look: V(side * 18, 96, z) }]; };
-  const fl = (p, y0, z) => [{ p, pos: V(-15, y0 + 9, z - 12), look: V(-58, y0 + 6, z + 2) }, { p: p + 0.012, pos: V(-16, y0 + 9, z - 9), look: V(-58, y0 + 6, z + 2) }];
+  const sa = (p, side, z) => { const c = atlCam(side, z); return [{ p, pos: c, look: V(side * 8, 95, z) }, { p: p + 0.012, pos: c.clone().add(V(0, 0, 3)), look: V(side * 8, 95, z) }]; };
+  const sai = (p, side, z) => { const c = aiCam(side, z); return [{ p, pos: c, look: V(side * 10, 96, z) }, { p: p + 0.01, pos: c.clone().add(V(0, 0, 3)), look: V(side * 10, 96, z) }]; };
+  const fl = (p, y0, z) => [{ p, pos: V(-15, y0 + 9, z - 12), look: V(-58, y0 + 6, z - 8) }, { p: p + 0.012, pos: V(-16, y0 + 9, z - 9), look: V(-58, y0 + 6, z - 8) }];   // этаж слева, рассказ справа
   CAM.atl = [...head,
-    { p: 0.612, pos: V(0, 40, 175), look: V(10, 90, 282) },
-    ...sa(0.634, 1, 282),
-    ...fl(0.664, 40, 342), ...fl(0.693, 64, 400),
-    { p: 0.722, pos: V(-31.5, 104, 458), look: V(-69, 96, 458) }, { p: 0.737, pos: V(-33, 103.5, 458), look: V(-69, 96, 458) },
-    ...sa(0.755, 1, 500), ...sa(0.782, -1, 545),
+    { p: 0.612, pos: V(0, 32, 172), look: V(-40, 45, 225) },
+    ...fl(0.632, 40, 225), ...sa(0.66, 1, 282), ...fl(0.688, 52, 345),
+    { p: 0.716, pos: V(-31.5, 86, 405), look: V(-69, 78, 405) }, { p: 0.731, pos: V(-33, 85.5, 405), look: V(-69, 78, 405) },
+    ...sa(0.752, 1, 500), ...sa(0.778, -1, 545),
     ...sai(0.81, 1, 572), ...sai(0.836, -1, 602), ...sai(0.862, 1, 632), ...sai(0.888, -1, 662),
     { p: 0.918, pos: V(0, 40, 710), look: V(19, 16, 780) },
     ...tail];
@@ -1084,30 +1078,33 @@ function sample(keys, p, fn) {
 // ---------- рассказ о кейсе на каждой остановке ----------
 // вместо навигации по кварталам: что за задача, что придумали, что получилось. «другие кейсы квартала» — в навигации
 const MORE = {
-  asia: { t: 'другие азиатские кейсы', ids: ['fandom', 'treschnutye', 'izhora'] },
+  asia: { t: 'другие азиатские кейсы', ids: ['fandom', 'tbank', 'treschnutye', 'izhora'] },
   sport: { t: 'другие спортивные кейсы', ids: ['lion', 'izhora', 'ironstar', 'gdrive', 'avangard', 'baltika7'] },
-  event: { t: 'другие ивент-кейсы', ids: ['baltikaPlant', 'megafon', 'mice', 'megafonTravel', 'tbank'] },
-  merch: { t: 'другие кейсы с мерчем', ids: ['gdriveMerch', 'oxygenSet', 'selekt'] },
-  dixy: { t: 'другие кейсы «дикси»', ids: ['dino', 'treschnutye', 'zaklinateli'] },
+  event: { t: 'другие ивент-кейсы', ids: ['baltikaPlant', 'megafon', 'mice', 'megafonTravel'] },
+  merch: { t: 'другие кейсы с мерчем', ids: ['selekt', 'gdriveMerch', 'oxygenSet', 'lionMerch'] },
+  dixy: { t: 'другие кейсы «дикси»', ids: ['treschnutye', 'dino', 'zaklinateli'] },
   ai: { t: 'другие ai-ролики', ids: ['aiFonbet', 'aiMango', 'aiLavka', 'aiAlfa', 'ai'] },
 };
+// сторона рассказа — всегда напротив того, что показывает камера
 const STORIES = [
-  ['fandom', 0.60, 0.66, 'btl', 'right', ['asia'], true], ['selekt', 0.662, 0.687, 'btl', 'left'], ['lion', 0.689, 0.715, 'btl', 'left', ['sport']],
-  ['ironstar', 0.717, 0.741, 'btl', 'left', ['sport']], ['gdrive', 0.744, 0.772, 'btl', 'left', ['sport']], ['baltika7', 0.774, 0.797, 'btl', 'left', ['sport']],
-  ['baltikaPlant', 0.799, 0.82, 'btl', 'left', ['event']], ['megafon', 0.822, 0.843, 'btl', 'left', ['event']], ['mice', 0.845, 0.866, 'btl', 'left', ['event']],
-  ['tbank', 0.868, 0.889, 'btl', 'left'], ['gdriveMerch', 0.891, 0.909, 'btl', 'left', ['merch']], ['oxygenSet', 0.911, 0.928, 'btl', 'left', ['merch']],
-  ['izhora', 0.626, 0.652, 'atl', 'left', ['asia', 'sport']], ['dino', 0.657, 0.682, 'atl', 'right', ['dixy']], ['treschnutye', 0.686, 0.711, 'atl', 'right', ['dixy', 'asia']],
-  ['zaklinateli', 0.716, 0.744, 'atl', 'right', ['dixy']], ['derbent', 0.749, 0.772, 'atl', 'left'], ['tevredens', 0.776, 0.799, 'atl', 'right'],
-  ['aiFonbet', 0.803, 0.826, 'atl', 'left', ['ai']], ['aiMango', 0.829, 0.852, 'atl', 'right', ['ai']], ['aiLavka', 0.855, 0.878, 'atl', 'left', ['ai']], ['aiAlfa', 0.881, 0.905, 'atl', 'right', ['ai']],
+  ['fandom', 0.60, 0.66, 'btl', 'right', ['asia'], true], ['tbank', 0.662, 0.69, 'btl', 'left', ['asia']], ['lion', 0.69, 0.716, 'btl', 'left', ['sport']],
+  ['ironstar', 0.718, 0.742, 'btl', 'left', ['sport']], ['gdrive', 0.745, 0.772, 'btl', 'left', ['sport']], ['baltika7', 0.774, 0.797, 'btl', 'left', ['sport']],
+  ['baltikaPlant', 0.799, 0.82, 'btl', 'left', ['event']], ['megafon', 0.822, 0.843, 'btl', 'left', ['event']], ['mice', 0.845, 0.863, 'btl', 'left', ['event']],
+  ['selekt', 0.864, 0.88, 'btl', 'right', ['merch']], ['gdriveMerch', 0.88, 0.896, 'btl', 'left', ['merch']], ['oxygenSet', 0.896, 0.912, 'btl', 'right', ['merch']], ['lionMerch', 0.912, 0.93, 'btl', 'left', ['merch']],
+  ['treschnutye', 0.626, 0.654, 'atl', 'right', ['dixy', 'asia']], ['izhora', 0.656, 0.682, 'atl', 'right', ['asia', 'sport']], ['dino', 0.684, 0.71, 'atl', 'right', ['dixy']],
+  ['zaklinateli', 0.712, 0.744, 'atl', 'right', ['dixy']], ['derbent', 0.747, 0.772, 'atl', 'right'], ['tevredens', 0.774, 0.8, 'atl', 'left'],
+  ['aiFonbet', 0.803, 0.826, 'atl', 'right', ['ai']], ['aiMango', 0.829, 0.852, 'atl', 'left', ['ai']], ['aiLavka', 0.855, 0.878, 'atl', 'right', ['ai']], ['aiAlfa', 0.881, 0.905, 'atl', 'left', ['ai']],
 ];
 STORIES.forEach(([id, a, b, r, side, more, orbitBtn]) => {
   const c = CASES[id], el = document.createElement('section');
-  el.className = `ov ${side} panel`; el.dataset.a = a; el.dataset.b = b; el.dataset.route = r; el.style.maxWidth = '430px';
-  el.innerHTML = `<span class="t">${r === 'btl' ? '{04} btl · на проспекте' : '{05} atl · в эфире'} · ${c.pass.клиент} · ${c.pass.год}</span>
-    <h2>${c.title}</h2>
-    <p><span class="t">задача</span><br>${c.task}</p>
-    <p style="margin-top:10px"><span class="t">идея</span><br>${c.idea}</p>
-    ${c.result[0][0] !== '—' ? `<div class="nums" style="grid-template-columns:1fr 1fr"><div><b>${c.result[0][0]}</b><span class="t">${c.result[0][1]}</span></div>${c.awards[0] ? `<div><b>${c.awards.length}</b><span class="t">${c.awards.length > 1 ? 'награды' : 'награда'} · ${c.awards[0]}</span></div>` : ''}</div>` : ''}
+  el.className = `ov ${side} panel`; el.dataset.a = a; el.dataset.b = b; el.dataset.route = r; el.style.maxWidth = '460px';
+  const res = c.result.filter(x => x[0] !== '—').slice(0, 3);
+  el.innerHTML = `<span class="t">${r === 'btl' ? '{04} btl' : '{05} atl'} · ${c.pass.клиент} · ${c.pass.год}${c.awards[0] ? ' · ' + c.awards[0] : ''}</span>
+    <h2 style="font-size:40px;margin:8px 0 12px">${c.title}</h2>
+    <p style="font-size:16px"><span class="t">задача</span> ${c.task}</p>
+    <p style="font-size:16px;margin-top:6px"><span class="t">идея</span> ${c.idea}</p>
+    ${c.steps ? `<div class="steps">${c.steps.slice(0, 4).map((x, n) => `<div><span class="t">{0${n + 1}}</span><span><b>${x[0]}</b> <span class="d">${x[1]}</span></span></div>`).join('')}</div>` : ''}
+    ${res.length ? `<div class="nums" style="grid-template-columns:repeat(${res.length},1fr)">${res.map(x => `<div><b>${x[0]}</b><span class="t">${x[1]}</span></div>`).join('')}</div>` : ''}
     <button class="btn" data-case="${id}">кейс целиком</button>${orbitBtn ? ' <button class="btn ghost" id="openOrbit">покрутить в 3D ↻</button>' : ''}
     ${c.formats ? `<div class="chips">${c.formats.map(f => `<span>${f[0]}</span>`).join('')}</div>` : ''}
     ${(more || []).map(m => `<p class="t" style="margin-top:8px"><a href="#" data-more="${m}" style="color:inherit">${MORE[m].t} →</a></p>`).join('')}`;
@@ -1117,7 +1114,7 @@ MODALS.more = key => `<span class="t">{кейсы}</span><h1>${MORE[key].t.repla
 
 // ---------- HTML-слой ----------
 const ovs = [...document.querySelectorAll('.ov')].map(el => ({ el, a: +el.dataset.a, b: +el.dataset.b, r: el.dataset.route }));
-const STAGES = [[0, '{00} вход'], [0.1, '{01} искра'], [0.35, '{01} кислород'], [0.45, '{02} шоурил'], [0.53, '{03} перекрёсток'], [0.6, '{04} btl · проспект', 'btl'], [0.6, '{05} atl · эфир', 'atl'], [0.8, '{05} ai-продакшн', 'atl'], [0.888, '{04} мерч на улице', 'btl'], [0.93, '{07} награды'], [0.955, '{08} о нас'], [0.98, '{09} бриф']];
+const STAGES = [[0, '{00} вход'], [0.1, '{01} искра'], [0.35, '{01} кислород'], [0.45, '{02} шоурил'], [0.53, '{03} перекрёсток'], [0.6, '{04} btl · проспект', 'btl'], [0.6, '{05} atl · эфир', 'atl'], [0.8, '{05} ai-продакшн', 'atl'], [0.864, '{04} квартал мерча', 'btl'], [0.93, '{06} награды'], [0.975, '{07} бриф']];
 const hudPct = document.getElementById('hudPct'), hudStage = document.getElementById('hudStage');
 function updateOverlay(p) {
   ovs.forEach(o => {
@@ -1128,6 +1125,7 @@ function updateOverlay(p) {
   hudPct.textContent = String(Math.round(p * 100)).padStart(3, '0');
   hudStage.textContent = STAGES.filter(s => p >= s[0] && (!s[2] || s[2] === route)).pop()[1];
   routeBtn.style.display = route ? '' : 'none'; routeBtn.textContent = `маршрут: ${route} · сменить ↺`;
+  micro.classList.toggle('dim', ovs.some(o => o.el.classList.contains('right') && o.el.classList.contains('panel') && o.el.classList.contains('on')));
 }
 const modal = document.getElementById('modal'), modalBody = document.getElementById('modalBody');
 const openModal = html => { modalBody.innerHTML = html; modal.classList.add('on'); modal.scrollTop = 0; };
@@ -1179,17 +1177,27 @@ canvas.addEventListener('pointermove', e => { if (!orbitOn) canvas.style.cursor 
 const micro = document.getElementById('micro'), microL = document.getElementById('microL'), wipe = document.getElementById('wipe');
 const sqs = [...document.querySelectorAll('.sq')];
 const INDEX = [['{00}', 'вход', 0], ['{01}', 'искра', 0.1], ['{02}', 'фильм', 0.45], ['{03}', 'развилка', 0.53],
-  ['{04}', 'ozon corp', 0.6, 'btl'], ['{04}', 'ozon селект', 0.662, 'btl'], ['{04}', 'синегривый лев', 0.689, 'btl'], ['{04}', 'ironstar', 0.717, 'btl'], ['{04}', 'шёлковый путь', 0.744, 'btl'], ['{04}', 'балтика 7', 0.774, 'btl'],
-  ['{04}', 'гусь на заводе', 0.799, 'btl'], ['{04}', 'золотые ворота', 0.822, 'btl'], ['{04}', 'белград', 0.845, 'btl'], ['{04}', 'чёрный пояс по it', 0.868, 'btl'], ['{04}', 'мерч', 0.891, 'btl'],
-  ['{05}', 'хроники ижоры', 0.6, 'atl'], ['{05}', 'дикси · дино', 0.657, 'atl'], ['{05}', 'дикси · треснутые', 0.686, 'atl'], ['{05}', 'дикси · кинозал', 0.716, 'atl'], ['{05}', 'дербент', 0.749, 'atl'], ['{05}', 'tevredens', 0.776, 'atl'],
+  ['{04}', 'ozon corp', 0.6, 'btl'], ['{04}', 'чёрный пояс по it', 0.662, 'btl'], ['{04}', 'синегривый лев', 0.69, 'btl'], ['{04}', 'ironstar', 0.718, 'btl'], ['{04}', 'шёлковый путь', 0.745, 'btl'], ['{04}', 'балтика 7', 0.774, 'btl'],
+  ['{04}', 'гусь на заводе', 0.799, 'btl'], ['{04}', 'золотые ворота', 0.822, 'btl'], ['{04}', 'белград', 0.845, 'btl'], ['{04}', 'квартал мерча', 0.864, 'btl'],
+  ['{05}', 'треснутые', 0.6, 'atl'], ['{05}', 'хроники ижоры', 0.656, 'atl'], ['{05}', 'дино', 0.684, 'atl'], ['{05}', 'заклинатели', 0.712, 'atl'], ['{05}', 'дербент', 0.747, 'atl'], ['{05}', 'tevredens', 0.774, 'atl'],
   ['{05}', 'ai · fonbet', 0.803, 'atl'], ['{05}', 'ai · mango', 0.829, 'atl'], ['{05}', 'ai · лавка', 0.855, 'atl'], ['{05}', 'ai · альфа', 0.881, 'atl'],
-  ['{06}', 'награды', 0.93], ['{07}', 'о нас', 0.955], ['{08}', 'бриф', 0.98]];
+  ['{06}', 'награды', 0.93], ['{07}', 'бриф', 0.975]];
+// пункт навигации кликабелен: прыжок к остановке, маршрут подставляется сам
+const jumpTo = (p, r) => {
+  closeModal(); if (orbitOn) closeOrbit(); if (r) route = r; else if (p > FORK && !route) route = 'btl';
+  const max = document.documentElement.scrollHeight - innerHeight, t = Math.min(1, p + (p > 0.59 && p < 0.93 ? 0.012 : 0));
+  if (Math.abs(t - pSm) < 0.08) return scrollTo({ top: t * max, behavior: 'smooth' });
+  curtainWord.textContent = WORD_OF(p); curtain.className = 'in';
+  setTimeout(() => { scrollTo(0, t * max); pSm = t; curtain.className = 'out'; }, 380);
+};
+const WORD_OF = p => (INDEX.filter(s => Math.abs(s[2] - p) < 1e-6)[0] || [, ''])[1];
+micro.addEventListener('click', e => { const d = e.target.closest('[data-j]'); if (!d) return; e.preventDefault(); jumpTo(+d.dataset.j, d.dataset.r || null); });
 let lastStage = '', sqT = 0, frameN = 0;
 function hud2d(p, time) {
   frameN++;
   const cur = INDEX.filter(s => p >= s[2] && (!s[3] || s[3] === route)).pop();
-  const moreKey = !route || p < 0.6 || p > 0.93 ? null : route === 'atl' ? (p < 0.655 ? 'sport' : p < 0.745 ? 'dixy' : p > 0.8 ? 'ai' : null) : (p < 0.66 ? 'asia' : p > 0.689 && p < 0.798 ? 'sport' : p > 0.798 && p < 0.867 ? 'event' : p > 0.89 ? 'merch' : null);
-  const html = INDEX.filter(s => !s[3] || !route || s[3] === route).map(s => `<div class="${s === cur ? 'on' : ''}">${s[0]} ${s[1]}${s === cur ? ' ←' : ''}</div>`).join('') + (moreKey ? `<div style="margin-top:8px;pointer-events:auto"><a href="#" data-more="${moreKey}" style="color:var(--cream)">${MORE[moreKey].t} →</a></div>` : '');
+  const moreKey = !route || p < 0.6 || p > 0.93 ? null : route === 'atl' ? (p < 0.684 ? 'asia' : p < 0.745 ? 'dixy' : p > 0.8 ? 'ai' : null) : (p < 0.69 ? 'asia' : p < 0.798 ? 'sport' : p < 0.864 ? 'event' : 'merch');
+  const html = INDEX.filter(s => !s[3] || !route || s[3] === route).map(s => `<div class="${s === cur ? 'on' : ''}" data-j="${s[2]}"${s[3] ? ` data-r="${s[3]}"` : ''}>${s[0]} ${s[1]}${s === cur ? ' ←' : ''}</div>`).join('') + (moreKey ? `<div style="margin-top:8px;pointer-events:auto"><a href="#" data-more="${moreKey}" style="color:var(--cream)">${MORE[moreKey].t} →</a></div>` : '');
   if (html !== micro._h) { micro.innerHTML = html; micro._h = html; }
   if (frameN % 6 === 0) microL.innerHTML = `cam ${camera.position.x.toFixed(1)} · ${camera.position.y.toFixed(1)} · ${camera.position.z.toFixed(1)}<br>fov ${camera.fov} · f ${String(frameN).padStart(6, '0')}<br>маршрут ${route || '—'} · p ${p.toFixed(3)}`;
   if (time - sqT > 1.1) {   // квадраты перескакивают по узлам сетки
@@ -1197,7 +1205,7 @@ function hud2d(p, time) {
     sqs.forEach((q, i) => { q.style.left = (Math.round(Math.random() * 12) * cell - 3) + 'px'; q.style.top = (Math.round(Math.random() * innerHeight / cell) * cell - 3) + 'px'; });
   }
   if (cur && cur[1] !== lastStage) {
-    if (lastStage) { wipe.textContent = cur[1] + ' ' + cur[0]; wipe.classList.remove('go'); void wipe.offsetWidth; wipe.classList.add('go'); }
+    if (lastStage && p < 0.59) { wipe.textContent = cur[1] + ' ' + cur[0]; wipe.classList.remove('go'); void wipe.offsetWidth; wipe.classList.add('go'); }
     lastStage = cur[1];
   }
 }
