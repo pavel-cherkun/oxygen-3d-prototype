@@ -40,7 +40,7 @@ export const CASES = {
     result: [['—', 'цифры результата — от аккаунтов']],
   },
   avangard: {
-    dir: 'btl', title: 'время авангарда', awards: [],
+    dir: 'atl', title: 'время авангарда', awards: [],
     pass: { клиент: 'ХК «Авангард»', год: '2024/25', отрасль: 'спорт', формат: 'дизайн сезона' },
     task: 'поднять посещаемость матчей и продажи абонементов новым оформлением сезона',
     idea: 'платформа сезона «Время Авангарда»: история клуба творится прямо сейчас, на арене',
@@ -243,7 +243,7 @@ export const CASES = {
     result: [['5', 'вещей в капсуле: худи, бомберы, панамы, тапки']],
   },
 };
-export const ORDER = { btl: ['fandom', 'tbank', 'lion', 'ironstar', 'gdrive', 'avangard', 'baltika7', 'baltikaPlant', 'megafon', 'mice', 'megafonTravel', 'selekt', 'gdriveMerch', 'oxygenSet', 'lionMerch'], atl: ['treschnutye', 'izhora', 'dino', 'zaklinateli', 'derbent', 'tevredens', 'aiFonbet', 'aiMango', 'aiLavka', 'aiAlfa', 'ai'] };
+export const ORDER = { btl: ['fandom', 'tbank', 'selekt', 'lion', 'ironstar', 'gdrive', 'baltika7', 'baltikaPlant', 'megafon', 'mice', 'megafonTravel', 'gdriveMerch', 'oxygenSet', 'lionMerch'], atl: ['treschnutye', 'zaklinateli', 'dino', 'izhora', 'avangard', 'derbent', 'tevredens', 'aiFonbet', 'aiMango', 'aiLavka', 'aiAlfa', 'ai'] };
 
 export function renderCase(id) {
   const c = CASES[id], list = ORDER[c.dir], next = list[(list.indexOf(id) + 1) % list.length];

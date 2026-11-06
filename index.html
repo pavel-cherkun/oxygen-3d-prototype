@@ -121,6 +121,7 @@ select{background:#111;border:0;border-bottom:1px solid #444;color:var(--cream);
 #views{position:fixed;left:50%;bottom:14px;translate:-50% 0;z-index:9;display:flex;gap:6px;align-items:center;font-size:11px;background:rgba(17,17,17,.7);backdrop-filter:blur(10px);padding:5px 8px;border:1px solid rgba(225,217,207,.12)}
 #views button{all:unset;cursor:pointer;color:var(--cream);padding:3px 8px;border:1px solid rgba(225,217,207,.2)}#views button:hover,#views button.on{background:var(--red);border-color:var(--red)}
 body.qview .ov,body.qview #orbitUi,body.qview #wipe{display:none!important}
+#viewInfo{position:fixed;left:28px;bottom:64px;z-index:6;width:min(420px,calc(100vw - 32px));max-height:70vh;overflow:auto}#viewInfo button{all:unset;cursor:pointer;display:block;padding:10px 0;border-top:1px solid rgba(225,217,207,.12)}#viewInfo button:hover b{color:var(--red)}#viewInfo b{display:block;font-weight:520;font-size:20px}#viewInfo .d{display:block;font-size:14px;color:var(--mute);margin-top:4px}
 </style>
 <script type="importmap">
 {"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.169.0/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.169.0/examples/jsm/"}}
@@ -243,6 +244,7 @@ body.qview .ov,body.qview #orbitUi,body.qview #wipe{display:none!important}
 </div>
 
 <!-- временно: обзорные виды на кварталы для работы над сценой -->
+<div id="viewInfo" class="panel" style="display:none"></div>
 <div id="views" class="t"><span>виды:</span><button data-view="asia">азия</button><button data-view="dixy">дикси</button><button data-view="sport">спорт</button><button data-view="merch">мерч</button><button data-view="ai">ai</button><button data-view="off">✕</button></div>
 <div id="modal"><button class="btn ghost close" id="modalClose">закрыть ✕</button><div class="wrap" id="modalBody"></div></div>
 
