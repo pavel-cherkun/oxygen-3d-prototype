@@ -505,10 +505,10 @@ const WORLD = [
   { id: 'tbank', r: 'btl', zone: 'asia', kind: 'station', hero: [16, 16, 10], imgs: ['tbank-zone-1', 'tbank-zone-top-1', 'tbank-road-1', 'tbank-cover-1'], nav: 'чёрный пояс по it' },
   { id: 'selekt', r: 'btl', zone: 'joint', kind: 'station', hero: [14, 4, 10], imgs: ['ozon-select-1', 'ozon-select-0', 'ozon-select-2', 'ozon-select-3'], nav: 'ozon селект' },
   { id: 'lion', r: 'btl', zone: 'sport', kind: 'station', hero: [14, 14, 16], imgs: ['../dp/lion-2', '../dp/lion-1', '../dp/lion-cover'], nav: 'синегривый лев', moment: 'lion' },
-  { id: 'ironstar', r: 'btl', zone: 'sport', kind: 'station', hero: [12, 12, 4], imgs: ['gdrive-ironstar-1'], nav: 'ironstar' },
+  { id: 'ironstar', r: 'btl', zone: 'sport', kind: 'station', hero: [12, 12, 4], imgs: ['gdrive-ironstar-1'], nav: 'ironstar', moment: 'ironstar' },
   { id: 'gdrive', r: 'btl', zone: 'sport', kind: 'station', hero: [30, 8, 4], imgs: ['gdrive-silk-1', 'gdrive-silk-road-1', 'gdrive-silk-road-2', 'gdrive-finish-1'], nav: 'шёлковый путь' },
   { id: 'baltika7', r: 'btl', zone: 'sport', kind: 'station', hero: [12, 10, 5], imgs: ['baltika7-1', 'baltika7-zone-1', 'baltika7-zone-2', 'baltika7-prizes-1'], nav: 'балтика 7' },
-  { id: 'baltikaPlant', r: 'btl', zone: 'event', kind: 'station', hero: [7, 4, 8], imgs: ['baltika-plant-1', 'baltika-plant-mock-1', 'baltika-plant-mock-2', 'baltika-plant-ruby-1'], nav: 'гусь на заводе' },
+  { id: 'baltikaPlant', r: 'btl', zone: 'event', kind: 'station', hero: [7, 4, 8], imgs: ['baltika-plant-1', 'baltika-plant-mock-1', 'baltika-plant-mock-2', 'baltika-plant-ruby-1'], nav: 'гусь на заводе', moment: 'goose' },
   { id: 'megafon', r: 'btl', zone: 'event', kind: 'station', hero: [14, 14, 6], imgs: ['megafon-1', 'megafon-zone-1', 'megafon-zone-2', 'megafon-bullet-1'], nav: 'золотые ворота' },
   { id: 'mice', r: 'btl', zone: 'event', kind: 'station', hero: [8, 6, 6], imgs: ['mice-1', 'mice-details-1', 'mice-details-2', 'mice-out-1'], nav: 'белград' },
   { id: 'megafonTravel', r: 'btl', zone: 'event', kind: 'station', hero: [13, 5, 9], imgs: ['megafon-travel-1', 'megafon-route-1', 'megafon-route-2'], nav: 'связь есть везде' },
@@ -532,7 +532,8 @@ const MOMENTS = {};   // кейсы-моменты: свой герой, сво�
 const DIXY_TOWER = { x: -62, w: 38, d: 40, h: 58 }, BANNER = { h: 30, w: 30 * 9 / 16 };
 const ATL_TOWER = { x: 58, w: 44, d: 34, h: 150 }, SCREEN_Y = 74;
 // ---------- моменты ----------
-// кейс-момент: герой в масштабе дома, камера заходит снизу и взмывает, свет и типографика бьют в бит 128 bpm
+// кейс-момент: герой в масштабе дома, своя пролётная камера, свет и типографика бьют в бит 128 bpm.
+// общий набор (сцена, прожекторы, лазеры, растяжка, бегущая строка, экран с кадрами) — в kit, герой и его движение — в самом моменте
 const BPM = 128, beatAt = t => t * BPM / 60;
 const glow = (hex, k = 1.6) => new THREE.MeshBasicMaterial({ color: new THREE.Color(hex).multiplyScalar(k), toneMapped: false, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false });
 // крупный набор на canvas: залитый или контурный
@@ -540,7 +541,7 @@ function typeTex(lines, fill, W = 2048, H = 900) {
   const c = document.createElement('canvas'); c.width = W; c.height = H; const g = c.getContext('2d');
   let fs = H / lines.length * 0.98; g.font = `620 ${fs}px TT, sans-serif`;
   while (Math.max(...lines.map(l => g.measureText(l).width)) > W * 0.98) { fs -= 8; g.font = `620 ${fs}px TT, sans-serif`; }
-  g.textBaseline = 'alphabetic'; g.lineJoin = 'round';
+  g.lineJoin = 'round';
   lines.forEach((l, i) => { const y = (i + 1) * H / lines.length - fs * 0.16;
     if (fill) { g.fillStyle = '#fff'; g.fillText(l, 0, y); } else { g.strokeStyle = '#fff'; g.lineWidth = fs * 0.025; g.strokeText(l, 0, y); } });
   const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 8; return t;
@@ -551,26 +552,73 @@ function tickerTex(txt) {
   for (let x = 0; x < 4096; x += w) g.fillText(txt, x, 100);
   const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.wrapS = THREE.RepeatWrapping; return t;
 }
-const LIVE = [];   // { w, center, update(time, I, beat, kick) } — работают только рядом с камерой
+// название в две строки примерно поровну
+const twoLines = s => { const w = s.split(' '); if (w.length < 3) return w; let best = 1, d = 1e9; for (let i = 1; i < w.length; i++) { const k = Math.abs(w.slice(0, i).join(' ').length - w.slice(i).join(' ').length); if (k < d) { d = k; best = i; } } return [w.slice(0, best).join(' '), w.slice(best).join(' ')]; };
+const LIVE = [];   // { fx, center, update } — работают только рядом с камерой
+
+// o: col — три цвета момента; stage — радиус сцены; laser — откуда веер; ticker — [высота, радиус]; wall — [x, y, z] растяжки; scr — [x, y, z] экрана; cam — откуда смотрит экран
+function kit(w, g, o) {
+  const fx = { beams: [], lasers: [], rings: [], shots: [], shot: -1, hero: {} }, [c1, c2, c3] = o.col, c = CASES[w.id];
+  const disc = new THREE.Mesh(new THREE.CylinderGeometry(o.stage, o.stage + 0.6, 0.8, 72), MAT.graphite); disc.position.y = 0.4; g.add(disc);
+  [1, 0.76, 0.52].forEach((k, i) => { const m = new THREE.Mesh(new THREE.TorusGeometry(o.stage * k, 0.16, 8, 128), glow(i === 1 ? c2 : c1)); m.rotation.x = Math.PI / 2; m.position.y = 0.85; g.add(m); fx.rings.push(m); });
+  fx.wave = new THREE.Mesh(new THREE.RingGeometry(0.96, 1, 128), glow(c3, 1.6)); fx.wave.rotation.x = -Math.PI / 2; fx.wave.position.y = 0.9; fx.waveR = o.stage * 2; g.add(fx.wave);
+  fx.key = new THREE.SpotLight(0xffffff, 0, 140, 0.5, 0.5); fx.key.position.set(26, 50, -40); fx.key.target.position.set(0, 10, 0);
+  fx.rim = new THREE.SpotLight(c1, 0, 140, 0.6, 0.4); fx.rim.position.set(-10, 46, 34); fx.rim.target.position.set(0, 12, 0);
+  g.add(fx.key, fx.key.target, fx.rim, fx.rim.target);
+  for (let i = 0; i < 6; i++) {
+    const a = i / 6 * Math.PI * 2 + 0.4, pivot = new THREE.Group(); pivot.position.set(Math.cos(a) * (o.stage + 5), 52, Math.sin(a) * (o.stage + 5)); g.add(pivot);
+    const cone = new THREE.Mesh(new THREE.ConeGeometry(7, 60, 32, 1, true), glow([c1, 0xffffff, c2][i % 3], 0.12)); cone.position.y = -30; pivot.add(cone);
+    pivot.add(new THREE.Mesh(new THREE.CylinderGeometry(1.1, 1.4, 1.6, 16), MAT.chrome));
+    pivot.lookAt(g.position.x, 0, g.position.z); fx.beams.push({ pivot, base: pivot.rotation.clone(), ph: i * 1.3 });
+  }
+  const lz = new THREE.Group(); lz.position.set(...o.laser); g.add(lz); fx.lz = lz;
+  for (let i = 0; i < 14; i++) { const m = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.14, 160), glow(i % 2 ? c2 : c1, 2.2)); m.geometry.translate(0, 0, -80); m.rotation.y = (i / 13 - 0.5) * 2.2; lz.add(m); fx.lasers.push(m); }
+  const tk = new THREE.Mesh(new THREE.CylinderGeometry(o.ticker[1], o.ticker[1], 2.6, 96, 1, true), new THREE.MeshBasicMaterial({ map: tickerTex(`${c.title} · ${c.pass.клиент} · `), transparent: true, side: THREE.DoubleSide, color: new THREE.Color(0xffffff).multiplyScalar(1.4), toneMapped: false, blending: THREE.AdditiveBlending, depthWrite: false }));
+  tk.material.map.repeat.set(3, 1); tk.position.y = o.ticker[0]; g.add(tk); fx.ticker = tk;
+  // растяжка над улицей за героем: залитый и контурный набор меняются на сильную долю; камера проходит под ней
+  const lines = twoLines(c.title), wallW = 72, wallH = wallW * 900 / 2048;
+  fx.typeFill = typeTex(lines, true); fx.typeLine = typeTex(lines, false);
+  fx.wall = new THREE.Mesh(new THREE.PlaneGeometry(wallW, wallH), new THREE.MeshBasicMaterial({ map: fx.typeLine, transparent: true, toneMapped: false, depthWrite: false }));
+  fx.wall.position.set(...o.wall); fx.wall.rotation.y = Math.PI; fx.wall.rotateX(0.22); g.add(fx.wall); fx.c3 = c2;
+  // экран с кадрами кейса: режется на каждый такт, на склейке вспышка
+  fx.shots = w.imgs.map(n => caseTexture(`assets/cases/${n}.jpg`, false, 1024, 640));
+  const scr = new THREE.Mesh(new THREE.PlaneGeometry(24, 15), new THREE.MeshBasicMaterial({ map: fx.shots[0], toneMapped: false }));
+  scr.position.set(...o.scr); scr.rotation.y = Math.atan2(o.cam.x - (g.position.x + o.scr[0]), o.cam.z - (g.position.z + o.scr[2])); g.add(scr); fx.scr = scr;
+  const frame = new THREE.Mesh(new THREE.PlaneGeometry(24.8, 15.8), glow(c1, 1.4)); frame.position.copy(scr.position); frame.quaternion.copy(scr.quaternion); frame.translateZ(-0.05); g.add(frame);
+  scr.userData.case = w.id; clickable.push(scr);
+  solid(scr); solid(fx.wall);
+  return fx;
+}
+function kitUpdate(fx, time, I, beat, kick) {
+  const bar = Math.floor(beat / 4), b = Math.floor(beat), drop = (bar % 4) === 3, f = beat % 1;   // каждый четвёртый такт — дроп
+  fx.key.intensity = I * (900 + 2200 * kick); fx.rim.intensity = I * (1400 + 1800 * kick);
+  fx.rings.forEach((r, i) => { r.material.opacity = 0.35 + 0.65 * Math.exp(-((beat + i * 0.25) % 1) * 5); });
+  fx.wave.scale.setScalar(2 + f * fx.waveR); fx.wave.material.opacity = (1 - f) * 0.8;
+  fx.beams.forEach((s, i) => { s.pivot.rotation.set(s.base.x + Math.sin(time * 0.9 + s.ph) * 0.35, s.base.y, s.base.z + Math.cos(time * 0.7 + s.ph) * 0.35); s.pivot.children[0].material.opacity = (0.06 + 0.1 * kick) * I * (drop || (b + i) % 2 ? 1 : 0.35); });
+  fx.lz.visible = drop || b % 8 >= 4; fx.lz.rotation.y = Math.sin(time * 1.7) * 0.5; fx.lz.rotation.x = -0.15 + Math.sin(time * 2.3) * 0.12;
+  fx.lasers.forEach((m, i) => m.visible = drop ? (b + i) % 2 === 0 : true);
+  fx.ticker.rotation.y = -time * 0.25; fx.ticker.material.opacity = I;
+  fx.wall.material.map = (drop ? b % 2 === 0 : b % 4 === 0) ? fx.typeFill : fx.typeLine;
+  fx.wall.material.color.setHex(drop && b % 2 ? fx.c3 : 0xffffff).multiplyScalar(0.6 + 1.2 * kick); fx.wall.material.opacity = I;
+  const shot = (drop ? b : bar) % fx.shots.length; if (shot !== fx.shot) { fx.shot = shot; fx.scr.material.map = fx.shots[shot]; }
+  fx.scr.material.color.setScalar(f < 0.06 && (drop || b % 4 === 0) ? 3 : 0.9);
+  return { b, bar, drop, f };
+}
+function momentGroup(w) { const g = new THREE.Group(); g.position.copy(w.center); scene.add(g); return g; }
 
 MOMENTS.lion = {
   layout(w) {
-    const Z = w.z, H = 30; w.center = V(-20, 0, Z); w.heroH = H;
+    const Z = w.z; w.center = V(-20, 0, Z); w.heroH = 30;
     w.keys = [
       [-0.46, V(9, 2.4, Z - 46), V(-17, 24, Z)],     // снизу, лев нависает
       [-0.16, V(10, 7, Z - 26), V(-10, 21, Z)],
       [0.14, V(6, 20, Z - 22), V(-10, 17, Z)],        // облёт на уровне морды
-      [0.44, V(14, 50, Z + 12), V(-19, 8, Z + 2)],      // кран над сценой
+      [0.44, V(14, 40, Z + 10), V(-19, 8, Z + 2)],    // кран над сценой
     ];
   },
   build(w) {
-    const Z = w.z, cx = w.center.x, g = new THREE.Group(); g.position.set(cx, 0, Z); scene.add(g);
-    const fx = { beams: [], lasers: [], rings: [], wave: null, shots: [], shot: -1 };
-    // сцена: глянцевый диск, светящиеся кольца, волна на каждый удар
-    const disc = new THREE.Mesh(new THREE.CylinderGeometry(17, 17.6, 0.8, 72), MAT.graphite); disc.position.y = 0.4; g.add(disc);
-    [17.2, 13, 9].forEach((r, i) => { const m = new THREE.Mesh(new THREE.TorusGeometry(r, 0.16, 8, 128), glow(i === 1 ? RED : 0x3a6bff)); m.rotation.x = Math.PI / 2; m.position.y = 0.85; g.add(m); fx.rings.push(m); });
-    fx.wave = new THREE.Mesh(new THREE.RingGeometry(0.96, 1, 128), glow(0x9fb8ff, 2)); fx.wave.rotation.x = -Math.PI / 2; fx.wave.position.y = 0.9; g.add(fx.wave);
-    // лев на 30 м
+    const g = momentGroup(w), Z = w.z;
+    const fx = kit(w, g, { col: [0x3a6bff, RED, 0x9fb8ff], stage: 17, laser: [0, 27, 6], ticker: [35, 15], wall: [2, 46, 46], scr: [-16, 16, -24], cam: V(9, 8, Z - 46) });
     gltfLoader.loadAsync('assets/models/lion-dance.glb').then(gltf => {
       const m = gltf.scene, bb = new THREE.Box3().setFromObject(m), k = w.heroH / (bb.max.y - bb.min.y);
       m.scale.setScalar(k); m.position.set(0, 0.8 - bb.min.y * k, 0); m.rotation.y = Math.PI - 0.5;   // мордой к камере на подлёте; танец сам разворачивает льва
@@ -579,66 +627,97 @@ MOMENTS.lion = {
       m.userData.case = w.id; g.add(m); clickable.push(m);
       lionDance.mixer = new THREE.AnimationMixer(m); gltf.animations.forEach(a => lionDance.mixer.clipAction(a).play());
     }).catch(e => console.warn('lion', e));
-    // настоящий свет на героя: синий контровой и белый ключ, вспыхивают в бит
-    fx.key = new THREE.SpotLight(0xffffff, 0, 120, 0.5, 0.5); fx.key.position.set(26, 50, -40); fx.key.target.position.set(0, 16, 0);
-    fx.rim = new THREE.SpotLight(0x3a6bff, 0, 120, 0.6, 0.4); fx.rim.position.set(-10, 46, 34); fx.rim.target.position.set(0, 18, 0);
-    g.add(fx.key, fx.key.target, fx.rim, fx.rim.target);
-    // лучи прожекторов: шесть конусов с ферм, качаются
-    for (let i = 0; i < 6; i++) {
-      const a = i / 6 * Math.PI * 2 + 0.4, col = [0x3a6bff, 0xffffff, RED][i % 3];
-      const pivot = new THREE.Group(); pivot.position.set(Math.cos(a) * 22, 52, Math.sin(a) * 22); g.add(pivot);
-      const cone = new THREE.Mesh(new THREE.ConeGeometry(7, 60, 32, 1, true), glow(col, 0.12)); cone.position.y = -30; pivot.add(cone);
-      const head = new THREE.Mesh(new THREE.CylinderGeometry(1.1, 1.4, 1.6, 16), MAT.chrome); pivot.add(head);
-      pivot.lookAt(g.position.x, 0, g.position.z); fx.beams.push({ pivot, base: pivot.rotation.clone(), ph: i * 1.3 });
-    }
-    // лазеры веером из-за головы
-    const lz = new THREE.Group(); lz.position.set(0, 27, 6); g.add(lz); fx.lz = lz;
-    for (let i = 0; i < 14; i++) { const m = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.14, 160), glow(i % 2 ? RED : 0x3a6bff, 2.2)); m.geometry.translate(0, 0, -80); m.rotation.y = (i / 13 - 0.5) * 2.2; lz.add(m); fx.lasers.push(m); }
-    // бегущая строка кольцом над гривой
-    const tk = new THREE.Mesh(new THREE.CylinderGeometry(15, 15, 2.6, 96, 1, true), new THREE.MeshBasicMaterial({ map: tickerTex(`${CASES[w.id].title} · ${CASES[w.id].pass.клиент} · `), transparent: true, side: THREE.DoubleSide, color: new THREE.Color(0xffffff).multiplyScalar(1.4), toneMapped: false, blending: THREE.AdditiveBlending, depthWrite: false }));
-    tk.material.map.repeat.set(3, 1); tk.position.y = 35; g.add(tk); fx.ticker = tk;
-    // титр-растяжка над улицей за львом: залитый и контурный набор меняются на сильную долю; камера проходит под ним
-    const lines = CASES[w.id].title.split(' '), wallW = 72, wallH = wallW * 900 / 2048;
-    fx.typeFill = typeTex(lines, true); fx.typeLine = typeTex(lines, false);
-    fx.wall = new THREE.Mesh(new THREE.PlaneGeometry(wallW, wallH), new THREE.MeshBasicMaterial({ map: fx.typeLine, transparent: true, color: new THREE.Color(0xffffff), toneMapped: false, depthWrite: false }));
-    fx.wall.position.set(2, 46, 46); fx.wall.rotation.y = Math.PI; fx.wall.rotateX(0.22); g.add(fx.wall);
-    // экран с кадрами кейса: режется на каждый такт
-    fx.shots = w.imgs.map(n => caseTexture(`assets/cases/${n}.jpg`, false, 1024, 640));
-    const scr = new THREE.Mesh(new THREE.PlaneGeometry(24, 15), new THREE.MeshBasicMaterial({ map: fx.shots[0], toneMapped: false }));
-    scr.position.set(-16, 16, -24); scr.rotation.y = Math.atan2(9 - (cx - 16), -22); g.add(scr); fx.scr = scr;
-    const frame = new THREE.Mesh(new THREE.PlaneGeometry(24.8, 15.8), glow(RED, 1.4)); frame.position.copy(scr.position); frame.quaternion.copy(scr.quaternion); frame.translateZ(-0.05); g.add(frame);
-    scr.userData.case = w.id; clickable.push(scr);
-    // для проверки камеры: сцена со львом, экран и стена — сплошные
-    SOLIDS.push({ box: new THREE.Box3(V(cx - 17.6, 0, Z - 17.6), V(cx + 17.6, w.heroH + 2, Z + 17.6)), name: w.id });
-    solid(scr); solid(fx.wall);
-    LIVE.push({ w, fx, center: V(cx, 16, Z), update: MOMENTS.lion.update });
-  },
-  update(time, I, beat, kick, fx) {
-    const bar = Math.floor(beat / 4), b = Math.floor(beat), drop = (bar % 4) === 3;   // каждый четвёртый такт — дроп
-    fx.key.intensity = I * (900 + 2200 * kick); fx.rim.intensity = I * (1400 + 1800 * kick);
-    fx.rings.forEach((r, i) => { r.material.opacity = 0.35 + 0.65 * Math.exp(-((beat + i * 0.25) % 1) * 5); });
-    const f = beat % 1; fx.wave.scale.setScalar(2 + f * 34); fx.wave.material.opacity = (1 - f) * 0.8;
-    fx.beams.forEach((s, i) => { s.pivot.rotation.set(s.base.x + Math.sin(time * 0.9 + s.ph) * 0.35, s.base.y, s.base.z + Math.cos(time * 0.7 + s.ph) * 0.35); s.pivot.children[0].material.opacity = (0.06 + 0.1 * kick) * I * (drop || (b + i) % 2 ? 1 : 0.35); });
-    fx.lz.visible = drop || b % 8 >= 4; fx.lz.rotation.y = Math.sin(time * 1.7) * 0.5; fx.lz.rotation.x = -0.15 + Math.sin(time * 2.3) * 0.12;
-    fx.lasers.forEach((m, i) => m.visible = drop ? (b + i) % 2 === 0 : true);
-    fx.ticker.rotation.y = -time * 0.25; fx.ticker.material.opacity = I;
-    fx.wall.material.map = (drop ? b % 2 === 0 : b % 4 === 0) ? fx.typeFill : fx.typeLine;
-    fx.wall.material.color.setHex(drop && b % 2 ? RED : 0xffffff).multiplyScalar(0.6 + 1.2 * kick); fx.wall.material.opacity = I;
-    const shot = (drop ? b : bar) % fx.shots.length; if (shot !== fx.shot) { fx.shot = shot; fx.scr.material.map = fx.shots[shot]; }
-    fx.scr.material.color.setScalar(f < 0.06 && (drop || b % 4 === 0) ? 3 : 0.9);   // белая вспышка на склейке
+    SOLIDS.push({ box: new THREE.Box3(V(w.center.x - 17.6, 0, Z - 17.6), V(w.center.x + 17.6, w.heroH + 2, Z + 17.6)), name: w.id });
+    LIVE.push({ fx, center: V(w.center.x, 16, Z), update: kitUpdate });
   },
 };
-// бит общий: момент разгорается, когда камера подлетает ближе 120 м; удар качает bloom, fov и камеру
+
+// ironstar: камера проезжает под финишной аркой g-drive, за ней на поворотном круге — mustang длиной 24 м, над аркой бежит гоночное время
+MOMENTS.ironstar = {
+  layout(w) {
+    const Z = w.z; w.center = V(-18, 0, Z + 6);
+    w.keys = [
+      [-0.46, V(10, 6, Z - 42), V(-6, 13, Z)],        // арка в кадре, за ней машина
+      [-0.14, V(10, 7, Z - 24), V(-14, 6, Z + 6)],    // под аркой
+      [0.16, V(7, 5, Z - 4), V(-18, 4, Z + 6)],       // в упор к кузову
+      [0.44, V(12, 24, Z + 26), V(-18, 3, Z + 4)],    // подъём, взгляд назад на машину
+    ];
+  },
+  build(w) {
+    const g = momentGroup(w), Z = w.z, O = 0xff6a10;
+    const fx = kit(w, g, { col: [O, RED, 0xffc070], stage: 17, laser: [0, 14, 10], ticker: [18, 17.5], wall: [4, 48, 44], scr: [-14, 15, -18], cam: V(10, 7, Z - 50) });
+    // машина и круг
+    const car = mustangIronStar(); car.scale.setScalar(6.5); car.position.y = 0.8; g.add(car); car.userData.case = w.id; clickable.push(car); fx.hero.car = car;
+    // финишная арка поперёк улицы: столбы за коридором камеры, перекладина на 34 м
+    const arch = new THREE.Group(); arch.position.set(-w.center.x, 0, -26); g.add(arch);
+    const archTex = decalTex(2048, 256, (c, W, H) => { c.fillStyle = '#ff6a10'; c.fillRect(0, 0, W, H); gdrive(c, 80, 190, 170, '#111'); ironstar(c, 1100, 180, 150, '#111'); });
+    const beam = new THREE.Mesh(new THREE.BoxGeometry(76, 8, 4), [MAT.matte, MAT.matte, MAT.matte, MAT.matte, new THREE.MeshBasicMaterial({ map: archTex }), new THREE.MeshBasicMaterial({ map: archTex })]);
+    beam.position.set(-4, 27, 0); arch.add(beam);
+    [-40, 32].forEach(x => { const p = new THREE.Mesh(new THREE.BoxGeometry(4, 31, 4), MAT.gloss); p.position.set(x, 15.5, 0); arch.add(p); });
+    const edge = new THREE.Mesh(new THREE.BoxGeometry(76.4, 0.4, 4.4), glow(O, 2)); edge.position.set(-4, 22.8, 0); arch.add(edge); fx.hero.edge = edge;
+    // гоночное время на арке: идёт по-настоящему, с секундами
+    const tc = document.createElement('canvas'); tc.width = 1024; tc.height = 256; fx.hero.tg = tc.getContext('2d'); fx.hero.tt = new THREE.CanvasTexture(tc); fx.hero.tt.colorSpace = THREE.SRGBColorSpace;
+    const timer = new THREE.Mesh(new THREE.PlaneGeometry(26, 6.5), new THREE.MeshBasicMaterial({ map: fx.hero.tt, toneMapped: false })); timer.position.set(-4, 35, 0); timer.rotation.y = Math.PI; arch.add(timer);
+    const tb = new THREE.Mesh(new THREE.BoxGeometry(27, 7.5, 1), MAT.matte); tb.position.set(-4, 35, 0.6); arch.add(tb);
+    arch.children.forEach(o => solid(o));
+    SOLIDS.push({ box: new THREE.Box3(V(w.center.x - 17.6, 0, w.center.z - 17.6), V(w.center.x + 17.6, 10, w.center.z + 17.6)), name: w.id });
+    LIVE.push({ fx, center: V(w.center.x, 8, w.center.z), update: MOMENTS.ironstar.update });
+  },
+  update(fx, time, I, beat, kick) {
+    const { drop } = kitUpdate(fx, time, I, beat, kick), h = fx.hero;
+    h.car.rotation.y = time * 0.35; h.car.position.y = 0.8 + (drop ? kick * 1.2 : 0);   // на дропе машина подпрыгивает на подвеске
+    h.edge.material.opacity = 0.4 + 0.6 * kick;
+    const s = Math.floor(time) + 3600 + 1338; if (s !== h.last) { h.last = s; const g = h.tg;
+      g.fillStyle = '#1a0606'; g.fillRect(0, 0, 1024, 256); g.font = '700 210px AP, monospace'; g.fillStyle = '#ff3a1a'; g.textAlign = 'center';
+      g.fillText(`${Math.floor(s / 3600)}:${String(Math.floor(s / 60) % 60).padStart(2, '0')}:${String(s % 60).padStart(2, '0')}`, 512, 200);
+      g.fillStyle = 'rgba(0,0,0,.55)'; for (let x = 0; x < 1024; x += 8) g.fillRect(x, 0, 3, 256); for (let y = 0; y < 256; y += 8) g.fillRect(0, y, 1024, 3); h.tt.needsUpdate = true; }
+  },
+};
+
+// гусь на заводе: гусь ростом 28 м топает по улице, светящиеся лапки на асфальте шаг за шагом ведут к нему
+MOMENTS.goose = {
+  layout(w) {
+    const Z = w.z; w.center = V(-20, 0, Z + 4);
+    w.keys = [
+      [-0.46, V(8, 2.2, Z - 54), V(-10, 18, Z + 4)],   // от земли, по дорожке лапок
+      [-0.14, V(10, 5, Z - 26), V(-14, 22, Z + 4)],
+      [0.16, V(4, 26, Z - 16), V(-18, 24, Z + 4)],     // глаза в глаза
+      [0.44, V(12, 34, Z + 24), V(-20, 10, Z + 2)],
+    ];
+  },
+  build(w) {
+    const g = momentGroup(w), Z = w.z, O = 0xff7a10;
+    const fx = kit(w, g, { col: [O, RED, 0xffe0b0], stage: 16, laser: [6, 26, 0], ticker: [33, 14], wall: [6, 50, 44], scr: [-14, 15, -22], cam: V(8, 6, Z - 52) });
+    const gs = goose(); gs.traverse(o => { if (o.isMesh && o.material.color.getHex() !== 0xff7a10 && o.material !== MAT.matte) o.material = MAT.chrome; });   // хромовый, как надувная скульптура
+    gs.scale.setScalar(4.6); gs.position.y = 0.8; gs.rotation.y = 2.3; g.add(gs); gs.userData.case = w.id; clickable.push(gs); fx.hero.goose = gs;
+    // лапки: дорожка от камеры к сцене, загораются по одной в бит
+    const paw = decalTex(256, 256, (c) => { c.fillStyle = '#fff'; c.translate(128, 150); [-0.55, 0, 0.55].forEach(a => { c.save(); c.rotate(a); c.beginPath(); c.ellipse(0, -60, 22, 70, 0, 0, Math.PI * 2); c.fill(); c.restore(); }); c.beginPath(); c.arc(0, 0, 40, 0, Math.PI * 2); c.fill(); });
+    fx.hero.paws = [];
+    for (let i = 0; i < 12; i++) {
+      const m = new THREE.Mesh(new THREE.PlaneGeometry(4, 4), new THREE.MeshBasicMaterial({ map: paw, color: new THREE.Color(O).multiplyScalar(2), transparent: true, toneMapped: false, blending: THREE.AdditiveBlending, depthWrite: false }));
+      const t = i / 11; m.position.set(-w.center.x + 6 - t * 18 + (i % 2 ? 1.6 : -1.6), 0.06, -66 + t * 52); m.rotation.set(-Math.PI / 2, 0, Math.PI - 0.35); g.add(m); fx.hero.paws.push(m);
+    }
+    SOLIDS.push({ box: new THREE.Box3(V(w.center.x - 16.6, 0, w.center.z - 16.6), V(w.center.x + 16.6, 30, w.center.z + 16.6)), name: w.id });
+    LIVE.push({ fx, center: V(w.center.x, 14, w.center.z), update: MOMENTS.goose.update });
+  },
+  update(fx, time, I, beat, kick) {
+    const { b, f } = kitUpdate(fx, time, I, beat, kick), h = fx.hero, gs = h.goose;
+    // переваливается с лапы на лапу в бит, шея кивает на удар
+    const side = b % 2 ? 1 : -1, step = Math.sin(Math.min(1, f * 2) * Math.PI);
+    gs.rotation.x = side * 0.07 * (1 - f); gs.position.y = 0.8 + step * 1.4; gs.userData.neck.rotation.z = -0.35 - kick * 0.25;
+    h.paws.forEach((m, i) => { const d = (b - i) % 12; m.material.opacity = I * (d === 0 ? 1 : d > 0 && d < 4 ? 0.55 - d * 0.12 : 0.08); });
+  },
+};
+// бит общий: момент разгорается, когда камера подлетает ближе 130 м; удар мягко качает bloom и чуть поджимает кадр
 function updateMoments(time) {
   const beat = beatAt(time), kick = Math.exp(-(beat % 1) * 7);
   let top = 0;
   for (const m of LIVE) {
     const I = clamp01((130 - camera.position.distanceTo(m.center)) / 60); top = Math.max(top, I);
-    if (I > 0 || m.wasOn) m.update(time, I, beat, kick, m.fx); m.wasOn = I > 0;
+    if (I > 0 || m.wasOn) m.update(m.fx, time, I, beat, kick); m.wasOn = I > 0;
   }
-  bloom.strength = 0.55 + top * (0.15 + 0.55 * kick);
-  const fov = 50 + top * (4 - 3 * kick); if (Math.abs(camera.fov - fov) > 0.01) { camera.fov = fov; camera.updateProjectionMatrix(); }
-  if (top) { camera.position.y += top * kick * 0.35 * Math.sin(time * 90); camera.position.x += top * kick * 0.25 * Math.cos(time * 77); }
+  bloom.strength = 0.55 + top * (0.12 + 0.3 * kick);
+  const fov = 50 + top * (1.5 - 0.6 * kick); if (Math.abs(camera.fov - fov) > 0.01) { camera.fov = fov; camera.updateProjectionMatrix(); }
 }
 
 function layoutWorld() {
@@ -1280,5 +1359,8 @@ await Promise.all([document.fonts.load('520 100px TT'), document.fonts.load('20p
 buildCity(); buildTower(); await buildLogo(); buildSections(); buildAtmosphere(); buildTimeline();
 window.__three = { renderer, scene, CAM, THREE, WORLD, checkPath, go: (p, r) => { route = r; scrollTo(0, p * (document.documentElement.scrollHeight - innerHeight)); pSm = p; } };   // для отладки
 if (location.search.includes('dev')) checkPath();   // для отладки производительности
+// ?at=lion:-0.3 — сразу встать на остановку кейса (для скриншотов)
+const AT = new URLSearchParams(location.search).get('at');
+if (AT) { const [id, t] = AT.split(':'), w = WORLD.find(w => w.id === id); window.__three.go(w.p + w.span * (+t || 0), w.r); }
 document.getElementById('loader').classList.add('done');
 frame();
