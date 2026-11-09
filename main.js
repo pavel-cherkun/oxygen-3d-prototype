@@ -558,7 +558,7 @@ const LIVE = [];   // { fx, center, update } — работают только �
 
 // o: col — три цвета момента; stage — радиус сцены; laser — откуда веер; ticker — [высота, радиус]; wall — [x, y, z] растяжки; scr — [x, y, z] экрана; cam — откуда смотрит экран
 function kit(w, g, o) {
-  const fx = { beams: [], lasers: [], rings: [], shots: [], shot: -1, hero: {} }, [c1, c2, c3] = o.col, c = CASES[w.id];
+  const fx = { beams: [], lasers: [], rings: [], shots: [], shot: -1, hero: {}, light: o.light ?? 1 }, [c1, c2, c3] = o.col, c = CASES[w.id];
   const disc = new THREE.Mesh(new THREE.CylinderGeometry(o.stage, o.stage + 0.6, 0.8, 72), MAT.graphite); disc.position.y = 0.4; g.add(disc);
   [1, 0.76, 0.52].forEach((k, i) => { const m = new THREE.Mesh(new THREE.TorusGeometry(o.stage * k, 0.16, 8, 128), glow(i === 1 ? c2 : c1)); m.rotation.x = Math.PI / 2; m.position.y = 0.85; g.add(m); fx.rings.push(m); });
   fx.wave = new THREE.Mesh(new THREE.RingGeometry(0.96, 1, 128), glow(c3, 1.6)); fx.wave.rotation.x = -Math.PI / 2; fx.wave.position.y = 0.9; fx.waveR = o.stage * 2; g.add(fx.wave);
@@ -591,7 +591,7 @@ function kit(w, g, o) {
 }
 function kitUpdate(fx, time, I, beat, kick) {
   const bar = Math.floor(beat / 4), b = Math.floor(beat), drop = (bar % 4) === 3, f = beat % 1;   // каждый четвёртый такт — дроп
-  fx.key.intensity = I * (900 + 2200 * kick); fx.rim.intensity = I * (1400 + 1800 * kick);
+  fx.key.intensity = I * fx.light * (900 + 2200 * kick); fx.rim.intensity = I * fx.light * (1400 + 1800 * kick);
   fx.rings.forEach((r, i) => { r.material.opacity = 0.35 + 0.65 * Math.exp(-((beat + i * 0.25) % 1) * 5); });
   fx.wave.scale.setScalar(2 + f * fx.waveR); fx.wave.material.opacity = (1 - f) * 0.8;
   fx.beams.forEach((s, i) => { s.pivot.rotation.set(s.base.x + Math.sin(time * 0.9 + s.ph) * 0.35, s.base.y, s.base.z + Math.cos(time * 0.7 + s.ph) * 0.35); s.pivot.children[0].material.opacity = (0.06 + 0.1 * kick) * I * (drop || (b + i) % 2 ? 1 : 0.35); });
@@ -606,75 +606,129 @@ function kitUpdate(fx, time, I, beat, kick) {
 }
 function momentGroup(w) { const g = new THREE.Group(); g.position.copy(w.center); scene.add(g); return g; }
 
+// лев как медиа-инсталляция: голограмма льва в центре поля из полутора тысяч светящихся стержней.
+// стержни идут волной от центра — грива из света; над полем медленно качаются три кинетических кольца, сверху бьют белые лучи в дымке
 MOMENTS.lion = {
   layout(w) {
     const Z = w.z; w.center = V(-20, 0, Z); w.heroH = 30;
     w.keys = [
-      [-0.46, V(9, 2.4, Z - 46), V(-17, 24, Z)],     // снизу, лев нависает
-      [-0.16, V(10, 7, Z - 26), V(-10, 21, Z)],
-      [0.14, V(6, 20, Z - 22), V(-10, 17, Z)],        // облёт на уровне морды
-      [0.44, V(14, 40, Z + 10), V(-19, 8, Z + 2)],    // кран над сценой
+      [-0.46, V(10, 2.4, Z - 46), V(-17, 22, Z)],     // снизу, поле стержней по колено камере
+      [-0.16, V(11, 9, Z - 30), V(-14, 18, Z)],
+      [0.14, V(10, 22, Z - 22), V(-16, 14, Z)],
+      [0.44, V(10, 64, Z + 4), V(-20, 0, Z + 2)],      // сверху: видно, как по полю расходится волна
     ];
   },
   build(w) {
-    const g = momentGroup(w), Z = w.z;
-    const fx = kit(w, g, { col: [0x3a6bff, RED, 0x9fb8ff], stage: 17, laser: [0, 27, 6], ticker: [35, 15], wall: [2, 46, 46], scr: [-16, 16, -24], cam: V(9, 8, Z - 46) });
+    const g = momentGroup(w), Z = w.z, fx = { light: 1 }, BLUE = 0x6f9bff;
+    const floor = new THREE.Mesh(new THREE.CylinderGeometry(25, 25.4, 0.6, 96), new THREE.MeshPhysicalMaterial({ color: 0x050608, roughness: 0.12, metalness: 0.6, clearcoat: 1, clearcoatRoughness: 0.03 })); floor.position.y = 0.3; g.add(floor);
+    // поле стержней
+    const spots = [];
+    for (let r = 7.5; r <= 24; r += 1.15) { const n = Math.round(Math.PI * 2 * r / 1.05); for (let i = 0; i < n; i++) { const a = i / n * Math.PI * 2 + r; spots.push([r, a]); } }
+    const rods = new THREE.InstancedMesh(new THREE.BoxGeometry(0.22, 1, 0.22), new THREE.MeshBasicMaterial({ toneMapped: false }), spots.length);
+    rods.instanceMatrix.setUsage(THREE.DynamicDrawUsage); rods.frustumCulled = false; g.add(rods);
+    rods.setColorAt(0, new THREE.Color()); rods.instanceColor.setUsage(THREE.DynamicDrawUsage);
+    Object.assign(fx, { rods, spots, m4: new THREE.Matrix4(), q: new THREE.Quaternion(), col: new THREE.Color(), white: new THREE.Color(0xffffff).multiplyScalar(0.85), blue: new THREE.Color(BLUE).multiplyScalar(0.4), dim: new THREE.Color(0x0b0f1e) });
+    // кинетические кольца из светодиодной трубки
+    fx.rings = [16, 20.5, 25].map((r, i) => { const m = new THREE.Mesh(new THREE.TorusGeometry(r, 0.12, 6, 160), new THREE.MeshBasicMaterial({ color: new THREE.Color(0xffffff).multiplyScalar(1.5), toneMapped: false })); m.position.y = 36 + i * 6; m.rotation.x = Math.PI / 2; g.add(m); return m; });
+    // белые лучи сверху в дымке, неподвижные: архитектурный свет, а не дискотека
+    fx.beams = [0, 1, 2, 3].map(i => { const a = i / 4 * Math.PI * 2 + 0.8, c = new THREE.Mesh(new THREE.ConeGeometry(4.5, 64, 32, 1, true), glow(0xffffff, 0.05)); c.position.set(Math.cos(a) * 10, 32, Math.sin(a) * 10); c.rotation.z = Math.cos(a) * 0.16; c.rotation.x = -Math.sin(a) * 0.16; g.add(c); return c; });
+    fx.key = new THREE.SpotLight(0xdde6ff, 0, 120, 0.45, 0.6); fx.key.position.set(18, 56, -30); fx.key.target.position.set(0, 14, 0); g.add(fx.key, fx.key.target);
+    // голограмма: тёмное тело и синяя сетка поверх, сетка сидит на том же скелете
     gltfLoader.loadAsync('assets/models/lion-dance.glb').then(gltf => {
       const m = gltf.scene, bb = new THREE.Box3().setFromObject(m), k = w.heroH / (bb.max.y - bb.min.y);
-      m.scale.setScalar(k); m.position.set(0, 0.8 - bb.min.y * k, 0); m.rotation.y = Math.PI - 0.5;   // мордой к камере на подлёте; танец сам разворачивает льва
-      m.traverse(o => { if (!o.isMesh) return; const s = o.material; o.frustumCulled = false;
-        o.material = new THREE.MeshPhysicalMaterial({ color: s.color, map: s.map, normalMap: s.normalMap, roughness: Math.max(0.55, s.roughness), sheen: 1, sheenColor: new THREE.Color(0x7d9cff), sheenRoughness: 0.4 }); });
+      m.scale.setScalar(k); m.position.set(0, 0.6 - bb.min.y * k, 0); m.rotation.y = Math.PI - 0.5;
+      const wire = new THREE.MeshBasicMaterial({ color: new THREE.Color(BLUE).multiplyScalar(1.3), wireframe: true, transparent: true, opacity: 0.22, blending: THREE.AdditiveBlending, depthWrite: false, toneMapped: false });
+      const skins = []; m.traverse(o => o.isSkinnedMesh && skins.push(o));
+      skins.forEach(o => { o.frustumCulled = false; const s = o.material;
+        o.material = new THREE.MeshPhysicalMaterial({ color: new THREE.Color(s.color).multiplyScalar(0.35), map: s.map, roughness: 0.6, sheen: 1, sheenColor: new THREE.Color(BLUE), sheenRoughness: 0.35 });
+        const net = new THREE.SkinnedMesh(o.geometry, wire); net.bind(o.skeleton, o.bindMatrix); net.frustumCulled = false; o.parent.add(net); });
       m.userData.case = w.id; g.add(m); clickable.push(m);
-      lionDance.mixer = new THREE.AnimationMixer(m); gltf.animations.forEach(a => lionDance.mixer.clipAction(a).play());
+      lionDance.mixer = new THREE.AnimationMixer(m); gltf.animations.forEach(a => lionDance.mixer.clipAction(a).setEffectiveTimeScale(0.7).play());
+      fx.wire = wire;
     }).catch(e => console.warn('lion', e));
-    SOLIDS.push({ box: new THREE.Box3(V(w.center.x - 17.6, 0, Z - 17.6), V(w.center.x + 17.6, w.heroH + 2, Z + 17.6)), name: w.id });
-    LIVE.push({ fx, center: V(w.center.x, 16, Z), update: kitUpdate });
+    // проекция кадров кейса на тонкий экран-сетку сбоку, без рамки
+    fx.shots = w.imgs.map(n => caseTexture(`assets/cases/${n}.jpg`, false, 1024, 640)); fx.shot = -1;
+    fx.scr = new THREE.Mesh(new THREE.PlaneGeometry(22, 13.75), new THREE.MeshBasicMaterial({ map: fx.shots[0], transparent: true, opacity: 0.9, toneMapped: false, side: THREE.DoubleSide }));
+    fx.scr.position.set(-18, 15, -30); fx.scr.rotation.y = Math.atan2(10 - (w.center.x - 18), -16); g.add(fx.scr); fx.scr.userData.case = w.id; clickable.push(fx.scr); solid(fx.scr);
+    SOLIDS.push({ box: new THREE.Box3(V(w.center.x - 24.4, 0, Z - 24.4), V(w.center.x + 24.4, 10, Z + 24.4)), name: w.id });
+    SOLIDS.push({ box: new THREE.Box3(V(w.center.x - 8, 0, Z - 8), V(w.center.x + 8, w.heroH + 2, Z + 8)), name: w.id });
+    LIVE.push({ fx, center: V(w.center.x, 12, Z), update: MOMENTS.lion.update });
+  },
+  update(fx, time, I, beat) {
+    const { rods, spots, m4, q, col } = fx, s = new THREE.Vector3(1, 1, 1), p = new THREE.Vector3(), pulse = Math.exp(-(beat / 2 % 1) * 3);   // мягкий удар раз в два такта
+    for (let i = 0; i < spots.length; i++) {
+      const [r, a] = spots[i];
+      const v = 0.5 + 0.5 * Math.sin(r * 0.45 - time * 1.6 + Math.sin(a * 3 + time * 0.4) * 1.4);   // волна от центра, гуляет по кругу
+      const h = 0.4 + I * (v * v * 8.5 + pulse * 1.2 * (1 - r / 24));
+      p.set(Math.cos(a) * r, 0.6 + h / 2, Math.sin(a) * r); s.y = h; m4.compose(p, q, s); rods.setMatrixAt(i, m4);
+      col.copy(fx.dim).lerp(v > 0.8 ? fx.white : fx.blue, I * v); rods.setColorAt(i, col);
+    }
+    rods.instanceMatrix.needsUpdate = true; rods.instanceColor.needsUpdate = true;
+    fx.rings.forEach((m, i) => { m.rotation.x = Math.PI / 2 + Math.sin(time * 0.25 + i * 2) * 0.28; m.rotation.y = Math.cos(time * 0.2 + i) * 0.22; m.position.y = 36 + i * 6 + Math.sin(time * 0.4 + i) * 2; m.material.color.setScalar((0.3 + 0.8 * I) * (0.8 + 0.4 * pulse)); });
+    fx.beams.forEach((c, i) => c.material.opacity = I * (0.035 + 0.02 * Math.sin(time * 0.7 + i)));
+    fx.key.intensity = I * 1600;
+    if (fx.wire) fx.wire.opacity = I * (0.16 + 0.14 * pulse);
+    const shot = Math.floor(beat / 8) % fx.shots.length; if (shot !== fx.shot) { fx.shot = shot; fx.scr.material.map = fx.shots[shot]; }
+    fx.scr.material.opacity = I * 0.9;
   },
 };
 
-// ironstar: камера проезжает под финишной аркой g-drive, за ней на поворотном круге — mustang длиной 24 м, над аркой бежит гоночное время
+// ironstar как световая инсталляция: тоннель из светодиодных порталов поперёк улицы, по ним бежит огонь, как лидер гонки;
+// последний портал — финиш с живым гоночным временем. за ним mustang на зеркальном полу под рядами линейного света, как на автосалоне
 MOMENTS.ironstar = {
   layout(w) {
     const Z = w.z; w.center = V(-18, 0, Z + 6);
     w.keys = [
-      [-0.46, V(10, 6, Z - 42), V(-6, 13, Z)],        // арка в кадре, за ней машина
-      [-0.14, V(10, 7, Z - 24), V(-14, 6, Z + 6)],    // под аркой
-      [0.16, V(7, 5, Z - 4), V(-18, 4, Z + 6)],       // в упор к кузову
-      [0.44, V(12, 24, Z + 26), V(-18, 3, Z + 4)],    // подъём, взгляд назад на машину
+      [-0.46, V(10, 6, Z - 42), V(0, 8, Z)],           // в створе тоннеля
+      [-0.2, V(9, 7, Z - 20), V(-10, 5, Z + 6)],       // внутри
+      [0.14, V(8, 5, Z - 2), V(-18, 3, Z + 6)],        // к машине
+      [0.44, V(12, 20, Z + 24), V(-18, 2, Z + 4)],
     ];
   },
   build(w) {
-    const g = momentGroup(w), Z = w.z, O = 0xff6a10;
-    const fx = kit(w, g, { col: [O, RED, 0xffc070], stage: 17, laser: [0, 14, 10], ticker: [18, 17.5], wall: [4, 48, 44], scr: [-14, 15, -18], cam: V(10, 7, Z - 50) });
-    // машина и круг
-    const car = mustangIronStar(); car.scale.setScalar(6.5); car.position.y = 0.8; g.add(car); car.userData.case = w.id; clickable.push(car); fx.hero.car = car;
-    // финишная арка поперёк улицы: столбы за коридором камеры, перекладина на 34 м
-    const arch = new THREE.Group(); arch.position.set(-w.center.x, 0, -26); g.add(arch);
-    const archTex = decalTex(2048, 256, (c, W, H) => { c.fillStyle = '#ff6a10'; c.fillRect(0, 0, W, H); gdrive(c, 80, 190, 170, '#111'); ironstar(c, 1100, 180, 150, '#111'); });
-    const beam = new THREE.Mesh(new THREE.BoxGeometry(76, 8, 4), [MAT.matte, MAT.matte, MAT.matte, MAT.matte, new THREE.MeshBasicMaterial({ map: archTex }), new THREE.MeshBasicMaterial({ map: archTex })]);
-    beam.position.set(-4, 27, 0); arch.add(beam);
-    [-40, 32].forEach(x => { const p = new THREE.Mesh(new THREE.BoxGeometry(4, 31, 4), MAT.gloss); p.position.set(x, 15.5, 0); arch.add(p); });
-    const edge = new THREE.Mesh(new THREE.BoxGeometry(76.4, 0.4, 4.4), glow(O, 2)); edge.position.set(-4, 22.8, 0); arch.add(edge); fx.hero.edge = edge;
-    // гоночное время на арке: идёт по-настоящему, с секундами
-    const tc = document.createElement('canvas'); tc.width = 1024; tc.height = 256; fx.hero.tg = tc.getContext('2d'); fx.hero.tt = new THREE.CanvasTexture(tc); fx.hero.tt.colorSpace = THREE.SRGBColorSpace;
-    const timer = new THREE.Mesh(new THREE.PlaneGeometry(26, 6.5), new THREE.MeshBasicMaterial({ map: fx.hero.tt, toneMapped: false })); timer.position.set(-4, 35, 0); timer.rotation.y = Math.PI; arch.add(timer);
-    const tb = new THREE.Mesh(new THREE.BoxGeometry(27, 7.5, 1), MAT.matte); tb.position.set(-4, 35, 0.6); arch.add(tb);
-    arch.children.forEach(o => solid(o));
-    SOLIDS.push({ box: new THREE.Box3(V(w.center.x - 17.6, 0, w.center.z - 17.6), V(w.center.x + 17.6, 10, w.center.z + 17.6)), name: w.id });
-    LIVE.push({ fx, center: V(w.center.x, 8, w.center.z), update: MOMENTS.ironstar.update });
+    const g = momentGroup(w), Z = w.z, cx = w.center.x, fx = {}, O = new THREE.Color(0xff6a10);
+    // порталы: x от -18 до 22 по миру, высота 24, через 4 м
+    fx.portals = [];
+    for (let i = 0; i < 8; i++) {
+      const p = new THREE.Group(); p.position.set(-cx + 2, 0, -40 + i * 4); g.add(p);
+      const m = new THREE.MeshBasicMaterial({ color: new THREE.Color(0xffffff), toneMapped: false });
+      [[0.3, 24, 0.3, -20, 12], [0.3, 24, 0.3, 20, 12], [40.3, 0.3, 0.3, 0, 24]].forEach(([a, b, c, x, y]) => { const bar = new THREE.Mesh(new THREE.BoxGeometry(a, b, c), m); bar.position.set(x, y, 0); p.add(bar); });
+      fx.portals.push(m);
+    }
+    // финиш: время над последним порталом
+    const tc = document.createElement('canvas'); tc.width = 1024; tc.height = 256; fx.tg = tc.getContext('2d'); fx.tt = new THREE.CanvasTexture(tc); fx.tt.colorSpace = THREE.SRGBColorSpace;
+    const timer = new THREE.Mesh(new THREE.PlaneGeometry(18, 4.5), new THREE.MeshBasicMaterial({ map: fx.tt, toneMapped: false })); timer.position.set(-cx + 2, 28, -12); timer.rotation.y = Math.PI; g.add(timer);
+    const back = new THREE.Mesh(new THREE.BoxGeometry(18.6, 5.1, 0.4), MAT.matte); back.position.set(-cx + 2, 28, -11.7); g.add(back);
+    // зеркальный пол и ряды линейного света над машиной
+    const floor = new THREE.Mesh(new THREE.BoxGeometry(34, 0.4, 26), new THREE.MeshPhysicalMaterial({ color: 0x060607, roughness: 0.06, metalness: 0.8, clearcoat: 1, clearcoatRoughness: 0.02 })); floor.position.y = 0.2; g.add(floor);
+    fx.bars = new THREE.MeshBasicMaterial({ color: new THREE.Color(0xffffff), toneMapped: false });
+    for (let i = 0; i < 9; i++) { const b = new THREE.Mesh(new THREE.BoxGeometry(0.35, 0.15, 24), fx.bars); b.position.set(-14 + i * 3.5, 13, 0); g.add(b); }
+    const car = mustangIronStar(); car.scale.setScalar(5.5); car.position.y = 0.4; car.rotation.y = 0.6; g.add(car); car.userData.case = w.id; clickable.push(car); fx.car = car;
+    fx.key = new THREE.SpotLight(0xffffff, 0, 60, 0.7, 0.8); fx.key.position.set(0, 14, 0); fx.key.target.position.set(0, 0, 0); g.add(fx.key, fx.key.target);
+    // проекция кадров кейса
+    fx.shots = w.imgs.map(n => caseTexture(`assets/cases/${n}.jpg`, false, 1024, 640)); fx.shot = -1;
+    fx.scr = new THREE.Mesh(new THREE.PlaneGeometry(20, 12.5), new THREE.MeshBasicMaterial({ map: fx.shots[0], transparent: true, toneMapped: false, side: THREE.DoubleSide }));
+    fx.scr.position.set(-12, 9, 14); fx.scr.rotation.y = Math.atan2(8 - (cx - 12), (Z - 2) - (Z + 20)); g.add(fx.scr); solid(fx.scr);
+    SOLIDS.push({ box: new THREE.Box3(V(cx - 17, 0, w.center.z - 13), V(cx + 17, 14, w.center.z + 13)), name: w.id });
+    LIVE.push({ fx, center: V(cx + 10, 8, Z - 10), update: MOMENTS.ironstar.update });
   },
-  update(fx, time, I, beat, kick) {
-    const { drop } = kitUpdate(fx, time, I, beat, kick), h = fx.hero;
-    h.car.rotation.y = time * 0.35; h.car.position.y = 0.8 + (drop ? kick * 1.2 : 0);   // на дропе машина подпрыгивает на подвеске
-    h.edge.material.opacity = 0.4 + 0.6 * kick;
-    const s = Math.floor(time) + 3600 + 1338; if (s !== h.last) { h.last = s; const g = h.tg;
-      g.fillStyle = '#1a0606'; g.fillRect(0, 0, 1024, 256); g.font = '700 210px AP, monospace'; g.fillStyle = '#ff3a1a'; g.textAlign = 'center';
+  update(fx, time, I, beat) {
+    // огонь бежит по порталам к финишу раз в такт; за ним гаснущий шлейф
+    const run = (beat / 4 % 1) * 10;
+    fx.portals.forEach((m, i) => { const d = run - i; const v = d >= 0 && d < 1 ? 1 : d >= 1 && d < 3 ? 1 - (d - 1) / 2 : 0;
+      m.color.setRGB(0.25, 0.25, 0.27).lerp(new THREE.Color(1.6, 0.75, 0.3), v).multiplyScalar(0.3 + 0.7 * I); });
+    fx.bars.color.setScalar(0.4 + 0.7 * I); fx.key.intensity = I * 500;
+    fx.car.rotation.y = 0.6 + Math.sin(time * 0.15) * 0.25;
+    const shot = Math.floor(beat / 8) % fx.shots.length; if (shot !== fx.shot) { fx.shot = shot; fx.scr.material.map = fx.shots[shot]; }
+    fx.scr.material.opacity = I * 0.9;
+    const s = Math.floor(time) + 3600 + 1338; if (s !== fx.last) { fx.last = s; const g = fx.tg;
+      g.fillStyle = '#100404'; g.fillRect(0, 0, 1024, 256); g.font = '700 210px AP, monospace'; g.fillStyle = '#ff3a1a'; g.textAlign = 'center';
       g.fillText(`${Math.floor(s / 3600)}:${String(Math.floor(s / 60) % 60).padStart(2, '0')}:${String(s % 60).padStart(2, '0')}`, 512, 200);
-      g.fillStyle = 'rgba(0,0,0,.55)'; for (let x = 0; x < 1024; x += 8) g.fillRect(x, 0, 3, 256); for (let y = 0; y < 256; y += 8) g.fillRect(0, y, 1024, 3); h.tt.needsUpdate = true; }
+      g.fillStyle = 'rgba(0,0,0,.55)'; for (let x = 0; x < 1024; x += 8) g.fillRect(x, 0, 3, 256); for (let y = 0; y < 256; y += 8) g.fillRect(0, y, 1024, 3); fx.tt.needsUpdate = true; }
   },
 };
 
-// гусь на заводе: гусь ростом 28 м топает по улице, светящиеся лапки на асфальте шаг за шагом ведут к нему
+// гусь на заводе: белый глянцевый гусь ростом 30 м топает по улице, светящиеся лапки на асфальте шаг за шагом ведут к нему
 MOMENTS.goose = {
   layout(w) {
     const Z = w.z; w.center = V(-20, 0, Z + 4);
@@ -688,7 +742,8 @@ MOMENTS.goose = {
   build(w) {
     const g = momentGroup(w), Z = w.z, O = 0xff7a10;
     const fx = kit(w, g, { col: [O, RED, 0xffe0b0], stage: 16, laser: [6, 26, 0], ticker: [33, 14], wall: [6, 50, 44], scr: [-14, 15, -22], cam: V(8, 6, Z - 52) });
-    const gs = goose(); gs.traverse(o => { if (o.isMesh && o.material.color.getHex() !== 0xff7a10 && o.material !== MAT.matte) o.material = MAT.chrome; });   // хромовый, как надувная скульптура
+    const gooseM = new THREE.MeshPhysicalMaterial({ color: 0xf2ede4, roughness: 0.22, clearcoat: 1, clearcoatRoughness: 0.05 }), pawM = new THREE.MeshStandardMaterial({ color: O, emissive: O, emissiveIntensity: 0.5, roughness: 0.4 });
+    const gs = goose(); gs.traverse(o => { if (!o.isMesh || o.material === MAT.matte) return; o.material = o.material.color.getHex() === 0xff7a10 ? pawM : gooseM; });   // белый глянец, как виниловая игрушка
     gs.scale.setScalar(4.6); gs.position.y = 0.8; gs.rotation.y = 2.3; g.add(gs); gs.userData.case = w.id; clickable.push(gs); fx.hero.goose = gs;
     // лапки: дорожка от камеры к сцене, загораются по одной в бит
     const paw = decalTex(256, 256, (c) => { c.fillStyle = '#fff'; c.translate(128, 150); [-0.55, 0, 0.55].forEach(a => { c.save(); c.rotate(a); c.beginPath(); c.ellipse(0, -60, 22, 70, 0, 0, Math.PI * 2); c.fill(); c.restore(); }); c.beginPath(); c.arc(0, 0, 40, 0, Math.PI * 2); c.fill(); });
@@ -713,7 +768,7 @@ function updateMoments(time) {
   const beat = beatAt(time), kick = Math.exp(-(beat % 1) * 7);
   let top = 0;
   for (const m of LIVE) {
-    const I = clamp01((130 - camera.position.distanceTo(m.center)) / 60); top = Math.max(top, I);
+    const I = clamp01((130 - camera.position.distanceTo(m.center)) / 60); if (m.fx.beams && m.fx.lz) top = Math.max(top, I);   // качает кадр только рейв-оформление
     if (I > 0 || m.wasOn) m.update(m.fx, time, I, beat, kick); m.wasOn = I > 0;
   }
   bloom.strength = 0.55 + top * (0.12 + 0.3 * kick);
