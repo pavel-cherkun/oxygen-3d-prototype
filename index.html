@@ -68,6 +68,10 @@ body.orbit .ov,body.orbit .hud.tl{display:none}
 .list:last-child button:last-child{border-bottom:1px solid #2a2a2a}
 .chips{display:flex;flex-wrap:wrap;gap:6px;margin:10px 0}
 .chips span{border:1px solid #333;padding:4px 10px;border-radius:30px;font-size:14px}
+.flex{max-width:min(720px,calc(100vw - 56px))}
+.flex h2{font-size:clamp(64px,9vw,148px);line-height:.84;margin:6px 0 14px;letter-spacing:-.03em;text-shadow:0 0 40px rgba(58,107,255,.55),0 4px 0 rgba(0,0,0,.4)}
+.flex .idea{font-size:clamp(17px,1.5vw,21px);max-width:460px;text-shadow:0 1px 12px rgba(0,0,0,.8)}
+.flex .hit{display:flex;align-items:baseline;gap:12px;margin-top:14px}.flex .hit b{font-weight:620;font-size:clamp(40px,4vw,64px);color:var(--red);line-height:1}
 .nums{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin:12px 0}
 .nums b{display:block;font-weight:520;font-size:30px;font-variation-settings:"opsz" 36,"wdth" 100,"slnt" -6}
 footer.ft{display:flex;gap:18px;margin-top:16px;padding-top:12px;border-top:1px solid #2a2a2a;flex-wrap:wrap}

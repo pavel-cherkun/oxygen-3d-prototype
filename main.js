@@ -504,7 +504,7 @@ const WORLD = [
   { id: 'fandom', r: 'btl', zone: 'asia', kind: 'station', hero: [26, 20, 12], imgs: ['ozon-fandom-kv-1', 'ozon-fandom-real-1', 'ozon-fandom-real-2', 'ozon-fandom-real-3'], nav: 'ozon corp', orbit: true },
   { id: 'tbank', r: 'btl', zone: 'asia', kind: 'station', hero: [16, 16, 10], imgs: ['tbank-zone-1', 'tbank-zone-top-1', 'tbank-road-1', 'tbank-cover-1'], nav: 'чёрный пояс по it' },
   { id: 'selekt', r: 'btl', zone: 'joint', kind: 'station', hero: [14, 4, 10], imgs: ['ozon-select-1', 'ozon-select-0', 'ozon-select-2', 'ozon-select-3'], nav: 'ozon селект' },
-  { id: 'lion', r: 'btl', zone: 'sport', kind: 'station', hero: [14, 14, 16], imgs: ['../dp/lion-2', '../dp/lion-1', '../dp/lion-cover'], nav: 'синегривый лев' },
+  { id: 'lion', r: 'btl', zone: 'sport', kind: 'station', hero: [14, 14, 16], imgs: ['../dp/lion-2', '../dp/lion-1', '../dp/lion-cover'], nav: 'синегривый лев', moment: 'lion' },
   { id: 'ironstar', r: 'btl', zone: 'sport', kind: 'station', hero: [12, 12, 4], imgs: ['gdrive-ironstar-1'], nav: 'ironstar' },
   { id: 'gdrive', r: 'btl', zone: 'sport', kind: 'station', hero: [30, 8, 4], imgs: ['gdrive-silk-1', 'gdrive-silk-road-1', 'gdrive-silk-road-2', 'gdrive-finish-1'], nav: 'шёлковый путь' },
   { id: 'baltika7', r: 'btl', zone: 'sport', kind: 'station', hero: [12, 10, 5], imgs: ['baltika7-1', 'baltika7-zone-1', 'baltika7-zone-2', 'baltika7-prizes-1'], nav: 'балтика 7' },
@@ -527,9 +527,120 @@ const WORLD = [
   { id: 'aiLavka', r: 'atl', zone: 'ai', kind: 'screen', s: 1, img: 'ai-lavka', video: 'ai-lavka', nav: 'ai · лавка' },
   { id: 'aiAlfa', r: 'atl', zone: 'ai', kind: 'screen', s: -1, img: 'ai-alfa', video: 'ai-alfa', nav: 'ai · альфа' },
 ];
-const ZR = {}, TAIL = {};   // z-диапазоны кварталов; z наград и брифа
+const ZR = {}, TAIL = {};
+const MOMENTS = {};   // кейсы-моменты: свой герой, своя камера, свет в бит; см. раздел «моменты»   // z-диапазоны кварталов; z наград и брифа
 const DIXY_TOWER = { x: -62, w: 38, d: 40, h: 58 }, BANNER = { h: 30, w: 30 * 9 / 16 };
 const ATL_TOWER = { x: 58, w: 44, d: 34, h: 150 }, SCREEN_Y = 74;
+// ---------- моменты ----------
+// кейс-момент: герой в масштабе дома, камера заходит снизу и взмывает, свет и типографика бьют в бит 128 bpm
+const BPM = 128, beatAt = t => t * BPM / 60;
+const glow = (hex, k = 1.6) => new THREE.MeshBasicMaterial({ color: new THREE.Color(hex).multiplyScalar(k), toneMapped: false, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false });
+// крупный набор на canvas: залитый или контурный
+function typeTex(lines, fill, W = 2048, H = 900) {
+  const c = document.createElement('canvas'); c.width = W; c.height = H; const g = c.getContext('2d');
+  let fs = H / lines.length * 0.98; g.font = `620 ${fs}px TT, sans-serif`;
+  while (Math.max(...lines.map(l => g.measureText(l).width)) > W * 0.98) { fs -= 8; g.font = `620 ${fs}px TT, sans-serif`; }
+  g.textBaseline = 'alphabetic'; g.lineJoin = 'round';
+  lines.forEach((l, i) => { const y = (i + 1) * H / lines.length - fs * 0.16;
+    if (fill) { g.fillStyle = '#fff'; g.fillText(l, 0, y); } else { g.strokeStyle = '#fff'; g.lineWidth = fs * 0.025; g.strokeText(l, 0, y); } });
+  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 8; return t;
+}
+function tickerTex(txt) {
+  const c = document.createElement('canvas'); c.width = 4096; c.height = 128; const g = c.getContext('2d');
+  g.font = '520 92px TT, sans-serif'; const w = g.measureText(txt).width; g.fillStyle = '#fff';
+  for (let x = 0; x < 4096; x += w) g.fillText(txt, x, 100);
+  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.wrapS = THREE.RepeatWrapping; return t;
+}
+const LIVE = [];   // { w, center, update(time, I, beat, kick) } — работают только рядом с камерой
+
+MOMENTS.lion = {
+  layout(w) {
+    const Z = w.z, H = 30; w.center = V(-20, 0, Z); w.heroH = H;
+    w.keys = [
+      [-0.46, V(9, 2.4, Z - 46), V(-17, 24, Z)],     // снизу, лев нависает
+      [-0.16, V(10, 7, Z - 26), V(-10, 21, Z)],
+      [0.14, V(6, 20, Z - 22), V(-10, 17, Z)],        // облёт на уровне морды
+      [0.44, V(14, 50, Z + 12), V(-19, 8, Z + 2)],      // кран над сценой
+    ];
+  },
+  build(w) {
+    const Z = w.z, cx = w.center.x, g = new THREE.Group(); g.position.set(cx, 0, Z); scene.add(g);
+    const fx = { beams: [], lasers: [], rings: [], wave: null, shots: [], shot: -1 };
+    // сцена: глянцевый диск, светящиеся кольца, волна на каждый удар
+    const disc = new THREE.Mesh(new THREE.CylinderGeometry(17, 17.6, 0.8, 72), MAT.graphite); disc.position.y = 0.4; g.add(disc);
+    [17.2, 13, 9].forEach((r, i) => { const m = new THREE.Mesh(new THREE.TorusGeometry(r, 0.16, 8, 128), glow(i === 1 ? RED : 0x3a6bff)); m.rotation.x = Math.PI / 2; m.position.y = 0.85; g.add(m); fx.rings.push(m); });
+    fx.wave = new THREE.Mesh(new THREE.RingGeometry(0.96, 1, 128), glow(0x9fb8ff, 2)); fx.wave.rotation.x = -Math.PI / 2; fx.wave.position.y = 0.9; g.add(fx.wave);
+    // лев на 30 м
+    gltfLoader.loadAsync('assets/models/lion-dance.glb').then(gltf => {
+      const m = gltf.scene, bb = new THREE.Box3().setFromObject(m), k = w.heroH / (bb.max.y - bb.min.y);
+      m.scale.setScalar(k); m.position.set(0, 0.8 - bb.min.y * k, 0); m.rotation.y = Math.PI - 0.5;   // мордой к камере на подлёте; танец сам разворачивает льва
+      m.traverse(o => { if (!o.isMesh) return; const s = o.material; o.frustumCulled = false;
+        o.material = new THREE.MeshPhysicalMaterial({ color: s.color, map: s.map, normalMap: s.normalMap, roughness: Math.max(0.55, s.roughness), sheen: 1, sheenColor: new THREE.Color(0x7d9cff), sheenRoughness: 0.4 }); });
+      m.userData.case = w.id; g.add(m); clickable.push(m);
+      lionDance.mixer = new THREE.AnimationMixer(m); gltf.animations.forEach(a => lionDance.mixer.clipAction(a).play());
+    }).catch(e => console.warn('lion', e));
+    // настоящий свет на героя: синий контровой и белый ключ, вспыхивают в бит
+    fx.key = new THREE.SpotLight(0xffffff, 0, 120, 0.5, 0.5); fx.key.position.set(26, 50, -40); fx.key.target.position.set(0, 16, 0);
+    fx.rim = new THREE.SpotLight(0x3a6bff, 0, 120, 0.6, 0.4); fx.rim.position.set(-10, 46, 34); fx.rim.target.position.set(0, 18, 0);
+    g.add(fx.key, fx.key.target, fx.rim, fx.rim.target);
+    // лучи прожекторов: шесть конусов с ферм, качаются
+    for (let i = 0; i < 6; i++) {
+      const a = i / 6 * Math.PI * 2 + 0.4, col = [0x3a6bff, 0xffffff, RED][i % 3];
+      const pivot = new THREE.Group(); pivot.position.set(Math.cos(a) * 22, 52, Math.sin(a) * 22); g.add(pivot);
+      const cone = new THREE.Mesh(new THREE.ConeGeometry(7, 60, 32, 1, true), glow(col, 0.12)); cone.position.y = -30; pivot.add(cone);
+      const head = new THREE.Mesh(new THREE.CylinderGeometry(1.1, 1.4, 1.6, 16), MAT.chrome); pivot.add(head);
+      pivot.lookAt(g.position.x, 0, g.position.z); fx.beams.push({ pivot, base: pivot.rotation.clone(), ph: i * 1.3 });
+    }
+    // лазеры веером из-за головы
+    const lz = new THREE.Group(); lz.position.set(0, 27, 6); g.add(lz); fx.lz = lz;
+    for (let i = 0; i < 14; i++) { const m = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.14, 160), glow(i % 2 ? RED : 0x3a6bff, 2.2)); m.geometry.translate(0, 0, -80); m.rotation.y = (i / 13 - 0.5) * 2.2; lz.add(m); fx.lasers.push(m); }
+    // бегущая строка кольцом над гривой
+    const tk = new THREE.Mesh(new THREE.CylinderGeometry(15, 15, 2.6, 96, 1, true), new THREE.MeshBasicMaterial({ map: tickerTex(`${CASES[w.id].title} · ${CASES[w.id].pass.клиент} · `), transparent: true, side: THREE.DoubleSide, color: new THREE.Color(0xffffff).multiplyScalar(1.4), toneMapped: false, blending: THREE.AdditiveBlending, depthWrite: false }));
+    tk.material.map.repeat.set(3, 1); tk.position.y = 35; g.add(tk); fx.ticker = tk;
+    // титр-растяжка над улицей за львом: залитый и контурный набор меняются на сильную долю; камера проходит под ним
+    const lines = CASES[w.id].title.split(' '), wallW = 72, wallH = wallW * 900 / 2048;
+    fx.typeFill = typeTex(lines, true); fx.typeLine = typeTex(lines, false);
+    fx.wall = new THREE.Mesh(new THREE.PlaneGeometry(wallW, wallH), new THREE.MeshBasicMaterial({ map: fx.typeLine, transparent: true, color: new THREE.Color(0xffffff), toneMapped: false, depthWrite: false }));
+    fx.wall.position.set(2, 46, 46); fx.wall.rotation.y = Math.PI; fx.wall.rotateX(0.22); g.add(fx.wall);
+    // экран с кадрами кейса: режется на каждый такт
+    fx.shots = w.imgs.map(n => caseTexture(`assets/cases/${n}.jpg`, false, 1024, 640));
+    const scr = new THREE.Mesh(new THREE.PlaneGeometry(24, 15), new THREE.MeshBasicMaterial({ map: fx.shots[0], toneMapped: false }));
+    scr.position.set(-16, 16, -24); scr.rotation.y = Math.atan2(9 - (cx - 16), -22); g.add(scr); fx.scr = scr;
+    const frame = new THREE.Mesh(new THREE.PlaneGeometry(24.8, 15.8), glow(RED, 1.4)); frame.position.copy(scr.position); frame.quaternion.copy(scr.quaternion); frame.translateZ(-0.05); g.add(frame);
+    scr.userData.case = w.id; clickable.push(scr);
+    // для проверки камеры: сцена со львом, экран и стена — сплошные
+    SOLIDS.push({ box: new THREE.Box3(V(cx - 17.6, 0, Z - 17.6), V(cx + 17.6, w.heroH + 2, Z + 17.6)), name: w.id });
+    solid(scr); solid(fx.wall);
+    LIVE.push({ w, fx, center: V(cx, 16, Z), update: MOMENTS.lion.update });
+  },
+  update(time, I, beat, kick, fx) {
+    const bar = Math.floor(beat / 4), b = Math.floor(beat), drop = (bar % 4) === 3;   // каждый четвёртый такт — дроп
+    fx.key.intensity = I * (900 + 2200 * kick); fx.rim.intensity = I * (1400 + 1800 * kick);
+    fx.rings.forEach((r, i) => { r.material.opacity = 0.35 + 0.65 * Math.exp(-((beat + i * 0.25) % 1) * 5); });
+    const f = beat % 1; fx.wave.scale.setScalar(2 + f * 34); fx.wave.material.opacity = (1 - f) * 0.8;
+    fx.beams.forEach((s, i) => { s.pivot.rotation.set(s.base.x + Math.sin(time * 0.9 + s.ph) * 0.35, s.base.y, s.base.z + Math.cos(time * 0.7 + s.ph) * 0.35); s.pivot.children[0].material.opacity = (0.06 + 0.1 * kick) * I * (drop || (b + i) % 2 ? 1 : 0.35); });
+    fx.lz.visible = drop || b % 8 >= 4; fx.lz.rotation.y = Math.sin(time * 1.7) * 0.5; fx.lz.rotation.x = -0.15 + Math.sin(time * 2.3) * 0.12;
+    fx.lasers.forEach((m, i) => m.visible = drop ? (b + i) % 2 === 0 : true);
+    fx.ticker.rotation.y = -time * 0.25; fx.ticker.material.opacity = I;
+    fx.wall.material.map = (drop ? b % 2 === 0 : b % 4 === 0) ? fx.typeFill : fx.typeLine;
+    fx.wall.material.color.setHex(drop && b % 2 ? RED : 0xffffff).multiplyScalar(0.6 + 1.2 * kick); fx.wall.material.opacity = I;
+    const shot = (drop ? b : bar) % fx.shots.length; if (shot !== fx.shot) { fx.shot = shot; fx.scr.material.map = fx.shots[shot]; }
+    fx.scr.material.color.setScalar(f < 0.06 && (drop || b % 4 === 0) ? 3 : 0.9);   // белая вспышка на склейке
+  },
+};
+// бит общий: момент разгорается, когда камера подлетает ближе 120 м; удар качает bloom, fov и камеру
+function updateMoments(time) {
+  const beat = beatAt(time), kick = Math.exp(-(beat % 1) * 7);
+  let top = 0;
+  for (const m of LIVE) {
+    const I = clamp01((130 - camera.position.distanceTo(m.center)) / 60); top = Math.max(top, I);
+    if (I > 0 || m.wasOn) m.update(time, I, beat, kick, m.fx); m.wasOn = I > 0;
+  }
+  bloom.strength = 0.55 + top * (0.15 + 0.55 * kick);
+  const fov = 50 + top * (4 - 3 * kick); if (Math.abs(camera.fov - fov) > 0.01) { camera.fov = fov; camera.updateProjectionMatrix(); }
+  if (top) { camera.position.y += top * kick * 0.35 * Math.sin(time * 90); camera.position.x += top * kick * 0.25 * Math.cos(time * 77); }
+}
+
 function layoutWorld() {
   let z = Z0 - STEP, prev = null;
   for (const w of WORLD.filter(w => w.r === 'btl')) { z += STEP + (prev && prev !== w.zone ? ZONE_GAP : 0); prev = w.zone; w.z = z; (ZR[w.zone] ||= [z, z])[1] = z; }
@@ -558,6 +669,7 @@ function layoutWorld() {
     // носитель — на своей стороне кадра, рассказ — на другой: смещаем точку взгляда в сторону рассказа
     const caseRight = w.F.x < C.x, fwd = w.F.clone().sub(C).normalize(), right = fwd.clone().cross(new THREE.Vector3(0, 1, 0)).normalize();
     w.cam = C; w.look = w.F.clone().addScaledVector(right, (caseRight ? -1 : 1) * 0.22 * dist); w.story = caseRight ? 'left' : 'right';
+    if (w.moment) MOMENTS[w.moment].layout(w);
   }
 }
 layoutWorld();
@@ -634,7 +746,7 @@ function roof(w) {
   solid(g);
 }
 function buildWorld() {
-  for (const w of WORLD) ({ station, vitrine, screen, roof })[w.kind](w);
+  for (const w of WORLD) w.moment ? MOMENTS[w.moment].build(w) : ({ station, vitrine, screen, roof })[w.kind](w);
   // модель зоны ozon corp заменяет серый блок
   gltfLoader.loadAsync('assets/models/ozon-corp.min.glb').then(gltf => {
     const model = gltf.scene, w = WORLD[0];
@@ -647,6 +759,7 @@ function buildWorld() {
   }).catch(() => {});
 }
 function updateWorld(time) {
+  updateMoments(time);
   if (lionDance.mixer) { const dt = Math.min(0.05, time - (lionDance.t || time)); lionDance.t = time; lionDance.mixer.update(dt); }
   clips.forEach(c => { const near = c.g.position.distanceTo(camera.position) < 220; if (near && c.v.paused) c.v.play().catch(() => {}); else if (!near && !c.v.paused) c.v.pause(); });
 }
@@ -904,7 +1017,7 @@ function buildTimeline() {
     { p: 1.00, pos: V(0, 14, TAIL.brief - 52), look: V(0, 20, TAIL.brief) },
   ];
   // на остановке камера присаживается и чуть подаётся вперёд, между остановками летит по коридору маршрута
-  const stops = r => WORLD.filter(w => w.r === r).flatMap(w => [{ p: w.p - w.span * 0.2, pos: w.cam, look: w.look }, { p: w.p + w.span * 0.22, pos: w.cam.clone().add(V(0, 0, 3)), look: w.look }]);
+  const stops = r => WORLD.filter(w => w.r === r).flatMap(w => w.keys ? w.keys.map(([t, pos, look]) => ({ p: w.p + t * w.span, pos, look })) : [{ p: w.p - w.span * 0.2, pos: w.cam, look: w.look }, { p: w.p + w.span * 0.22, pos: w.cam.clone().add(V(0, 0, 3)), look: w.look }]);
   CAM.btl = [...head, { p: 0.596, pos: V(10, 13, 150), look: V(-4, 9, 230) }, ...stops('btl'), ...tail];
   CAM.atl = [...head, { p: 0.596, pos: V(0, 42, 150), look: V(-30, 66, 240) }, ...stops('atl'), { p: 0.93, pos: V(0, 40, TAIL.awards - 80), look: V(19, 16, TAIL.awards) }, ...tail];
   // камера летит по сплайну через ключи: без остановки на каждом, тормозит только там, где ключи стоят рядом
@@ -943,7 +1056,15 @@ const MORE = {
 // рассказы строятся из таблицы мира: окно — отрезок остановки, сторона — напротив носителя в кадре
 const STORIES = WORLD.map(w => [w.id, w.a, w.b, w.r, w.story, [ZONES[w.zone].more, ...(w.also || [])].filter(Boolean), w.orbit]);
 STORIES.forEach(([id, a, b, r, side, more, orbitBtn]) => {
-  const c = CASES[id], el = document.createElement('section');
+  const c = CASES[id], el = document.createElement('section'), w = WORLD.find(w => w.id === id);
+  if (w.moment) {
+    // у момента вместо окна — титр: заходит после пролёта камеры, всё остальное в «кейс целиком»
+    const res = c.result.filter(x => x[0] !== '—')[0];
+    el.className = 'ov left flex'; el.dataset.a = w.p - w.span * 0.12; el.dataset.b = b; el.dataset.f = 0.004; el.dataset.route = r;
+    el.innerHTML = `<span class="t">${r === 'btl' ? '{04} btl' : '{05} atl'} · ${c.pass.клиент}</span><h2>${c.title}</h2><p class="idea">${c.idea}</p>
+      ${res ? `<div class="hit"><b>${res[0]}</b><span class="t">${res[1]}</span></div>` : ''}<button class="btn" data-case="${id}">кейс целиком</button>`;
+    return document.body.insertBefore(el, document.getElementById('orbitUi'));
+  }
   el.className = `ov ${side} panel`; el.dataset.a = a; el.dataset.b = b; el.dataset.f = 0.005; el.dataset.route = r; el.style.maxWidth = '460px';
   const res = c.result.filter(x => x[0] !== '—').slice(0, 3);
   el.innerHTML = `<span class="t">${r === 'btl' ? '{04} btl' : '{05} atl'} · ${c.pass.клиент} · ${c.pass.год}${c.awards[0] ? ' · ' + c.awards[0] : ''}</span>
