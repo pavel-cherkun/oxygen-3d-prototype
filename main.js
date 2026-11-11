@@ -28,7 +28,7 @@ const canvas = document.getElementById('gl');
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: false, powerPreference: 'high-performance' });
 renderer.setPixelRatio(Math.min(devicePixelRatio, 1.25));
 renderer.setSize(innerWidth, innerHeight);
-renderer.toneMapping = THREE.ACESFilmicToneMapping; renderer.toneMappingExposure = 1.05;
+renderer.toneMapping = THREE.ACESFilmicToneMapping; renderer.toneMappingExposure = 0.92;
 const scene = new THREE.Scene(); scene.background = new THREE.Color(0x010101);
 const camera = new THREE.PerspectiveCamera(50, innerWidth / innerHeight, 0.5, 9000);
 const composer = new EffectComposer(renderer);
@@ -192,15 +192,15 @@ const SHAFTS = [];   // { x, z, r, k, floor, top }
 const LAMPS = [];    // точечные источники локаций: { p, r, c } — к камере подсаживаются ближайшие 8
 const ZONES = [      // дымка и общий свет по локациям (по z камеры)
   { z: 200, haze: [0, 0, 0], k: 0, amb: [0.026, 0.028, 0.036] },
-  { z: -700, haze: [0.012, 0.016, 0.024], k: 0.0009, amb: [0.035, 0.038, 0.048] },
-  { z: -1400, haze: [0.012, 0.016, 0.024], k: 0.0009, amb: [0.035, 0.038, 0.048] },
-  { z: -1530, haze: [0.05, 0.004, 0.003], k: 0.002, amb: [0.03, 0.004, 0.004] },
-  { z: -1860, haze: [0.03, 0.034, 0.045], k: 0.0008, amb: [0.03, 0.033, 0.04] },
-  { z: -2440, haze: [0.05, 0.055, 0.05], k: 0.0007, amb: [0.06, 0.064, 0.06] },
-  { z: -3440, haze: [0.012, 0.02, 0.036], k: 0.0007, amb: [0.02, 0.026, 0.04] },
-  { z: -4460, haze: [0.022, 0.024, 0.03], k: 0.0006, amb: [0.04, 0.042, 0.048] },
-  { z: -5120, haze: [0.022, 0.024, 0.03], k: 0.0006, amb: [0.04, 0.042, 0.048] },
-  { z: -5240, haze: [0.05, 0.022, 0.008], k: 0.0011, amb: [0.006, 0.005, 0.004] },
+  { z: -700, haze: [0.0060, 0.0080, 0.0120], k: 0.0009, amb: [0.0105, 0.0114, 0.0144] },
+  { z: -1400, haze: [0.0060, 0.0080, 0.0120], k: 0.0009, amb: [0.0105, 0.0114, 0.0144] },
+  { z: -1530, haze: [0.0060, 0.0075, 0.0110], k: 0.0006, amb: [0.0036, 0.0039, 0.0051] },
+  { z: -1860, haze: [0.0150, 0.0170, 0.0225], k: 0.0008, amb: [0.0090, 0.0099, 0.0120] },
+  { z: -2440, haze: [0.0150, 0.0170, 0.0170], k: 0.0008, amb: [0.0075, 0.0081, 0.0078] },
+  { z: -3440, haze: [0.0060, 0.0100, 0.0180], k: 0.0007, amb: [0.0060, 0.0078, 0.0120] },
+  { z: -4460, haze: [0.0110, 0.0120, 0.0150], k: 0.0006, amb: [0.0120, 0.0126, 0.0144] },
+  { z: -5120, haze: [0.0110, 0.0120, 0.0150], k: 0.0006, amb: [0.0120, 0.0126, 0.0144] },
+  { z: -5240, haze: [0.05, 0.022, 0.008], k: 0.0011, amb: [0.0018, 0.0015, 0.0012] },
 ];
 let PATH = [], SEG = [], S_TOTAL = 0;
 const FX = { beams: [], glows: [], cubes: [], dots: [] };
@@ -233,6 +233,7 @@ function buildWorld(slot) {
   box(STAIR.x0 - 6, STAIR.x0, LOW, 6, STAIR.z1, STAIR.z0); box(STAIR.x1, STAIR.x1 + 6, LOW, 6, STAIR.z1, STAIR.z0);
   box(-320, 320, LOW, -10, -310, -300);
 
+  LAMPS.push({ p: V(500, LOW + 200, -330), r: 380, c: V(0.8, 0.88, 1).multiplyScalar(0.9) });
   // ===== путь ленты =====
   const sx = slot.x, z = WALL.z + 0.25, rc = V(sx + REEL.w / 2 - 2, 104, 0), m = 2.6;
   const yt = rc.y + REEL.h / 2 + m, yb = rc.y - REEL.h / 2 - m, xl = rc.x - REEL.w / 2 - m, xr = rc.x + REEL.w / 2 + m;
@@ -251,26 +252,37 @@ function buildWorld(slot) {
   const nearPath = (x, zz, r) => SEG.some(g => { if (g.a.y > LOW + 1) return false; const ab = g.b.clone().sub(g.a), t = clamp01(V(x, LOW, zz).sub(g.a).dot(ab) / ab.lengthSq()); return g.a.clone().addScaledVector(ab, t).distanceTo(V(x, LOW + 0.25, zz)) < r; });
 
   // ===== общий пол всех залов =====
-  box(-720, 720, LOW - 20, LOW, ZN.fan - 120, -300);
+  box(-720, 720, LOW - 20, LOW, -1512, -300); box(-720, 720, LOW - 20, LOW, ZN.fan - 120, ZN.asia + ZN.asiaR);
 
   // ===== 1. гипостильный зал (реф: G-Cans) — колонны 30×30 м, лампы под потолком, мокрый пол =====
   const HX = 700, HY = LOW + 420;
   box(-HX, HX, HY, HY + 30, ZN.hyp, -300, 0.7);
   box(-HX - 20, -HX, LOW, HY, ZN.hyp, -300); box(HX, HX + 20, LOW, HY, ZN.hyp, -300);
-  box(-HX, -320, LOW, HY, -310, -300); box(320, HX, LOW, HY, -310, -300); box(-320, 320, 0, HY, -310, -300, 0.8);
+  box(-HX, -320, LOW, HY, -310, -300); box(320, HX, LOW, HY, -310, -300);
   const lampGlow = [];
   for (let x = -630; x <= 630; x += 140) for (let zz = -400; zz >= -1440; zz -= 140) {
     if (nearPath(x, zz, 50) || CUBES.some(c => Math.hypot(x - c.p.x, zz - c.p.z) < 60) || (x > 30 && x < 160 && zz > -660)) continue;
     box(x - 15, x + 15, LOW, HY, zz - 15, zz + 15, 0.9 + rnd() * 0.15);
     const lx = x + 70, lz = zz - 70; lampGlow.push(V(lx, HY - 4, lz));
-    if (((x + 630) / 140 + (zz + 400) / 140) % 2 === 0) LAMPS.push({ p: V(lx, HY - 30, lz), r: 70, c: V(1, 0.9, 0.78).multiplyScalar(1.5) });
+    if (((x + 630) / 140 + (zz + 400) / 140) % 2 === 0) LAMPS.push({ p: V(lx, HY - 30, lz), r: 60, c: V(1, 0.9, 0.78).multiplyScalar(0.55) });
   }
   portalWall(ZN.hyp, HX, HY);
+  // кадры 2–3: в торце зала — высокие светящиеся проёмы; колонны и лестница читаются силуэтами против них
+  FX.slitsHyp = [-600, -470, -330, -190, 190, 330, 470, 600].map(x => ({ x, w: 26 + (Math.abs(x) % 3) * 8 }));
+  FX.slitsHyp.forEach(o => LAMPS.push({ p: V(o.x, LOW + 160, ZN.hyp + 30), r: 260, c: V(0.8, 0.88, 1).multiplyScalar(0.9) }));
 
-  // ===== 2. красная труба (реф 1): водовод Ø72 м, кольца рёбер, красный свет =====
-  pipe(ZN.hyp - 12, ZN.asia + ZN.asiaR, 36, 18);
+  // ===== 2. колодец (кадр 4): шахта Ø300 м и глубиной 2,6 км, мост над ней, свет снизу =====
+  const SC = V(0, 0, (ZN.hyp - 12 + ZN.asia + ZN.asiaR) / 2), SR = 150, gb = Math.asin(24 / SR);
+  const scyl = (th0, thL, y0, y1) => inst(new THREE.CylinderGeometry(SR, SR, y1 - y0, 72, 1, true, th0, thL), concrete, [{ m: M(V(SC.x, (y0 + y1) / 2, SC.z)) }]);
+  scyl(gb, Math.PI - 2 * gb, LOW - 2600, LOW + 420); scyl(Math.PI + gb, Math.PI - 2 * gb, LOW - 2600, LOW + 420);
+  [0, Math.PI].forEach(t => { scyl(t - gb, 2 * gb, LOW - 2600, LOW - 8); scyl(t - gb, 2 * gb, LOW + 76, LOW + 420); });
+  const ledge = []; for (let y = LOW - 70; y > LOW - 2500; y -= 64) ledge.push({ m: M(V(SC.x, y, SC.z), [-Math.PI / 2, 0, 0]) });
+  inst(new THREE.RingGeometry(SR - 12, SR, 96), concrete, ledge);
+  box(-8, 8, LOW - 7, LOW, SC.z - SR - 8, SC.z + SR + 8, 0.85);                                    // мост
+  box(-8, -7.6, LOW, LOW + 1.4, SC.z - SR - 8, SC.z + SR + 8, 0.5); box(7.6, 8, LOW, LOW + 1.4, SC.z - SR - 8, SC.z + SR + 8, 0.5);
+  LAMPS.push({ p: V(0, LOW - 1400, SC.z), r: 900, c: V(0.75, 0.85, 1).multiplyScalar(0.9) });
+  FX.shaftC = SC; FX.shaftR = SR;
   const redGlow = [];
-  for (let zz = ZN.hyp - 40; zz > ZN.asia + ZN.asiaR; zz -= 48) { LAMPS.push({ p: V(0, LOW + 62, zz), r: 34, c: V(1, 0.05, 0.035).multiplyScalar(2.2) }); redGlow.push(V(0, LOW + 70, zz)); }
 
   // ===== 3. Азия: цилиндр Ø520 м, свет из проёма сверху, кабели, кольца галерей, гигантская сакура =====
   const C = V(0, 0, ZN.asia), R = ZN.asiaR, HA = 1000, g0 = Math.asin(40 / R);
@@ -284,7 +296,8 @@ function buildWorld(slot) {
   for (let i = 0; i < 46; i++) { const a = rnd() * Math.PI * 2, d = 150 + rnd() * 100, top = V(C.x + Math.cos(a) * d, LOW + HA, C.z + Math.sin(a) * d), len = 250 + rnd() * 600; cables.push({ m: beam(top, top.clone().add(V(0, -len, 0)), 0.8 + rnd() * 1.6), c: new THREE.Color(0.02, 0.02, 0.025) }); }
   inst(new THREE.CylinderGeometry(0.5, 0.5, 1, 6), flatMat, cables);
   buildSakura(V(C.x, LOW, C.z));
-  for (let i = 0; i < 6; i++) { const a = i / 6 * Math.PI * 2 + 0.3; LAMPS.push({ p: V(C.x + Math.cos(a) * 200, LOW + 40, C.z + Math.sin(a) * 200), r: 80, c: V(1, 0.55, 0.7).multiplyScalar(0.9) }); }
+  for (let i = 0; i < 6; i++) { const a = i / 6 * Math.PI * 2 + 0.3; LAMPS.push({ p: V(C.x + Math.cos(a) * 200, LOW + 40, C.z + Math.sin(a) * 200), r: 70, c: V(1, 0.55, 0.7).multiplyScalar(0.35) }); }
+  LAMPS.push({ p: V(C.x, LOW + 700, C.z), r: 600, c: V(0.9, 0.92, 1).multiplyScalar(1.2) });
 
   // ===== 4. ритейл: бесконечный продуктовый — стеллажи 420 м, товары, люминесцентные полосы =====
   pipe(ZN.asia - R, ZN.ret0, 36, 0);
@@ -303,24 +316,24 @@ function buildWorld(slot) {
   box(-AX, -80, LOW, AY, ZN.ai1 - 12, ZN.ai1); box(80, AX, LOW, AY, ZN.ai1 - 12, ZN.ai1); box(-80, 80, LOW + 200, AY, ZN.ai1 - 12, ZN.ai1);
   buildSphere(V(0, LOW + 430, -3930), 230);
   SHAFTS.push({ x: 0, z: -3930, r: 170, k: 0.9, floor: LOW, top: AY });
-  [[-560, -3600], [560, -3600], [-560, -4250], [560, -4250]].forEach(([x, zz]) => LAMPS.push({ p: V(x, LOW + 120, zz), r: 160, c: V(0.55, 0.75, 1).multiplyScalar(1.3) }));
+  [[-560, -3600], [560, -3600], [-560, -4250], [560, -4250]].forEach(([x, zz]) => LAMPS.push({ p: V(x, LOW + 120, zz), r: 140, c: V(0.55, 0.75, 1).multiplyScalar(0.4) }));
+  LAMPS.push({ p: V(0, LOW + 430, -4260), r: 520, c: V(0.8, 0.9, 1).multiplyScalar(1.0) });
 
   // ===== 6. колодец лестниц (рефы 11, 17): пролёты зигзагом по стенам до самого верха, мосты =====
   const SX = 320, SY = LOW + 1000;
   box(-SX, SX, SY, SY + 20, ZN.st1, ZN.ai1 - 12, 0.7); box(-SX - 20, -SX, LOW, SY, ZN.st1, ZN.ai1 - 12); box(SX, SX + 20, LOW, SY, ZN.st1, ZN.ai1 - 12);
   box(-SX, -72, LOW, SY, ZN.st1 - 12, ZN.st1); box(72, SX, LOW, SY, ZN.st1 - 12, ZN.st1); box(-72, 72, LOW + 144, SY, ZN.st1 - 12, ZN.st1);
-  const zA = ZN.ai1 - 60, zB = ZN.st1 + 50, fl = zB - zA, ang = Math.atan2(90, -fl);
-  for (let k = 0; k < 10; k++) [-1, 1].forEach(sd => {
-    const y = LOW + k * 90, dirk = (k + (sd > 0 ? 1 : 0)) % 2 ? 1 : -1, x = sd * (SX - 16);
-    boxR(V(x, y + 45, (zA + zB) / 2), V(26, 3, Math.hypot(fl, 90)), [dirk * ang, 0, 0], 0.9);
-    box(x - 13, x + 13, y + 87, y + 90, dirk > 0 ? zA - 30 : zB, dirk > 0 ? zA : zB + 30, 0.9);   // площадка
-    box(sd > 0 ? x - 13 : x + 12, sd > 0 ? x - 12 : x + 13, y + 3, y + 93, zB, zA, 0.6);       // перила-экран
-  });
-  [LOW + 380, LOW + 650].forEach((y, i) => box(-SX, SX, y, y + 6, -4640 - i * 260, -4630 - i * 260, 0.85));
-  SHAFTS.push({ x: 0, z: -4800, r: 120, k: 0.8, floor: LOW, top: SY });
-  const stG = [];
-  for (let k = 0; k < 10; k++) [-1, 1].forEach(sd => { const pz = (k + (sd > 0 ? 1 : 0)) % 2 ? zA - 20 : zB + 20, pp = V(sd * (SX - 30), LOW + k * 90 + 70, pz); LAMPS.push({ p: pp, r: 90, c: V(1, 0.88, 0.7).multiplyScalar(1.4) }); stG.push(pp); });
-  FX.stairGlow = stG;
+  // кадр 8: пространственная ферма — бетонные балки без человеческой логики, свет пробивается сзади
+  const rf = mulberry(77);
+  for (let i = 0, n = 0; n < 64 && i < 600; i++) {
+    const c = V((rf() - 0.5) * 600, LOW + 60 + rf() * 900, ZN.ai1 - 30 - rf() * (ZN.ai1 - ZN.st1 - 60)), L = 260 + rf() * 620, t = 14 + rf() * 26;
+    const e = new THREE.Euler(rf() * Math.PI, rf() * Math.PI, rf() * Math.PI), dir = V(0, 1, 0).applyEuler(e);
+    let bad = false; for (let k = -1; k <= 1.001; k += 0.1) { const pnt = c.clone().addScaledVector(dir, k * L / 2); if (Math.abs(pnt.x) < 40 + t && pnt.y < LOW + 110 + t && pnt.z < ZN.ai1 + 20 && pnt.z > ZN.st1 - 20) { bad = true; break; } }
+    if (bad) continue;
+    boxR(c, V(t, L, t * (0.8 + rf() * 0.6)), [e.x, e.y, e.z], 0.8 + rf() * 0.3); n++;
+  }
+  FX.slitsSt = [-240, -120, 0, 120, 240].map(x => ({ x, w: 18 + Math.abs(x) % 20 }));
+  LAMPS.push({ p: V(0, LOW + 520, ZN.st1 + 30), r: 420, c: V(0.8, 0.88, 1).multiplyScalar(0.7) });
 
   // ===== 7. вентиляционная шахта (кадры 10–11): 220×220 м, ступенчатые рамы, трубы по стенам, в торце — вентилятор-Искра =====
   const VX = VENT.x, VY = LOW + VENT.h, z0 = ZN.st1, z1 = ZN.fan;
@@ -362,9 +375,12 @@ function buildSakura(base) {
     }
   };
   grow(base, V(0.08, 1, 0).normalize(), 110, 34, 6);
-  inst(new THREE.CylinderGeometry(0.42, 0.5, 1, 8), flatMat, bark);
-  inst(new THREE.IcosahedronGeometry(1, 0), litMat({ flat: true, glow: 0.12 }), bloom);
+  inst(new THREE.CylinderGeometry(17, 58, 46, 24, 1, true), flatMat, [{ m: M(base.clone().add(V(0, 23, 0))), c: new THREE.Color(0.05, 0.035, 0.032) }]);   // раздутое основание ствола
+  for (let i = 0; i < 9; i++) { const a = i / 9 * 6.28 + r() * 0.5, L = 50 + r() * 70; bark.push({ m: beam(base.clone().add(V(Math.cos(a) * 20, 14, Math.sin(a) * 20)), base.clone().add(V(Math.cos(a) * (20 + L), 0, Math.sin(a) * (20 + L))), 9 - r() * 4), c: new THREE.Color(0.045, 0.032, 0.03) }); }   // корни
+  
   // лепестки падают сквозь луч
+  inst(new THREE.CylinderGeometry(0.42, 0.5, 1, 8), flatMat, bark);
+  inst(new THREE.IcosahedronGeometry(1, 0), litMat({ flat: true, glow: 0.22 }), bloom);
   const n = 3500, pos = new Float32Array(n * 3), ph = new Float32Array(n);
   for (let i = 0; i < n; i++) { const a = r() * 6.28, d = Math.sqrt(r()) * 230; pos.set([base.x + Math.cos(a) * d, r() * 600, base.z + Math.sin(a) * d], i * 3); ph[i] = r() * 6.28; }
   const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.BufferAttribute(pos, 3)); g.setAttribute('aPh', new THREE.BufferAttribute(ph, 1));
@@ -402,7 +418,8 @@ function buildShelves(RX, RY) {
   const strips = [];
   [0, -140, 140, -280, 280].forEach(x => { for (let zz = ZN.ret0 - 40; zz > ZN.ret1 + 30; zz -= 46) strips.push({ m: M(V(x, RY - 6, zz - 15), [0, 0, 0], V(2.4, 1.2, 30)) }); });
   inst(new THREE.BoxGeometry(1, 1, 1), new THREE.MeshBasicMaterial({ color: new THREE.Color(0.85, 1, 0.92).multiplyScalar(2.2), toneMapped: false }), strips);
-  for (let zz = ZN.ret0 - 80; zz > ZN.ret1; zz -= 120) [0, -280, 280].forEach(x => LAMPS.push({ p: V(x, RY - 40, zz), r: 150, c: V(0.85, 1, 0.9).multiplyScalar(1.1) }));
+  for (let zz = ZN.ret0 - 80; zz > ZN.ret1; zz -= 120) [0, -280, 280].forEach(x => LAMPS.push({ p: V(x, RY - 40, zz), r: 130, c: V(0.85, 1, 0.9).multiplyScalar(0.45) }));
+  LAMPS.push({ p: V(0, LOW + 70, ZN.ret1 - 20), r: 420, c: V(0.85, 0.95, 1).multiplyScalar(1.1) });
 }
 
 // ИИ: сфера, каркас-икосаэдр из стальных балок, большие кольца, опоры
@@ -424,10 +441,8 @@ function buildSphere(c, rad) {
       void main(){
         vec3 n = normalize(vN), v = normalize(cameraPosition - vW);
         float fr = pow(1.0 - max(dot(n, v), 0.0), 3.0);
-        float lat = asin(clamp(normalize(vO).y, -1.0, 1.0)) * 18.0, lon = atan(vO.z, vO.x) * 24.0;
-        float grid = smoothstep(0.93, 1.0, abs(sin(lat))) * 0.5 + smoothstep(0.985, 1.0, abs(sin(lon))) * 0.25;
-        float scan = smoothstep(0.0, 0.08, fract(normalize(vO).y * 0.5 + 0.5 - uT * 0.05)) * (1.0 - smoothstep(0.08, 0.2, fract(normalize(vO).y * 0.5 + 0.5 - uT * 0.05)));
-        vec3 c = vec3(0.012, 0.014, 0.02) * (0.6 + 0.4 * n.y) + vec3(0.55, 0.72, 1.0) * (fr * 0.9 + grid * 0.35 + scan * 0.6);
+        float rim = pow(1.0 - max(dot(n, v), 0.0), 7.0);                     // контровой ореол по силуэту
+        vec3 c = vec3(0.004, 0.0045, 0.006) + vec3(0.85, 0.92, 1.0) * rim * 3.2 + vec3(0.6, 0.7, 0.9) * fr * 0.05;
         gl_FragColor = vec4(haze(c, vW), 1.0);
         #include <tonemapping_fragment>
         #include <colorspace_fragment>
@@ -455,8 +470,14 @@ function buildLight() {
   });
   // светильники гипостильного зала и красной трубы
   glowPoints(FX.lampGlow, new THREE.Color(1, 0.9, 0.75).multiplyScalar(2.5), 26);
-  glowPoints(FX.redGlow, new THREE.Color(1, 0.08, 0.05).multiplyScalar(3), 30);
-  glowPoints(FX.stairGlow, new THREE.Color(1, 0.88, 0.7).multiplyScalar(2.5), 22);
+  const cold = 0xdfe8ff, slab = (w, h, pos, k = 2.6) => { const m = new THREE.Mesh(new THREE.PlaneGeometry(w, h), basic(cold, k)); m.position.copy(pos); scene.add(m); FX.glows.push(m); return m; };
+  slab(80, 330, V(470, LOW + 260, -299), 2.4); slab(50, 330, V(590, LOW + 260, -299), 2.4);                                                                    // кадр 1: свет из-за края стены
+  FX.slitsHyp.forEach(o => slab(o.w, 340, V(o.x, LOW + 190, ZN.hyp + 0.6)));                                 // кадры 2–3
+  const bot = new THREE.Mesh(new THREE.CircleGeometry(FX.shaftR - 10, 64), basic(cold, 3)); bot.rotation.x = -Math.PI / 2; bot.position.set(0, LOW - 2560, FX.shaftC.z); scene.add(bot); FX.glows.push(bot);   // кадр 4
+  slab(118, 138, V(0, LOW + 70, ZN.ret1 - 4), 3.2);                                                           // кадр 6: конец прохода
+  const back = new THREE.Mesh(new THREE.CircleGeometry(300, 96), basic(cold, 2.8)); back.position.set(0, LOW + 430, -4350); scene.add(back); FX.glows.push(back);   // кадр 7
+  FX.slitsSt.forEach(o => slab(o.w, 600, V(o.x, LOW + 560, ZN.st1 + 0.6), 2.4));                             // кадр 8
+  for (let zz = ZN.st1 - 64; zz > ZN.st1 - 520; zz -= 48) [-1, 1].forEach(sd => { const m = slab(3, 180, V(sd * (VENT.x - 0.6), LOW + 100, zz), 2.6); m.rotation.y = -sd * Math.PI / 2; });   // кадр 9: щели
   // кубы-заглушки кейсов
   CUBES.forEach(c => {
     const m = new THREE.Mesh(new THREE.BoxGeometry(c.s, c.s, c.s), basic(CREAM, 1.5)); m.position.set(c.p.x, c.p.y + c.s / 2, c.p.z); scene.add(m);
@@ -583,18 +604,18 @@ function buildTimeline() {
     { p: pOf(sv[9]), pos: V(110, -116, -575), look: V(70, -140, -1000) },
     // 1. гипостиль: камера ведёт за лентой и смотрит то влево, то вправо — в лес колонн и ламп
     K(90, -700, V(150, Y(42), -600), V(-160, Y(150), -1100)),
-    K(-90, -880, V(-20, Y(32), -770), V(-320, Y(230), -1080)),
-    K(90, -1220, V(30, Y(36), -1100), V(340, Y(170), -1420)),
+    K(-90, -880, V(-20, Y(30), -770), V(-200, Y(150), -1500)),
+    K(90, -1220, V(30, Y(32), -1100), V(220, Y(140), -1500)),
     // 2. симметричный кадр в красную трубу (реф 1), затем внутрь
     K(0, -1380, V(0, Y(34), -1250), V(0, Y(34), -1700)),
-    K(0, -1700, V(0, Y(30), -1580), V(0, Y(38), -1950)),
+    K(0, -1640, V(26, Y(22), -1560), V(0, Y(-900), -1720)),   // кадр 4: с моста в бездну
     // 3. Азия: выход из трубы под сакуру — снизу вверх, потом обход вокруг ствола
-    K(0, -1950, V(18, Y(16), -1872), V(0, Y(250), -2100)),
+    K(0, -1950, V(18, Y(14), -1868), V(0, Y(300), -2100)),
     K(-150, -2100, V(-175, Y(28), -1975), V(80, Y(210), -2160)),
     K(0, -2250, V(-110, Y(40), -2262), V(150, Y(320), -2060)),
     // 4. ритейл: проход по центральному ряду, взгляд то в одни стеллажи, то в другие
     K(0, -2460, V(0, Y(40), -2390), V(0, Y(70), -2760)),
-    K(0, -2880, V(0, Y(58), -2770), V(-330, Y(260), -3000)),
+    K(0, -2880, V(0, Y(46), -2770), V(-40, Y(110), -3320)),   // кадр 6: строго вдоль прохода
     K(0, -3250, V(0, Y(42), -3140), V(280, Y(230), -3360)),
     // 5. ИИ: сфера впереди и над головой
     K(0, -3500, V(0, Y(30), -3400), V(0, Y(460), -3930)),
@@ -632,15 +653,22 @@ addEventListener('pointermove', e => mouse.set(e.clientX / innerWidth - 0.5, e.c
 const clock = new THREE.Clock();
 const RED_C = new THREE.Color(1, 0.06, 0.05), RED_V = V(1, 0.06, 0.05), CREAM_V = V(1, 0.9, 0.78);
 const BACKLIGHTS = [   // точка, откуда бьёт контровой свет, — для лучей
+  { z0: 200, z1: -640, p: V(520, LOW + 260, -300), k: 0.6 },
+  { z0: -300, z1: -1500, p: V(0, LOW + 190, ZN.hyp), k: 0.8 },
+  { z0: -1500, z1: -1840, p: V(0, LOW - 2560, -1676), k: 0.9 },
+  { z0: -1840, z1: -2420, p: V(0, LOW + 1000, ZN.asia), k: 0.8 },
+  { z0: -2420, z1: -3330, p: V(0, LOW + 70, ZN.ret1), k: 0.9 },
+  { z0: -3330, z1: -4440, p: V(0, LOW + 430, -4350), k: 1.0 },
+  { z0: -4440, z1: -5160, p: V(0, LOW + 560, ZN.st1), k: 0.8 },
   { z0: -5150, z1: -6600, p: V(0, -50, -6480), k: 1.0 },
 ];
 const _sp = new THREE.Vector3();
 function updateRays() {
   const cz = camera.position.z; let k = 0;
-  for (const b of BACKLIGHTS) if (cz < b.z0 + 200 && cz > b.z1) {
+  for (const b of BACKLIGHTS) if (cz < b.z0 + 60 && cz > b.z1) {
     _sp.copy(b.p).project(camera); if (_sp.z > 1) continue;
-    const on = clamp01(1.4 - Math.max(Math.abs(_sp.x), Math.abs(_sp.y)));
-    rays.uniforms.uLight.value.set(_sp.x * 0.5 + 0.5, _sp.y * 0.5 + 0.5); k = b.k * on * clamp01((b.z0 + 200 - cz) / 200);
+    const kk = b.k * clamp01(1.4 - Math.max(Math.abs(_sp.x), Math.abs(_sp.y))) * clamp01((b.z0 + 60 - cz) / 120) * U.uL.value;
+    if (kk > k) { k = kk; rays.uniforms.uLight.value.set(_sp.x * 0.5 + 0.5, _sp.y * 0.5 + 0.5); }
   }
   rays.uniforms.uK.value = k;
 }
@@ -707,7 +735,8 @@ function buildWetFloor() {
     vertexShader: 'uniform mat4 textureMatrix; varying vec4 vUv; varying vec3 vW; void main(){ vUv = textureMatrix * vec4(position, 1.0); vec4 w = modelMatrix * vec4(position, 1.0); vW = w.xyz; gl_Position = projectionMatrix * viewMatrix * w; }',
     fragmentShader: `uniform sampler2D tDiffuse, tStain; uniform vec3 color; ${HAZE} varying vec4 vUv; varying vec3 vW;
       void main(){
-        float pud = texture2D(tStain, vW.xz / 300.0).g, wet = 0.16 + 0.8 * smoothstep(0.35, 0.7, pud);
+        if (vW.z < -1512.0 && vW.z > -1840.0) discard;   // над колодцем пола нет
+        float pud = texture2D(tStain, vW.xz / 300.0).g, wet = 0.3 + 0.7 * smoothstep(0.3, 0.65, pud);
         vec2 uv = vUv.xy / vUv.w; vec2 o = vec2(0.0025, 0.0);
         vec3 r = (texture2D(tDiffuse, uv).rgb * 2.0 + texture2D(tDiffuse, uv + o).rgb + texture2D(tDiffuse, uv - o).rgb + texture2D(tDiffuse, uv + o.yx * 1.6).rgb + texture2D(tDiffuse, uv - o.yx * 1.6).rgb) / 6.0;
         float f = 1.0 - exp(-length(vW - cameraPosition) * uHazeK);
