@@ -128,16 +128,16 @@ function cube(q, x, y, z, title, r, o = {}) {
 const path = (q, r, ...pts) => pts.forEach(p => q.paths[r].push(V(...p)));
 
 // крыши: старт и нейтральная локация стоят на поверхности города, на высоте ROOF; в азии маршруты ныряют вниз
-const ROOF = 80;
+const ROOF = 110;   // поверхность города: на ней старт и нейтральная, вровень с ней — крыши азии
 function lift(q, h) { q.g.position.y += h; for (const r of ['btl', 'atl']) q.paths[r].forEach(p => p.y += h); q.trunk?.forEach(p => p.y += h); q.cubes.forEach(c => c.p.y += h); q.anchors.forEach(a => a.p.y += h); }
 
 // {00} старт — закрытый барабан из тонких бетонных рёбер на крыше. сквозь щели между рёбрами солнце кладёт на пол веер полос.
 // выходы не дыры: btl — щель в рёбрах с красными кромками и светящаяся дорожка, atl — световое кольцо в окулюсе, сквозь которое камера поднимается
 function rotunda() {
-  const R = 40, q = zone('fork', { n: '00', t: 'старт', line: 'барабан из рёбер: btl — в щель, atl — сквозь световое кольцо', exp: 1.05, sky: ['#3a3631', '#8f877e', '#d8cec1'], hemi: [0x8a847c, 0x1a1816, 0.3], key: [0xffe6c8, 4.6, V(-0.8, 0.38, 0.3)], bloom: 1, spark: 12 });
-  const k = q.kit, W = clean(0xc4bdb3), Wd = clean(0x8f8981, 0.9, THREE.DoubleSide), floor = matte(0x242220, 0.26, 0.1), red = glow(RED, 1.4), cr = glow(CREAM, 0.6);
+  const R = 40, q = zone('fork', { n: '00', t: 'старт', line: 'барабан из рёбер: btl — в щель, atl — сквозь световое кольцо', exp: 1.05, sky: ['#121212', '#333333', '#707070'], hemi: [0x8a8a8a, 0x161616, 0.3], key: [0xf2f2f2, 4.6, V(-0.8, 0.38, 0.3)], bloom: 1, spark: 12 });
+  const k = q.kit, W = clean(0x8e8e8e), Wd = clean(0x5e5e5e, 0.9, THREE.DoubleSide), floor = matte(0x1c1c1c, 0.26, 0.1), red = glow(RED, 1.4), cr = glow(CREAM, 0.6);
   q.rects.push([-56, 56, -56, R + 4]);
-  k.box(clean(0x9a948b), 2 * R + 16, ROOF, 2 * R + 16, 0, -ROOF, 0);   // здание под барабаном
+  k.box(clean(0x4a4a4a, 0.5), 440, 2, 2 * R + 16, 0, -2, 0);   // поверхность вокруг барабана
   k.box(floor, 2 * R + 6, 0.3, 2 * R + 6, 0, -0.3, 0);
   const N = 72, gap = 0.16;
   for (let i = 0; i < N; i++) {
@@ -162,56 +162,49 @@ function rotunda() {
   return R;
 }
 
-// {01} нейтральная — поверхность города: крыши-плиты, между ними глубокие разрывы до земли, колоннада на средней крыше.
-// btl идёт по крышам (через разрывы — по мосткам), atl летит в воздухе над ними. кубы atl — на вершинах колонн
+// {01} нейтральная — тёмно-серая поверхность города: гладкие плиты, в них световые прорези (под поверхностью живёт город),
+// огромные чёрные кубы, утопленные в плиты. btl идёт по поверхности, atl летит над ней; кубы atl держит столб света
 function neutral(z0) {
-  const q = zone('neutral', { n: '01', t: 'нейтральная', line: 'поверхность города: крыши, разрывы до земли, колоннада, atl в воздухе', exp: 1.2, sky: ['#4a443e', '#a39a90', '#e6ddd0'], hemi: [0xd0c6ba, 0x5a544c, 1.0], key: [0xffe6c8, 4.6, V(-1, 0.32, 0.5)], bloom: 0.7, sun: [V(-1, 0.22, 0.6).normalize(), 0xffe6c8, 1.2], spark: 6 });
-  const z1 = z0 + 440, C = clean(0xd6cfc5), D = clean(0xaaa399), B = clean(0xb3aca2), k = q.kit, roofM = clean(0x8f8a83, 0.6);
-  q.rects.push([-150, 150, z0, z1]);
-  const xs = [[-150, -50], [-44, 44], [50, 150]], zs = [z0, z0 + 146, z0 + 300, z1];
-  for (let j = 0; j < zs.length - 1; j++) for (const [xa, xb] of xs) {
-    const za = zs[j] + (j ? 4 : 0), zb = zs[j + 1] - (j < zs.length - 2 ? 4 : 0), w = xb - xa, L = zb - za, x = (xa + xb) / 2, zc = (za + zb) / 2;
-    k.box(B, w, ROOF, L, x, -ROOF, zc);                         // тело здания до земли
-    k.box(roofM, w - 0.6, 0.2, L - 0.6, x, 0, zc);              // кровля
-    [[w, 0.4, x, za + 0.2], [w, 0.4, x, zb - 0.2]].forEach(([ww, dd, xx, zz]) => k.box(D, ww, 1.2, dd, xx, 0.2, zz));   // парапеты
-    [xa + 0.2, xb - 0.2].forEach(xx => k.box(D, 0.4, 1.2, L, xx, 0.2, zc));
-  }
-  [zs[1], zs[2]].forEach(z => { k.box(D, 10, 0.6, 10, 0, -0.6, z); [-5, 5].forEach(x => k.box(steelM(), 0.12, 1.1, 10, x, 0, z)); });   // мостки btl через разрывы
-  const joints = []; for (let x = -42; x <= 42; x += 12) joints.push(x, 0.22, z0, x, 0.22, z1); for (let z = z0; z <= z1; z += 12) joints.push(-42, 0.22, z, 42, 0.22, z);
-  const jg = new THREE.BufferGeometry(); jg.setAttribute('position', new THREE.Float32BufferAttribute(joints, 3)); q.g.add(new THREE.LineSegments(jg, new THREE.LineBasicMaterial({ color: 0x5a5650 })));
-  const cols = []; for (let z = z0 + 30; z < z1 - 30; z += 35) if (!zs.some(g => Math.abs(g - z) < 8)) for (const s of [-1, 1]) cols.push([s * 16, z]);
-  const atl = [['дербент', 1], ['tevredens', 4], ['заклинатели', 7], ['дино', 10]];
-  cols.forEach(([x, z], i) => { const top = atl.find(a => a[1] === i); k.box(C, 3.6, top ? 34.6 : 40, 3.6, x, 0, z); if (!top) k.box(D, 4.4, 1, 4.4, x, 40, z); });
-  atl.forEach(([t, i]) => { const [x, z] = cols[i]; cube(q, x, 35.4, z, t, 'atl', { perch: 'slab', plinth: D }); });
-  [['ozon селект', 50], ['золотые ворота', 120], ['белград', 190], ['связь есть везде', 260], ['гусь на заводе', 340]].forEach(([t, dz], i) => cube(q, i % 2 ? 8 : -8, 0.2, z0 + dz, t, 'btl', { plinth: D }));
-  path(q, 'btl', [0, 6.5, z0 + 10], [1.5, 7, z0 + 90], [-1, 7.5, z0 + 180], [1.5, 7, z0 + 270], [0, 7, z0 + 370], [0, 6.5, z1]);
-  path(q, 'atl', [0, 52, z0 + 20], [-2, 46, z0 + 120], [2, 46, z0 + 220], [-2, 46, z0 + 320], [0, 46, z1]);
+  const q = zone('neutral', { n: '01', t: 'нейтральная', line: 'тёмно-серая поверхность: световые прорези, чёрные кубы-гиганты', exp: 1.1, sky: ['#101010', '#2e2e2e', '#6a6a6a'], hemi: [0x9a9a9a, 0x1c1c1c, 0.75], key: [0xf0f0f0, 3.8, V(-0.8, 0.3, 0.55)], bloom: 1, sun: [V(-0.8, 0.18, 0.6).normalize(), 0xffffff, 0.7], spark: 9 });
+  const z1 = z0 + 400, mid = (z0 + z1) / 2, k = q.kit, S = clean(0x4a4a4a, 0.5), blk = matte(0x141414, 0.35, 0.15), ln = glow(0xf2efe9, 0.6);
+  q.rects.push([-220, 220, z0, z1]);
+  k.box(S, 440, 2, z1 - z0, 0, -2, mid);
+  [-90, -30, 30, 90].forEach(x => k.box(ln, 0.45, 0.06, z1 - z0, x, 0, mid));             // продольные прорези
+  for (let z = z0 + 40; z < z1; z += 80) { k.box(ln, 440, 0.06, 0.45, 0, 0, z); [-90, -30, 30, 90].forEach(x => k.box(ln, 2.6, 0.07, 2.6, x, 0, z)); }   // поперечные и колодцы на узлах
+  const r = rng(91); [[-120, z0 + 90, 34], [150, z0 + 160, 46], [-170, z0 + 260, 40], [110, z0 + 330, 30], [-70, z0 + 380, 22], [190, z0 + 40, 26]].forEach(([x, z, a]) => k.box(blk, a, a, a, x, -a * (0.25 + r() * 0.3), z, r() * 0.6));   // кубы-гиганты, утопленные в плиты
+  [['ozon селект', 40], ['золотые ворота', 110], ['белград', 180], ['связь есть везде', 250], ['гусь на заводе', 320]].forEach(([t, dz], i) => cube(q, i % 2 ? 9 : -9, 0, z0 + dz, t, 'btl', { plinth: blk }));
+  [['дербент', 75], ['tevredens', 145], ['заклинатели', 215], ['дино', 285]].forEach(([t, dz], i) => { const x = i % 2 ? 14 : -14, z = z0 + dz;
+    cube(q, x, 34, z, t, 'atl', { float: true }); k.geo(glow(0xf2efe9, 0.7), new THREE.CylinderGeometry(0.12, 0.12, 34, 8), x, 17, z); k.box(ln, 6, 0.07, 6, x, 0, z); });   // столб света под кубом
+  path(q, 'btl', [0, 6.5, z0 + 6], [1.5, 7, z0 + 80], [-1, 7.5, z0 + 160], [1.5, 7, z0 + 240], [0, 7, z0 + 330], [0, 6.5, z1]);
+  path(q, 'atl', [0, 52, z0 + 20], [-2, 46, z0 + 120], [2, 46, z0 + 220], [-2, 44, z0 + 320], [0, 36, z1]);
   lift(q, ROOF);
   return z1;
 }
 
-// {02} азия — узкий вертикальный переулок между чёрными башнями: btl внизу среди фонарей и ториев, atl — между башнями на высоте
+// {02} азия — прорезь в поверхности города: крыши башен вровень с нейтральной поверхностью, переулок уходит вниз.
+// btl спускается по монументальной лестнице на улицу, atl ныряет в прорезь и идёт по уровню зданий
 function asia(z0) {
-  const q = zone('asia', { n: '02', t: 'азия', line: 'узкий чёрный переулок, красные вывески-лезвия', sky: ['#050102', '#3a0608', '#8a1010'], hemi: [0xa04048, 0x1a0808, 0.6], key: [0xff7a6a, 2.2, V(0.3, 1, -0.2)], bloom: 1.2, sun: [V(0, 0.32, 1).normalize(), 0xff2a1a, 2.2], spark: 18 });
-  const z1 = z0 + 340, k = q.kit, r = rng(31), B = conc(0x1a1919, true, 0.6), red = glow(RED, 1.5), cr = glow(0xffe0d0, 1.1), tor = matte(0x9a0608, 0.5);
+  const q = zone('asia', { n: '02', t: 'азия', line: 'прорезь в поверхности: лестница вниз, чёрные башни, красные вывески-лезвия', sky: ['#050102', '#3a0608', '#8a1010'], hemi: [0xa04048, 0x1a0808, 0.6], key: [0xff7a6a, 2.2, V(0.3, 1, -0.2)], bloom: 1.2, sun: [V(0, 0.32, 1).normalize(), 0xff2a1a, 2.2], spark: 18 });
+  const DS = 230, z1 = z0 + 460, k = q.kit, r = rng(31), B = conc(0x1a1919, true, 0.6), red = glow(RED, 1.5), cr = glow(0xffe0d0, 1.1), tor = matte(0x9a0608, 0.5), step = conc(0x2a2424, true, 0.5), S = clean(0x4a4a4a, 0.5);
+  const gy = z => z < z0 + DS ? ROOF * (1 - smooth(clamp01((z - z0) / DS))) : 0;   // высота улицы: плавный спуск с поверхности
   q.rects.push([-70, 70, z0, z1]);
-  k.box(conc(0x1a1414, true, 0.4), 30, 0.3, z1 - z0, 0, -0.3, (z0 + z1) / 2);
-  for (const sd of [-1, 1]) k.box(B, 90, 150, 6, sd * 56, 0, z0 - 3);   // глухая чёрная стена квартала, вход — щель 22 м
-  k.box(glow(RED, 1.2), 0.3, 150, 0.3, -11, 0, z0 - 6.2); k.box(glow(RED, 1.2), 0.3, 150, 0.3, 11, 0, z0 - 6.2);   // красные кромки щели
+  for (let z = z0; z < z0 + DS; z += 1.6) k.box(step, 22, Math.max(0.3, gy(z + 0.8)), 1.6, 0, 0, z + 0.8);   // лестница
+  k.box(conc(0x1a1414, true, 0.4), 22, 0.3, z1 - z0 - DS, 0, -0.3, (z0 + DS + z1) / 2);
+  for (const sd of [-1, 1]) k.box(S, 180, 2, z1 - z0, sd * 130, ROOF - 2, (z0 + z1) / 2);   // поверхность города продолжается над кварталом
   for (const s of [-1, 1]) for (let z = z0; z < z1;) {
-    const L = 9 + r() * 10, d = 14 + r() * 16, h = 72 + r() * 140, x = s * (11 + d / 2), zc = z + L / 2;
-    k.box(B, d, h, L, x, 0, zc); if (r() < 0.5) k.box(B, d * 0.5, 10 + r() * 30, L * 0.6, x, h, zc);
-    for (let i = 0, n = 1 + (r() * 4 | 0); i < n; i++) { const hh = 5 + r() * 12; k.box(r() < 0.8 ? red : cr, 0.5, hh, 2.6, s * 9.4, 5 + r() * 60, z + 1 + r() * (L - 2)); }
-    z += L + 1.4 + r() * 2;
+    const L = 9 + r() * 10, d = 30, x = s * (11 + d / 2), zc = z + L / 2, g0 = gy(z + L);
+    k.box(B, d, ROOF, L, x, 0, zc);   // башни: крыши вровень с поверхностью
+    for (let i = 0, n = g0 > ROOF - 24 ? 0 : 1 + (r() * 4 | 0); i < n; i++) { const hh = 5 + r() * Math.min(12, ROOF - g0 - 14), y = g0 + 4 + r() * Math.max(0, ROOF - g0 - hh - 8); k.box(r() < 0.8 ? red : cr, 0.5, hh, 2.6, s * 9.4, y, z + 1 + r() * (L - 2)); }
+    z += L + 1.4 + r() * 2;   // щели между башнями — красные прорези света, видны и сверху, с поверхности
   }
-  for (let z = z0 + 104; z < z1 - 10; z += 13) { const y = 9 + r() * 8; for (let x = -10; x <= 10; x += 1.6) { const sag = (1 - (x / 10) ** 2) * 1.6; k.box(red, 0.55, 0.7, 0.55, x, y - sag, z); } }
-  for (let z = z0 + 120; z < z1 - 10; z += 31) { const y = 30 + r() * 20; for (let x = -10; x <= 10; x += 2.2) k.box(r() < 0.3 ? cr : red, 0.4, 0.4, 0.4, x, y - (1 - (x / 10) ** 2) * 2.4, z); }   // верхние гирлянды — для atl
-  for (let i = 0; i < 4; i++) { const z = z0 + 30 + i * 84; [-8.5, 8.5].forEach(x => k.geo(tor, new THREE.CylinderGeometry(0.45, 0.55, 15, 12), x, 7.5, z)); k.box(tor, 22, 0.9, 1.1, 0, 15, z); k.box(tor, 19, 0.6, 0.7, 0, 12.6, z); q.anchors.push({ p: V(0, 13, z), c: 0xff3020, i: 70 }); }
-  [['ozon corp', 140], ['т-банк', 250]].forEach(([t, dz], i) => cube(q, i % 2 ? 6.5 : -6.5, 0, z0 + dz, t, 'btl', { s: 3.6 }));
-  // наверху квартала, на консолях между башнями: хроники ижоры и треснутые
-  [['хроники ижоры', 170, -7], ['треснутые', 270, 7]].forEach(([t, dz, x]) => { q.kit.box(B, 8, 1.2, 8, x + Math.sign(x) * 0.5, 38.8, z0 + dz); cube(q, x, 40, z0 + dz, t, 'atl', { s: 3.6, perch: 'slab', plinth: B }); q.anchors.push({ p: V(0, 46, z0 + dz), c: 0xff4030, i: 50 }); });
-  path(q, 'btl', [0, ROOF * 0.7, z0 + 16], [0, 26, z0 + 56], [0, 8, z0 + 96], [-1.5, 6, z0 + 200], [1, 5.5, z0 + 300], [0, 6, z1]);   // ныряем с крыш на улицу
-  path(q, 'atl', [0, ROOF + 22, z0 + 16], [0, 62, z0 + 70], [0, 46, z0 + 120], [1, 44, z0 + 170], [-1, 44, z0 + 270], [0, 50, z1 - 30], [0, 58, z1]);   // с воздуха на уровень зданий
+  for (let z = z0 + 30; z < z1 - 10; z += 13) { if (gy(z) > ROOF - 26) continue; const y = gy(z) + 9 + r() * 8; for (let x = -10; x <= 10; x += 1.6) { const sag = (1 - (x / 10) ** 2) * 1.6; k.box(red, 0.55, 0.7, 0.55, x, y - sag, z); } }
+  for (let z = z0 + DS + 20; z < z1 - 10; z += 31) { const y = 30 + r() * 16; for (let x = -10; x <= 10; x += 2.2) k.box(r() < 0.3 ? cr : red, 0.4, 0.4, 0.4, x, y - (1 - (x / 10) ** 2) * 2.4, z); }
+  for (let i = 0; i < 3; i++) { const z = z0 + DS + 30 + i * 70; [-8.5, 8.5].forEach(x => k.geo(tor, new THREE.CylinderGeometry(0.45, 0.55, 15, 12), x, 7.5, z)); k.box(tor, 22, 0.9, 1.1, 0, 15, z); k.box(tor, 19, 0.6, 0.7, 0, 12.6, z); q.anchors.push({ p: V(0, 13, z), c: 0xff3020, i: 70 }); }
+  for (let z = z0 + 40; z < z0 + DS; z += 60) q.anchors.push({ p: V(0, gy(z) + 14, z), c: 0xff3020, i: 60 });
+  [['ozon corp', DS + 60], ['т-банк', DS + 170]].forEach(([t, dz], i) => cube(q, i % 2 ? 6.5 : -6.5, 0, z0 + dz, t, 'btl', { s: 3.6 }));
+  [['хроники ижоры', DS + 20, -7], ['треснутые', DS + 130, 7]].forEach(([t, dz, x]) => { k.box(B, 8, 1.2, 8, x + Math.sign(x) * 0.5, 44.8, z0 + dz); cube(q, x, 46, z0 + dz, t, 'atl', { s: 3.6, perch: 'slab', plinth: B }); q.anchors.push({ p: V(0, 52, z0 + dz), c: 0xff4030, i: 50 }); });
+  path(q, 'btl', ...[10, 50, 90, 130, 170, 210].map(dz => [0, gy(z0 + dz) + 6.5, z0 + dz]), [1.5, 6, z0 + DS + 30], [-1.5, 6, z0 + DS + 110], [1, 5.5, z0 + DS + 190], [0, 6, z1]);
+  path(q, 'atl', [0, ROOF + 26, z0 + 10], ...[70, 130, 190].map(dz => [0, Math.max(50, gy(z0 + dz) + 50), z0 + dz]), [1, 50, z0 + DS + 20], [-1, 50, z0 + DS + 130], [0, 54, z1 - 30], [0, 58, z1]);
   return z1;
 }
 
@@ -383,7 +376,7 @@ const M = { top: new THREE.Color(), mid: new THREE.Color(), bot: new THREE.Color
 let curZone = null;
 function updateZones(dawn) {
   const x = camera.position.x, z = camera.position.z;
-  const ws = ZL.map(q => { const d = rectD(q, x, z); q.g.visible = d < 170; q.d = d; return Math.exp(-((d / 16) ** 2)) + 1e-6; }), sum = ws.reduce((a, b) => a + b, 0);
+  const ws = ZL.map(q => { const d = rectD(q, x, z); q.g.visible = d < 260; q.d = d; return Math.exp(-((d / 16) ** 2)) + 1e-6; }), sum = ws.reduce((a, b) => a + b, 0);
   for (const k of ['top', 'mid', 'bot', 'key', 'hs', 'hg', 'sunC']) M[k].setRGB(0, 0, 0); M.dir.set(0, 0, 0); M.sun.set(0, 0, 0);
   let keyI = 0, hemiI = 0, bl = 0, sunK = 0, sp = 0, ex = 0, best = 0;
   ZL.forEach((q, i) => { const w = ws[i] / sum; if (ws[i] > ws[best]) best = i;
