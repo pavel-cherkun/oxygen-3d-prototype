@@ -87,9 +87,13 @@ footer.ft a{color:var(--cream);font-size:14px}
 select{background:#111;border:0;border-bottom:1px solid #444;color:var(--cream);font:400 17px "TT",sans-serif;padding:8px 0}
 /* светлый мир: тексты поверх сцены — чёрные, панели остаются тёмными */
 header nav{mix-blend-mode:difference}header nav a{color:#fff}nav a.cta{color:#fff;border-color:#fff}
-.ov:not(.panel):not(#fork){color:#fff}
+.ov:not(.panel):not(#fork):not(#brief){color:#fff}
+/* бриф — только на белом экране финала: чёрный текст, по центру, всегда в пределах экрана */
+#brief{left:50%;top:50%;bottom:auto;translate:-50% -50%!important;width:min(520px,calc(100vw - 32px));max-width:none;max-height:calc(100vh - 120px);overflow:auto;color:#0d0d0d}
+#brief h2{color:#0d0d0d}#brief .row{border-color:#cfcfcf}#brief input,#brief textarea,#brief select{color:#0d0d0d;border-bottom-color:#9a9a9a;background:transparent}#brief input::placeholder,#brief textarea::placeholder{color:#7a7a7a}
+#brief .ft{border-top-color:#cfcfcf}#brief .ft a{color:#0d0d0d}
 /* текст поверх сцены инвертируется к фону: на белом небе — чёрный, на чёрном фасаде — белый */
-.ov:not(.panel):not(#fork) :is(h1,h2,p,.lead,.idea){mix-blend-mode:difference}
+.ov:not(.panel):not(#fork):not(#brief) :is(h1,h2,p,.lead,.idea){mix-blend-mode:difference}
 .flex h2{text-shadow:none}.flex .idea{text-shadow:none}
 #routeBtn{color:#111!important}
 #micro{position:fixed;right:28px;top:76px;z-index:5;text-align:right;line-height:1.55;pointer-events:none;font-size:11px;transition:opacity .3s;color:var(--mute);opacity:.6}#micro:hover{opacity:1}
@@ -213,7 +217,7 @@ body.qview .ov,body.qview #orbitUi,body.qview #wipe{display:none!important}
 </section>
 
 
-<section class="ov right panel" data-a="0.982" data-b="1.01" id="brief" style="width:min(460px,calc(100vw - 32px))">
+<section class="ov" data-a="0.993" data-b="1.01" data-f="0.004" id="brief">
   <h2>с чем вы приходите?</h2>
   <form id="briefForm" onsubmit="event.preventDefault();this.innerHTML='<p>прототип: данные никуда не отправлены</p>'">
     <select id="briefDir"><option value="">выберите задачу</option><option value="atl">нужна кампания к запуску</option><option value="tender">скоро тендер</option><option value="btl">нужно мероприятие или промо</option><option value="audience">хотим выйти на новую аудиторию</option><option value="special">нужен спецпроект</option></select>

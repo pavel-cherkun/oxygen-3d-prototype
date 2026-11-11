@@ -62,13 +62,33 @@ bloom.enabled = false;   // без ореолов и засветов   // по�
 composer.addPass(bloom);
 composer.addPass(new OutputPass());
 // плёнка как на рефе: зерно и уход низа кадра в черноту
-const grain = new ShaderPass({ uniforms: { tDiffuse: { value: null }, t: { value: 0 }, fin: { value: 0 }, uA: { value: 0 }, uB: { value: 0 }, uC: { value: 0 }, uW: { value: 0 }, px: { value: new THREE.Vector2(1 / innerWidth, 1 / innerHeight) } },
+const grain = new ShaderPass({ uniforms: { tDiffuse: { value: null }, t: { value: 0 }, fin: { value: 0 }, uA: { value: 0 }, uB: { value: 0 }, uC: { value: 0 }, uW: { value: 0 }, wScan: { value: 0 }, wZoom: { value: 0 }, wSpot: { value: 0 }, wInk: { value: 0 }, wBars: { value: 0 }, wGen: { value: 0 }, wPrint: { value: 0 }, spd: { value: 0 }, px: { value: new THREE.Vector2(1 / innerWidth, 1 / innerHeight) } },
   vertexShader: 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
-  fragmentShader: `uniform sampler2D tDiffuse; uniform float t; uniform float fin; uniform float uA; uniform float uB; uniform float uC; uniform float uW; uniform vec2 px; varying vec2 vUv;
+  fragmentShader: `uniform sampler2D tDiffuse; uniform float t; uniform float fin; uniform float uA; uniform float uB; uniform float uC; uniform float uW; uniform float wScan; uniform float wZoom; uniform float wSpot; uniform float wInk; uniform float wBars; uniform float wGen; uniform float wPrint; uniform float spd; uniform vec2 px; varying vec2 vUv;
     float lum(vec2 u){ return dot(texture2D(tDiffuse, u).rgb, vec3(0.299, 0.587, 0.114)); }
     float bayer(vec2 p){ vec2 q = mod(floor(p), 4.0); float m[16]; m[0]=0.;m[1]=8.;m[2]=2.;m[3]=10.;m[4]=12.;m[5]=4.;m[6]=14.;m[7]=6.;m[8]=3.;m[9]=11.;m[10]=1.;m[11]=9.;m[12]=15.;m[13]=7.;m[14]=13.;m[15]=5.; int i = int(q.y * 4.0 + q.x); float v = 0.; for (int k = 0; k < 16; k++) if (k == i) v = m[k]; return (v + 0.5) / 16.0; }
     float h(vec2 p){ return fract(sin(dot(p, vec2(12.9898, 78.233)) + t) * 43758.5453); }
-    void main(){ vec4 c = texture2D(tDiffuse, vUv);
+    void main(){
+      // эффекты мест — каждый по смыслу своих кейсов, чистые, без грязи; вес растёт у остановок своего квартала
+      vec2 uv = vUv;
+      float gcs = 1.0 + floor(wGen * spd * 26.0);                                        // ai: кадр «генерируется» — мозаика в движении, на остановке собирается в чистую картинку
+      if (gcs > 1.5) uv = (floor(vUv / px / gcs) + 0.5) * gcs * px;
+      vec4 c = texture2D(tDiffuse, uv);
+      if (wZoom * spd > 0.01) {                                                          // спорт: скорость — радиальные смазы к центру, только когда едем
+        vec3 acc = c.rgb; vec2 dir = uv - 0.5; for (int k = 1; k < 10; k++) acc += texture2D(tDiffuse, uv - dir * float(k) * 0.01 * wZoom * spd).rgb; c.rgb = acc / 10.0; }
+      if (wScan > 0.01) {                                                                // азия, киберпанк ozon corp: тонкие строки экрана и расхождение каналов к краям кадра
+        vec2 e = (uv - 0.5) * 0.006 * wScan; c.r = texture2D(tDiffuse, uv + e).r; c.b = texture2D(tDiffuse, uv - e).b;
+        c.rgb *= 1.0 - wScan * 0.16 * step(0.5, fract(gl_FragCoord.y / 3.0)); }
+      if (wInk > 0.01) {                                                                 // вебтун и аниме («ижора», «дикси»): тушь по граням и плоская заливка
+        float ex = length(vec2(lum(uv + vec2(px.x, 0.)) - lum(uv - vec2(px.x, 0.)), lum(uv + vec2(0., px.y)) - lum(uv - vec2(0., px.y))));
+        c.rgb = mix(c.rgb, floor(c.rgb * 5.0 + 0.5) / 5.0, wInk * 0.55); c.rgb *= 1.0 - wInk * smoothstep(0.06, 0.18, ex) * 0.85; }
+      if (wSpot > 0.01) {                                                                // ивенты и фотозона: театральный луч — всё вне эллипса вокруг кейса уходит в тень
+        float d = length((vUv - vec2(0.66, 0.5)) * vec2(1.5, 1.0)); c.rgb *= mix(1.0, 0.18 + 0.82 * smoothstep(0.75, 0.22, d), wSpot); }
+      if (wPrint > 0.01) {                                                               // мерч: печать — мягкий растр точек поверх, как на ткани
+        vec2 hg = gl_FragCoord.xy / 4.0; float L = dot(c.rgb, vec3(0.299, 0.587, 0.114)); float dv = smoothstep(0.08, 0.0, length(fract(hg) - 0.5) - sqrt(L) * 0.55);
+        c.rgb = mix(c.rgb, c.rgb * (0.55 + 0.6 * dv), wPrint * 0.6); }
+      if (wBars > 0.01) {                                                                // эфир (авангард, дербент): кашетированный кадр трансляции
+        float bh = 0.085 * wBars; if (vUv.y < bh || vUv.y > 1.0 - bh) c.rgb = vec3(0.0); }
       vec3 bl = (texture2D(tDiffuse, vUv + vec2(px.x, 0.0)).rgb + texture2D(tDiffuse, vUv - vec2(px.x, 0.0)).rgb + texture2D(tDiffuse, vUv + vec2(0.0, px.y)).rgb + texture2D(tDiffuse, vUv - vec2(0.0, px.y)).rgb) * 0.25;
       c.rgb = clamp(c.rgb + (c.rgb - bl) * 0.45, 0.0, 1.0);   // лёгкая резкость: строгие грани
       c.rgb += (h(vUv * 1371.0) - 0.5) * 0.03;
@@ -1287,11 +1307,9 @@ function placeholder(w) {
     if (img) {
       const fw = span * 0.92, fh = Math.min(fw * 0.625, sy * 1.25);
       const fm = new THREE.MeshBasicMaterial({ map: caseTexture(`assets/cases/${img}.jpg`, false, 1024, 640), toneMapped: false });
-      fm.userData.reveal = { value: 0 };   // кадр проявляется полутоновыми точками: растут от нуля и сливаются в изображение
+      fm.userData.reveal = { value: 0 };   // кадр открывается чистой шторкой снизу вверх, ровно как разъезжаются плиты
       fm.onBeforeCompile = sh => { sh.uniforms.uR = fm.userData.reveal; sh.fragmentShader = 'uniform float uR;\n' + sh.fragmentShader.replace('#include <map_fragment>', `#include <map_fragment>
-        float L = dot(diffuseColor.rgb, vec3(0.299, 0.587, 0.114)); vec2 hg = gl_FragCoord.xy / 7.0;
-        float dv = step(length(fract(hg) - 0.5), sqrt(L) * 0.8 * min(1.0, uR * 1.5));
-        diffuseColor.rgb = mix(diffuseColor.rgb * dv, diffuseColor.rgb, smoothstep(0.75, 1.0, uR));`); };
+        if (vMapUv.y > uR * 1.02) discard;`); };
       face = new THREE.Mesh(new THREE.PlaneGeometry(fw, fh), fm);
       g.add(face); g.updateMatrixWorld(true); face.lookAt(cam); face.userData.case = w.id; clickable.push(face);
     }
@@ -1326,6 +1344,7 @@ function buildWorld() {
   buildAsia();
 }
 const CUBES = [];
+const ZFX = { asia: 'scan', joint: 'spot', sport: 'zoom', event: 'spot', merch: 'print', asiaAir: 'ink', dixy: 'ink', arena: 'bars', city: 'bars', ai: 'gen' };   // какой эффект у какого квартала
 function updateCubes() {
   for (const q of CUBES) {
     const t = clamp01((150 - q.g.position.distanceTo(camera.position)) / 70), I = t * t * (3 - 2 * t);
@@ -1718,11 +1737,13 @@ function frame() {
   updateOverlay(pSm);
   CITY.sky.position.copy(camera.position); grain.uniforms.t.value = time % 100; {
     const fin = clamp01((pSm - 0.928) / 0.068), ss = (a, b, x) => { const t = clamp01((x - a) / (b - a)); return t * t * (3 - 2 * t); };
-    const spd = INTRO.done && !orbitOn ? clamp01((Math.abs(CS.v) - 8) / 30) : 0;                 // сигнал в движении: чем быстрее едем, тем сильнее растр
-    const ign = INTRO.t0 !== null ? Math.exp(-Math.pow((pSm - 0.352) / 0.01, 2)) : 0;            // искра встала в «О» — вспышка контуров
-    const U = grain.uniforms; U.fin.value = fin;
-    U.uA.value = Math.max(ss(0, 0.35, fin), spd * 0.42); U.uB.value = Math.max(ss(0.3, 0.7, fin), spd * 0.3, ign * 0.9); U.uC.value = ss(0.62, 0.95, fin);
-    U.uW.value = Math.max(ss(0.985, 1.0, pSm), ign * 0.25);
+    const spd = INTRO.done && !orbitOn ? clamp01((Math.abs(CS.v) - 6) / 26) : 0;
+    const U = grain.uniforms; U.fin.value = fin; U.spd.value = spd;
+    U.uA.value = ss(0, 0.35, fin); U.uB.value = ss(0.3, 0.7, fin); U.uC.value = ss(0.62, 0.95, fin); U.uW.value = ss(0.985, 1.0, pSm);   // «сигнал» — только финал
+    const W = { scan: 0, zoom: 0, spot: 0, ink: 0, bars: 0, gen: 0, print: 0 };
+    if (route && !orbitOn) for (const w of WORLD) { if (w.r !== route) continue; const b = ss(0, 1, 1 - Math.abs(pSm - w.p) / (w.span * 0.95)), k = ZFX[w.zone]; if (k) W[k] = Math.max(W[k], b); }
+    const fade = 1 - fin;   // к финалу эффекты мест уступают «сигналу»
+    U.wScan.value = W.scan * fade; U.wZoom.value = W.zoom * fade; U.wSpot.value = W.spot * fade; U.wInk.value = W.ink * fade; U.wBars.value = W.bars * fade; U.wGen.value = W.gen * fade; U.wPrint.value = W.print * fade;
   }
   renderer.shadowMap.needsUpdate = true; composer.render();
   requestAnimationFrame(frame);
