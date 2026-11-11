@@ -157,6 +157,19 @@ function litMat({ flat = false, glow = 0, side = THREE.DoubleSide, baked = null,
       }`,
     fragmentShader: /* glsl */`
       uniform sampler2D tAlb, tNrm, tStain; uniform float uBake;
+      // без повтора: текстура берётся с двумя сдвигами, выбор плавно меняется по поверхности (приём И. Кильеса)
+      vec4 noTile(sampler2D t, vec2 uv, out float sel) {
+        float l = texture2D(tStain, uv * 0.031).g * 9.0, f = fract(l), ia = floor(l), ib = ia + 1.0;
+        vec2 oa = sin(vec2(3.0, 7.0) * ia), ob = sin(vec2(3.0, 7.0) * ib), dx = dFdx(uv), dy = dFdy(uv);
+        vec4 a = textureGrad(t, uv + oa, dx, dy), b = textureGrad(t, uv + ob, dx, dy);
+        sel = smoothstep(0.2, 0.8, f - 0.1 * dot(a.rgb - b.rgb, vec3(1.0)));
+        return mix(a, b, sel);
+      }
+      vec4 noTileN(sampler2D t, vec2 uv, float sel) {
+        float l = texture2D(tStain, uv * 0.031).g * 9.0, ia = floor(l), ib = ia + 1.0;
+        vec2 dx = dFdx(uv), dy = dFdy(uv);
+        return mix(textureGrad(t, uv + sin(vec2(3.0, 7.0) * ia), dx, dy), textureGrad(t, uv + sin(vec2(3.0, 7.0) * ib), dx, dy), sel);
+      }
       #ifdef BAKED
         uniform sampler2D tLM; uniform float uCK; varying vec2 vLM; varying float vA;
       #endif
@@ -178,8 +191,8 @@ function litMat({ flat = false, glow = 0, side = THREE.DoubleSide, baked = null,
           if (a.y > a.x && a.y > a.z) { uv = vW.xz; t1 = vec3(1., 0., 0.); t2 = vec3(0., 0., 1.); }
           else if (a.x > a.z) { uv = vW.zy; t1 = vec3(0., 0., 1.); t2 = vec3(0., 1., 0.); }
           else { uv = vW.xy; t1 = vec3(1., 0., 0.); t2 = vec3(0., 1., 0.); }
-          alb = pow(texture2D(tAlb, uv / 16.0).rgb, vec3(2.2)) * tint;
-          vec3 tn = texture2D(tNrm, uv / 16.0).xyz * 2.0 - 1.0;
+          float sel; alb = pow(noTile(tAlb, uv / 16.0, sel).rgb, vec3(2.2)) * tint;
+          vec3 tn = noTileN(tNrm, uv / 16.0, sel).xyz * 2.0 - 1.0;
           N = normalize(n * max(tn.z, 0.2) + (t1 * tn.x + t2 * tn.y) * 0.7);
           float wall = 1.0 - smoothstep(0.6, 0.9, a.y);
           float streak = texture2D(tStain, vec2(uv.x / 97.0, uv.y / 900.0)).r;                 // потёки по вертикали
@@ -262,7 +275,7 @@ const CASEPOS = [
   KX('aiLavka', 'cases/ai-lavka', 262, 34, -4030, V(-1, 0, 0), 80, 'ai-продакшн'),
   KX('aiAlfa', 'cases/ai-alfa', -92, 34, -4290, V(1, 0, 0), 80, 'ai-продакшн'),
   // фермы — спорт
-  KX('lion', 'dp/lion-2', -112, 34, -4530, V(1, 0, 0), 80, 'спорт'),
+  KX('lion', 'dp/lion-2', -112, 34, -4575, V(1, 0, 0), 80, 'спорт'),
   KX('ironstar', 'cases/gdrive-ironstar-1', 112, 34, -4660, V(-1, 0, 0), 80, 'спорт'),
   KX('gdrive', 'cases/gdrive-silk-1', -112, 34, -4790, V(1, 0, 0), 80, 'спорт'),
   KX('baltika7', 'cases/baltika7-1', 112, 34, -4920, V(-1, 0, 0), 80, 'спорт'),
@@ -659,6 +672,7 @@ function buildReel() {
 // p 0…0.17 — Искра в темноте летит к стене и встаёт в лого; дальше всё движение привязано к голове ленты.
 const P_LINE = 0.19, P_END = 0.962;
 let CAMK = [], ISK = [], SMAP = [], STOPS = [];
+const RIG = { pos: [], look: [], s0: 0, step: 4 };
 function buildTimeline() {
   const s = slot, L0 = LOGO, rc = REEL.c, sl = iskra.userData.S;
   const sAt = pt => { let best = 0, bd = 1e9; for (let x = 0; x <= S_TOTAL; x += 1) { const d = headAt(x).distanceTo(pt); if (d < bd) { bd = d; best = x; } } return best; };
@@ -668,16 +682,17 @@ function buildTimeline() {
   SMAP = [[P_LINE, 0], [0.25, sv[1]], [0.36, sv[4]], [0.42, sv[6]], [0.53, sv[7]], [0.58, sv[8]], [0.62, sv[9]]];
   // остановки у кейсов: кадр слева, подпись справа; камера на пути ленты
   STOPS = CASEPOS.map(c => {
-    const D = c.w * 1.5 + 8, cam = c.p.clone().addScaledVector(c.n, D); cam.y = c.p.y > LOW + 60 ? LOW + 40 : LOW + 36;
-    const right = V(-c.n.x, 0, -c.n.z).cross(V(0, 1, 0)).normalize();
-    return { c, cam, look: c.p.clone().addScaledVector(right, c.w * 0.3), s: sAt(V(cam.x, LOW + 0.25, cam.z)) };
+    const sp = sAt(V(c.p.x, LOW + 0.25, c.p.z).addScaledVector(c.n, Math.abs(c.n.z) > 0.5 ? 0 : 60));
+    const near = ['derbent', 'tevredens', 'izhora', 'treschnutye'].includes(c.id);
+    return { c, s: sp - (near ? 18 + c.w * 0.25 : 60 + c.w * 0.9) };   // голова ленты здесь — камера на ~60 м позади, кадр впереди по диагонали
   }).sort((a, b) => a.s - b.s);
-  const H = 0.0072, budget = (P_END - 0.62) - STOPS.length * H - 0.035;
-  let prevS = sv[9], dist = 0; STOPS.forEach(t => { dist += Math.max(0, t.s - 12 - prevS); prevS = t.s + 12; }); dist += S_TOTAL - prevS;
-  let p = 0.62; prevS = sv[9];
-  STOPS.forEach(t => { p += budget * Math.max(0, t.s - 12 - prevS) / dist; t.p0 = p; SMAP.push([p, t.s - 12]); p += H; t.p1 = p; SMAP.push([p, t.s + 12]); prevS = t.s + 12; });
-  SMAP.push([P_END, S_TOTAL]);
+  // после лестницы: скорость по пути постоянная, у каждого кейса плавно падает (гаусс) и так же плавно растёт
+  const s0 = sv[9], s1 = S_TOTAL, NS_ = Math.ceil((s1 - s0) / 2);
+  const dens = x => 1 + STOPS.reduce((a, t) => a + 6 * Math.exp(-(((x - t.s) / 30) ** 2)), 0);
+  const cum = [0]; for (let i = 1; i <= NS_; i++) cum.push(cum[i - 1] + dens(s0 + (i - 0.5) * (s1 - s0) / NS_));
+  for (let i = 1; i <= NS_; i++) SMAP.push([0.62 + (P_END - 0.62) * cum[i] / cum[NS_], s0 + i * (s1 - s0) / NS_]);
   const pOf = x => { for (let i = 0; i < SMAP.length - 1; i++) if (x <= SMAP[i + 1][1]) return SMAP[i][0] + (SMAP[i + 1][0] - SMAP[i][0]) * (x - SMAP[i][1]) / (SMAP[i + 1][1] - SMAP[i][1] || 1); return P_END; };
+  STOPS.forEach(t => { t.pS = pOf(t.s); });
   const narrow = innerWidth < 760, Y = y => LOW + y;
   const K = (x, z, pos, look) => ({ p: pOf(at(x, z)), pos, look });
   CAMK = [
@@ -698,26 +713,41 @@ function buildTimeline() {
     { p: pOf(sv[8]), pos: V(104, 34, -236), look: V(90, -120, -900) },
     { p: pOf((sv[8] + sv[9]) / 2), pos: V(112, -50, -430), look: V(80, -150, -1000) },
     { p: pOf(sv[9]), pos: V(110, -116, -575), look: V(70, -140, -1000) },
-    // дальше ключи строятся от кейсов (ниже); вентшахта — свой финальный проход
-    K(0, -5160, V(0, Y(40), -5060), V(0, Y(80), -5600)),
-    K(0, -5700, V(0, Y(42), -5600), V(0, Y(104), -6420)),          // кадр 10: строгая перспектива на вентилятор
-    { p: P_END, pos: V(0, Y(34), -6120), look: V(0, Y(112), -6420) },
-    { p: 1, pos: V(0, Y(30), -6160), look: V(0, Y(116), -6420) },   // кадр 11: вентилятор на весь кадр
   ];
-  // проезды между кейсами: за лентой, взгляд — в главное событие локации (сакура, бездна, сфера) или вперёд по пути
+  // ===== после лестницы: одна плавная траектория вместо ключей =====
+  // позиция — сглаженный путь ленты (углы скруглены), камера на 60 м позади головы и на 42 м выше пола;
+  // у кейса — мягкое притяжение к точке съёмки; взгляд — вперёд по пути, в главное событие локации, на кейс у остановки
   const hd = x => headAt(Math.min(Math.max(x, 0), S_TOTAL), V(0, 0, 0));
-  const focus = (h, ahead) => { const z = h.z;
-    if (z < -1512 && z > -1840) return V(0, LOW - 700, -1690);
-    if (z < -1840 && z > -2420) return V(0, LOW + 260, ZN.asia);
-    if (z < -3420 && z > -4440) return V(0, LOW + 430, -3930);
-    return ahead.add(V(0, 46, 0)); };
-  STOPS.forEach((t, i) => {
-    CAMK.push({ p: t.p0, pos: t.cam.clone(), look: t.look.clone() }, { p: t.p1, pos: t.cam.clone().addScaledVector(t.c.n, -5), look: t.look.clone() });
-    const prev = i ? STOPS[i - 1] : { p1: 0.62, s: sv[9] }; if (t.p0 - prev.p1 < 0.006) return;
-    const sm = (prev.s + t.s) / 2, h = hd(sm), back = hd(sm - 25).sub(h).normalize();
-    CAMK.push({ p: (prev.p1 + t.p0) / 2, pos: h.clone().addScaledVector(back, 70).add(V(0, 44, 0)), look: focus(h, hd(sm + 260)) });
-  });
-  CAMK.sort((a, b) => a.p - b.p);
+  const smoothPath = (x, win) => { const a = V(0, 0, 0); for (let k = -6; k <= 6; k++) a.add(hd(x + k * win / 6)); return a.multiplyScalar(1 / 13); };
+  const bump = (z, z0, z1, e = 120) => clamp01((z0 - z) / e) * clamp01((z - z1) / e);
+  const STEP = 4, n = Math.ceil((s1 - s0) / STEP) + 1, P = [], Lk = [];
+  const introEnd = V(110, -116, -575), introLook = V(70, -140, -1000);
+  for (let i = 0; i < n; i++) {
+    const x = s0 + i * STEP, h = hd(x), pos = smoothPath(x - 60, 90).add(V(0, 42, 0)), ahead = smoothPath(x + 170, 110).add(V(0, 34, 0));
+    pos.y = Math.max(pos.y, LOW + 36);
+    let look = ahead.clone();
+    const z = h.z;
+    look.lerp(V(0, LOW - 600, -1690), 0.55 * bump(z, -1500, -1850, 90));            // колодец: вниз в бездну
+    look.lerp(V(0, LOW + 230, ZN.asia), 0.6 * bump(z, -1840, -2420, 110));          // сакура
+    look.lerp(V(0, LOW + 420, -3930), 0.55 * bump(z, -3420, -4440, 140));           // сфера
+    look.lerp(V(0, VENT.cy + 10, ZN.fan), bump(z, -5150, -9000, 160));              // вентилятор
+    let wl = 0, cl = null;
+    STOPS.forEach(t => { const b = Math.exp(-(((x - t.s) / 52) ** 2)); if (b > wl) { wl = b; cl = t; } });
+    if (cl) { const c = cl.c, vd = c.p.clone().sub(pos).normalize(), right = vd.clone().cross(V(0, 1, 0)).normalize(); look.lerp(c.p.clone().addScaledVector(right, c.w * 0.28), Math.min(1, smooth(wl) * 1.15)); }
+    const wi = smooth(clamp01((x - s0) / 160)); pos.lerp(introEnd, 1 - wi); look.lerp(introLook, 1 - wi);
+    P.push(pos); Lk.push(look);
+  }
+  const relax = (A, r) => A.map((_, i) => { const a = V(0, 0, 0); let c = 0; for (let k = -r; k <= r; k++) { const j = Math.min(n - 1, Math.max(0, i + k)); a.add(A[j]); c++; } return a.multiplyScalar(1 / c); });
+  const Ps = relax(relax(P, 8), 8);
+  // взгляд как направление; скорость поворота ≤ 1,6° на 4 м пути — проход вперёд и назад, затем среднее (поворот начинается заранее)
+  const dirs = Lk.map((l, i) => l.clone().sub(Ps[i]).normalize()), MAXA = THREE.MathUtils.degToRad(3.2);
+  const limit = (arr, from, to, st) => { const out = arr.map(d => d.clone()); for (let i = from + st; i !== to; i += st) { const a = out[i - st], b = out[i], ang = a.angleTo(b); if (ang > MAXA) out[i] = a.clone().lerp(b, MAXA / ang).normalize(); } return out; };
+  const fw = limit(dirs, 0, n, 1), bw = limit(dirs, n - 1, -1, -1);
+  const D2 = relax(fw.map((d, i) => d.clone().add(bw[i]).normalize()), 3).map(d => d.normalize());
+  RIG.pos = Ps; RIG.look = Ps.map((p, i) => p.clone().addScaledVector(D2[i], 220)); RIG.s0 = s0; RIG.step = STEP;
+  // финальный кадр 11: камера подходит к вентилятору, пока он раскручивается
+  RIG.finPos = V(0, LOW + 30, -6160); RIG.finLook = V(0, LOW + 116, ZN.fan);
+  CAMK.sort((a, b) => a.p - b.p);  CAMK.sort((a, b) => a.p - b.p);
   CAMK.pos = new THREE.CatmullRomCurve3(CAMK.map(k => k.pos), false, 'centripetal');
   CAMK.look = new THREE.CatmullRomCurve3(CAMK.map(k => k.look), false, 'centripetal');
   const hero = narrow ? 1.6 : 2.4;
@@ -730,7 +760,9 @@ function buildTimeline() {
     { p: 1.00, pos: s.clone(), sc: sl, spin: 4 * Math.PI },
   ];
 }
-const sOfP = p => { if (p <= SMAP[0][0]) return 0; for (let i = 0; i < SMAP.length - 1; i++) if (p <= SMAP[i + 1][0]) return SMAP[i][1] + (SMAP[i + 1][1] - SMAP[i][1]) * (p - SMAP[i][0]) / (SMAP[i + 1][0] - SMAP[i][0]); return S_TOTAL; };
+const sOfP = p => { if (p <= SMAP[0][0]) return 0; if (p >= SMAP[SMAP.length - 1][0]) return S_TOTAL;
+  let lo = 0, hi = SMAP.length - 1; while (hi - lo > 1) { const m = (lo + hi) >> 1; if (SMAP[m][0] < p) lo = m; else hi = m; }
+  return SMAP[lo][1] + (SMAP[hi][1] - SMAP[lo][1]) * (p - SMAP[lo][0]) / (SMAP[hi][0] - SMAP[lo][0] || 1); };
 
 // ---------- цикл ----------
 const ovs = [...document.querySelectorAll('.ov')].map(el => ({ el, a: +el.dataset.a, b: +el.dataset.b }));
@@ -760,16 +792,31 @@ function updateRays() {
   rays.uniforms.uK.value = k;
 }
 const zoneAt = z => { let i = 0; while (i < ZONES.length - 2 && z < ZONES[i + 1].z) i++; const a = ZONES[i], b = ZONES[i + 1], t = smooth(clamp01((a.z - z) / (a.z - b.z))); const mix = (u, v) => u.map((x, k) => x + (v[k] - x) * t); return { haze: mix(a.haze, b.haze), k: a.k + (b.k - a.k) * t, amb: mix(a.amb, b.amb) }; };
-const RAW_A = 0.25;   // доля скролла на интро (до низа лестницы) — дальше скролл отдан кейсам
+const camT = V(0, 0, 0), rigPos = V(0, 0, 0), rigQ = new THREE.Quaternion(), _qT = new THREE.Quaternion(), _qS = new THREE.Quaternion(), _m4 = new THREE.Matrix4(), _up = V(0, 1, 0);
+let snapCam = true;
+// цель камеры: интро — по ключам; дальше — по таблице траектории (по длине ленты)
+function camTarget(q) {
+  if (q < 0.62) {
+    const k = CAMK; let i = 0; while (i < k.length - 2 && q > k[i + 1].p) i++;
+    const u = (i + clamp01((q - k[i].p) / (k[i + 1].p - k[i].p))) / (k.length - 1);
+    k.pos.getPoint(Math.min(u, 1), camT); k.look.getPoint(Math.min(u, 1), look);
+  } else {
+    const f = (sOfP(q) - RIG.s0) / RIG.step, i0 = Math.max(0, Math.min(RIG.pos.length - 2, Math.floor(f))), w = clamp01(f - i0);
+    camT.lerpVectors(RIG.pos[i0], RIG.pos[i0 + 1], w); look.lerpVectors(RIG.look[i0], RIG.look[i0 + 1], w);
+    if (q > P_END) { const e = smooth(clamp01((q - P_END) / (1 - P_END))); camT.lerp(RIG.finPos, e); look.lerp(RIG.finLook, e); }
+  }
+}
+const RAW_A = 0.18;   // доля скролла на интро (до низа лестницы) — дальше скролл отдан кейсам
 const toP = r => r < RAW_A ? r * 0.62 / RAW_A : 0.62 + (r - RAW_A) * 0.38 / (1 - RAW_A);
 const toRaw = p => p < 0.62 ? p * RAW_A / 0.62 : RAW_A + (p - 0.62) * (1 - RAW_A) / 0.38;
 const capEl = document.getElementById('case');
 let capId = null;
 function caption(p) {
-  const t = STOPS.find(t => p > t.p0 - 0.003 && p < t.p1 + 0.002);
+  const sc = sOfP(p), t = p >= 0.62 ? STOPS.find(t => Math.abs(sc - t.s) < 20) : null;
   if (!t) { capEl.classList.remove('on'); capId = null; return; }
   if (capId !== t.c.id) { capId = t.c.id; const c = CASES[t.c.id] || {}, ps = c.pass || {};
     capEl.innerHTML = `<span class="t">{${String(STOPS.indexOf(t) + 1).padStart(2, '0')}} ${t.c.loc}</span><h2>${c.title || ''}</h2><p class="m">${[ps.клиент, ps.год].filter(x => x && x !== '—').join(' · ')}</p><p>${c.idea || c.task || ''}</p>`; }
+  _sp.copy(t.c.p).project(camera); capEl.classList.toggle('left', _sp.x > 0.05);   // подпись — на стороне, противоположной кадру
   capEl.classList.add('on');
 }
 function frame() {
@@ -777,11 +824,14 @@ function frame() {
   const max = document.documentElement.scrollHeight - innerHeight, p = toP(max > 0 ? clamp01(scrollY / max) : 0);
   pSm += (p - pSm) * (1 - Math.exp(-dt * 2.6));
   U.uT.value = time;
-  const k = CAMK; let i = 0; while (i < k.length - 2 && pSm > k[i + 1].p) i++;
-  const u = (i + clamp01((pSm - k[i].p) / (k[i + 1].p - k[i].p))) / (k.length - 1);
-  k.pos.getPoint(u, camera.position); k.look.getPoint(u, look);
-  mouseSm.lerp(mouse, Math.min(1, dt * 3)); camera.position.x += mouseSm.x * 3; camera.position.y -= mouseSm.y * 2;
-  camera.lookAt(look);
+  camTarget(pSm);
+  // риг: пружина с пределом скорости 160 м/с и пределом поворота 40°/с — без рывков даже при резком скролле
+  if (snapCam) { rigPos.copy(camT); }
+  else { const d = camT.clone().sub(rigPos), stepV = d.multiplyScalar(1 - Math.exp(-dt * 3.0)), mx = 160 * dt; if (stepV.length() > mx) stepV.setLength(mx); rigPos.add(stepV); }
+  _m4.lookAt(rigPos, look, _up); _qT.setFromRotationMatrix(_m4);
+  if (snapCam) rigQ.copy(_qT); else { _qS.copy(rigQ).slerp(_qT, 1 - Math.exp(-dt * 2.4)); rigQ.rotateTowards(_qS, THREE.MathUtils.degToRad(40) * dt); }
+  snapCam = false;
+  mouseSm.lerp(mouse, Math.min(1, dt * 2)); camera.position.copy(rigPos).add(V(mouseSm.x * 2.5, -mouseSm.y * 1.5, 0)); camera.quaternion.copy(rigQ);
   // Искра
   let j = 0; while (j < ISK.length - 2 && pSm > ISK[j + 1].p) j++;
   const a = ISK[j], b = ISK[j + 1], t = smooth(clamp01((pSm - a.p) / (b.p - a.p)));
@@ -877,7 +927,7 @@ await buildLogo();
 buildWorld(slot); buildLight(); buildNeon(); buildReel(); buildWetFloor(); buildTimeline();
 if (!new URLSearchParams(location.search).has('live')) await loadBaked();
 renderer.compile(scene, camera);
-window.__mega = { cam: camera, composer, bloom, fanMesh: FX.fan.bi, LAMPS, SHAFTS, glows: FX.glows, U, go: p => { scrollTo(0, toRaw(p) * (document.documentElement.scrollHeight - innerHeight)); pSm = p; }, STOPS: () => STOPS.map(t => [t.c.id, +t.p0.toFixed(4)]), renderer, scene };
+window.__mega = { cam: camera, composer, bloom, fanMesh: FX.fan.bi, LAMPS, SHAFTS, glows: FX.glows, U, rigAt: q => { camTarget(q); return [camT.toArray(), look.toArray()]; }, go: p => { scrollTo(0, toRaw(p) * (document.documentElement.scrollHeight - innerHeight)); pSm = p; snapCam = true; }, STOPS: () => STOPS.map(t => [t.c.id, +t.pS.toFixed(4)]), renderer, scene };
 const AT = new URLSearchParams(location.search).get('p'); if (AT) window.__mega.go(+AT);
 frame();
 await new Promise(res => { const t0 = performance.now(); let calm = 0; const tick = () => { calm = LOAD.total === LOAD.loaded ? calm + 1 : 0; if (calm > 3 || performance.now() - t0 > 30000) return res(); setTimeout(tick, 150); }; tick(); });
