@@ -177,6 +177,12 @@ function neutral(z0) {
     cube(q, x, 34, z, t, 'atl', { float: true }); k.geo(glow(0xf2efe9, 0.7), new THREE.CylinderGeometry(0.12, 0.12, 34, 8), x, 17, z); k.box(ln, 6, 0.07, 6, x, 0, z); });   // столб света под кубом
   path(q, 'btl', [0, 6.5, z0 + 6], [1.5, 7, z0 + 80], [-1, 7.5, z0 + 160], [1.5, 7, z0 + 240], [0, 7, z0 + 330], [0, 6.5, z1]);
   path(q, 'atl', [0, 52, z0 + 20], [-2, 46, z0 + 120], [2, 46, z0 + 220], [-2, 44, z0 + 320], [0, 36, z1]);
+  // парапеты: после последнего кейса блока вдоль дороги встают две низкие стенки с кремовой линией — они же уходят вниз по лестнице азии
+  const P = clean(0x5a5a5a, 0.6); for (const sd of [-1, 1]) { k.box(P, 0.5, 1.1, z1 - (z0 + 350), sd * 10.6, 0, (z0 + 350 + z1) / 2); k.box(glow(0xf2efe9, 0.9), 0.12, 0.05, z1 - (z0 + 350), sd * 10.6, 1.1, (z0 + 350 + z1) / 2); }
+  // облака: невидимые плиты высоко над поверхностью, их тени плывут по плитам — свет всё время играет
+  const cl = new THREE.InstancedMesh(new THREE.BoxGeometry(1, 1, 1), new THREE.MeshBasicMaterial({ colorWrite: false, depthWrite: false }), 26), dm = new THREE.Object3D(), cr = rng(5);
+  q.clouds = []; for (let i = 0; i < 26; i++) q.clouds.push({ x: (cr() - 0.5) * 520, z: z0 - 120 + cr() * (z1 - z0 + 240), w: 30 + cr() * 60, d: 40 + cr() * 80 });
+  cl.castShadow = true; cl.frustumCulled = false; q.g.add(cl); q.cloudMesh = cl; q.cloudDm = dm;
   lift(q, ROOF);
   return z1;
 }
@@ -189,6 +195,7 @@ function asia(z0) {
   const gy = z => z < z0 + DS ? ROOF * (1 - smooth(clamp01((z - z0) / DS))) : 0;   // высота улицы: плавный спуск с поверхности
   q.rects.push([-70, 70, z0, z1]);
   for (let z = z0; z < z0 + DS; z += 1.6) k.box(step, 22, Math.max(0.3, gy(z + 0.8)), 1.6, 0, 0, z + 0.8);   // лестница
+  const P = clean(0x5a5a5a, 0.6); for (let z = z0; z < z0 + DS + 40; z += 1.6) for (const sd of [-1, 1]) { const y = gy(z + 0.8); k.box(P, 0.5, 1.1, 1.7, sd * 10.6, y, z + 0.8); k.box(glow(0xf2efe9, 0.9), 0.12, 0.05, 1.7, sd * 10.6, y + 1.1, z + 0.8); }   // парапет с поверхности спускается вниз вместе с лестницей
   k.box(conc(0x1a1414, true, 0.4), 22, 0.3, z1 - z0 - DS, 0, -0.3, (z0 + DS + z1) / 2);
   for (const sd of [-1, 1]) k.box(S, 180, 2, z1 - z0, sd * 130, ROOF - 2, (z0 + z1) / 2);   // поверхность города продолжается над кварталом
   for (const s of [-1, 1]) for (let z = z0; z < z1;) {
@@ -390,7 +397,7 @@ function updateZones(dawn) {
   sky.position.copy(camera.position);
   hemi.color.copy(M.hs); hemi.groundColor.copy(M.hg); hemi.intensity = hemiI * D;
   key.color.copy(M.key); key.intensity = keyI * D;
-  const fwd = new THREE.Vector3(); camera.getWorldDirection(fwd); key.target.position.copy(camera.position).addScaledVector(fwd, 50); key.target.position.y = 0;
+  const fwd = new THREE.Vector3(); camera.getWorldDirection(fwd); key.target.position.copy(camera.position).addScaledVector(fwd, 50); key.target.position.y = Math.max(0, camera.position.y - (camera.position.y > ROOF ? 6 : 8)); if (camera.position.y > ROOF + 20) key.target.position.y = ROOF;
   key.position.copy(key.target.position).addScaledVector(M.dir.normalize(), 300);
   renderer.toneMappingExposure = ex; bloom.strength = 0.6 * bl; sparkLight.intensity = sp * (0.9 + 0.1 * Math.sin(performance.now() / 140)) * (0.35 + 0.65 * D) + (1 - D) * 25;
   // лампы зоны: три ближайшие точки света из всех видимых зон
@@ -437,6 +444,10 @@ function frame() {
   endEl.classList.toggle('on', landed > 0.6);
   sparkLight.position.copy(spark.position);
   const dawn = smooth(clamp01((sSm - 6) / 50));   // мир проявляется, когда искра трогается с места
+  // солнце на первом участке ходит: азимут плывёт со временем и с продвижением, облака тянут тени по поверхности
+  { const a = time * 0.06 + camera.position.z * 0.004, N = Z.neutral, F0 = Z.fork; N.key[2].set(Math.cos(a) * 0.9, 0.42 + 0.12 * Math.sin(time * 0.11), Math.sin(a) * 0.9); F0.key[2].set(Math.cos(a * 1.4 + 1) * 0.85, 0.36, Math.sin(a * 1.4 + 1) * 0.85);
+    N.sun[0].copy(N.key[2]).setY(0.16).normalize();
+    if (N.g.visible) { N.clouds.forEach((c, i) => { N.cloudDm.position.set(((c.x + time * 7 + 260) % 520 + 520) % 520 - 260, 72, c.z); N.cloudDm.scale.set(c.w, 2, c.d); N.cloudDm.updateMatrix(); N.cloudMesh.setMatrixAt(i, N.cloudDm.matrix); }); N.cloudMesh.instanceMatrix.needsUpdate = true; } }
   updateZones(dawn);
   if (curZone && curZone.k !== lastZone) { lastZone = curZone.k; zoneN.textContent = `{${curZone.n}} ${route ? (route === 'btl' ? 'btl · на земле' : 'atl · над городом') : 'вход'}`; zoneT.textContent = curZone.t; }
   pct.textContent = String(Math.round(sSm / TOTAL * 100)).padStart(3, '0') + '%';
@@ -489,7 +500,7 @@ frame();
 // прелоадер: искра встаёт туда, где в кадре 3D-искра, и передаёт ей кадр; только потом открывается скролл
 {
   const L = document.getElementById('loader'), open = () => { L.classList.add('done'); document.documentElement.classList.remove('lock'); };
-  if (AT || location.search.includes('map')) open();
+  if (AT || /map|rec/.test(location.search)) open();
   else { await settled(); document.getElementById('loadPct').textContent = '100%';
     const c = spark.position.clone().project(camera), d = spark.position.distanceTo(camera.position), px = 0.8 / (2 * d * Math.tan(camera.fov * Math.PI / 360)) * innerHeight;
     L.style.setProperty('--tx', `${(c.x + 1) / 2 * innerWidth}px`); L.style.setProperty('--ty', `${(1 - c.y) / 2 * innerHeight}px`); L.style.setProperty('--tw', `${Math.max(16, px)}px`);
