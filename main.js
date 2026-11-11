@@ -228,6 +228,8 @@ const CASE_IMGS = ['ozon-fandom-kv-1', 'ozon-fandom-real-1', 'ozon-fandom-real-2
 // раскладываются по кускам улицы (flushBrutal): кусок рисуется, только пока он ближе границы темноты
 const TOWER = { w: 80, h: 260, d: 40 };
 const BR = { boxes: [], lit: [], rays: [], chunks: [], CH: 140 };
+// запечённые в Blender куски: матовые коробки этого куска рисуются одной сеткой с картами рассеянного света и AO (Cycles)
+const BAKED = {};   // пробный запечённый кусок (assets/bake) отключён: на чёрном бетоне разница почти не видна
 // чёрные монументальные объёмы по доске «blach arch»: монолит, стопка плит со скруткой, консоль над улицей,
 // парящий куб над основанием. коробка: [x, y, z, ширина, высота, глубина, поворот]
 // у каждого здания свой материал: матовый чёрный бетон (по умолчанию) или чёрное стекло — контраст матового и зеркального.
@@ -287,15 +289,22 @@ function flushBrutal() {
   for (const [k, { b, l, r }] of by) {
     const g = new THREE.Group(); scene.add(g);
     [[0, CONC.matte], [1, CONC.wall]].forEach(([flag, mat]) => {
-      const list = b.filter(x => (x[7] || 0) === flag); if (!list.length) return;
+      const list = b.filter(x => (x[7] || 0) === flag && !(flag === 0 && BAKED[k])); if (!list.length) return;
       const im = new THREE.InstancedMesh(box, mat, list.length); im.castShadow = im.receiveShadow = true;
       list.forEach(([x, y, z, w, h, dd, ry = 0], i) => { d.position.set(x, y, z); d.rotation.set(0, ry, 0); d.scale.set(w, h, dd); d.updateMatrix(); im.setMatrixAt(i, d.matrix); });
       im.computeBoundingSphere(); g.add(im);
     });
     if (l.length) { const lm = new THREE.InstancedMesh(plane, litM, l.length); l.forEach(([x, y, z, w, h, s], i) => { d.position.set(x, y, z); d.rotation.set(0, -s * Math.PI / 2, 0); d.scale.set(w, h, 1); d.updateMatrix(); lm.setMatrixAt(i, d.matrix); }); lm.computeBoundingSphere(); g.add(lm); }
     if (r.length) { const rm = new THREE.InstancedMesh(plane, rayM, r.length); r.forEach(([fx, z, len, wd, s], i) => { d.position.set(fx - s * len / 2, 0.14, z); d.rotation.set(-Math.PI / 2, 0, s * Math.PI / 2); d.scale.set(wd, len, 1); d.updateMatrix(); rm.setMatrixAt(i, d.matrix); }); rm.computeBoundingSphere(); g.add(rm); }
+    if (BAKED[k]) loadBaked(BAKED[k], g);
     BR.chunks.push({ g, z0: k * BR.CH, z1: (k + 1) * BR.CH });
   }
+}
+async function loadBaked(o, g) {
+  const gl = await gltfLoader.loadAsync(o.glb); let geo; gl.scene.traverse(n => { if (n.isMesh && !geo) geo = n.geometry; });
+  const tx = u => { const t = texLoader.load(u); t.channel = 0; t.flipY = false; return t; };
+  const m = concrete(0x18181a, { scale: 30, rough: 0.95 }); m.lightMap = tx(o.gi); m.lightMapIntensity = o.giScale * 3.2; m.aoMap = tx(o.ao); m.aoMapIntensity = 1;
+  const mesh = new THREE.Mesh(geo, m); mesh.castShadow = mesh.receiveShadow = true; g.add(mesh);
 }
 // дальность: кусок города рисуется, только пока он ближе границы, где туман становится глухим
 function updateReach() {
@@ -1600,6 +1609,7 @@ function frame() {
   logo.mat.emissiveIntensity = landed * 1.1;
   logo.mat.color.copy(LOGO_DARK).lerp(ISK_RED, landed);
   iskra.material.color.copy(ISK_RED).lerp(ISK_BLACK, landed);
+  iskra.visible = landed < 0.98;   // встала в «О» — и исчезла: дальше живёт только логотип
   logo.glow.intensity = 0;   // без пятна света на подложке: логотип светится сам
   fans.air.pts.visible = false;   // поток воздуха нужен только у башни
 
