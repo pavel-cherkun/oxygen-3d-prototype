@@ -180,7 +180,7 @@ function brutalBlock(c, r, rich) {
   } else {   // консольные эркеры-коробки
     for (let i = 0; i < 3 + (r() * 3 | 0); i++) { const bw = 4 + r() * 6, bh = 4 + r() * 7, bd = 2 + r() * 3; B.push([fx - side * bd / 2, 6 + bh / 2 + r() * Math.max(1, c.h - 14 - bh), c.z + (r() - 0.5) * (c.d - bw), bd, bh, bw]); }
   }
-  if (r() < 0.28) for (let k = 0; k < 1 + (r() * 3 | 0); k++)   // редкие тёплые щели окон: жизнь внутри монолита, без неона
+  if (false) for (let k = 0; k < 1 + (r() * 3 | 0); k++)   // редкие тёплые щели окон: жизнь внутри монолита, без неона
     BR.lit.push([fx - side * 0.06, 6 + r() * (c.h - 12), c.z + (r() - 0.5) * c.d * 0.7, 2 + r() * 7, 0.7 + r() * 0.8, side]);
 }
 // раскладка всех коробок по кускам вдоль z: в каждом куске один InstancedMesh бетона и один — тёплых окон
@@ -238,9 +238,6 @@ function buildCity() {
     const l = new THREE.Mesh(new THREE.PlaneGeometry(0.4, 5), new THREE.MeshBasicMaterial({ color: 0x2c2c30 }));
     l.rotation.x = -Math.PI / 2; l.position.set(0, 0.05, z); scene.add(l);
   }
-  [80, TAIL.awards - 40, TAIL.awards + 40, TAIL.brief - 30].forEach((z, i) => {
-    const pl = new THREE.PointLight(0xffd2a0, 320, 60, 1.8); pl.position.set(i % 2 ? 12 : -12, 14, z); scene.add(pl);
-  });
 }
 
 // ---------- башня, вентиляторы, логотип ----------
@@ -381,11 +378,7 @@ function buildSections() {
 
   buildWorld();
 
-  // награды
-  board(textTexture(['16', 'металл: gold · silver · bronze'], { label: '{06} · награды', accent: 0 }), 44, 22, V(19.5, 18, TAIL.awards), -Math.PI / 2);
 
-  // бриф
-  board(textTexture(['бриф', 'ответим за рабочий день'], { label: '{08} · oxygen', bg: '#F40709', color: '#111111', accent: -1 }), 50, 25, V(0, 22, TAIL.brief), Math.PI);
 }
 // ---------- стенд кейса посреди улицы: крупный главный кадр, под ним ряд кадров, сверху табличка ----------
 const aim = (o, cam) => { o.rotation.y = Math.atan2(cam.x - o.position.x, cam.z - o.position.z); return o; };
@@ -847,14 +840,6 @@ function buildAsia() {
     add(new THREE.Mesh(new THREE.TubeGeometry(cv, 48, 1.3, 12), CONC.wall));
     add(new THREE.Mesh(new THREE.BoxGeometry(56, 1.6, 1.6), CONC.wall)).position.set(-1, 22.6, 0);
   });
-  // низкое красное солнце в конце квартала: матовый диск без обводки и прожекторы с крыш
-  const sun = new THREE.Group(); sun.position.set(0, 150, ASIA.z1 + 120); scene.add(sun);
-  const disc = new THREE.Mesh(new THREE.CircleGeometry(42, 96), glow(RED, 0.22)); disc.material.side = THREE.DoubleSide; sun.add(disc); ASIA_FX.sun = disc;
-  ASIA_FX.beams = towers.filter(t => t.h > 150).slice(0, 6).map((t, i) => {
-    const p = new THREE.Group(); p.position.set(t.x, t.h, t.z); scene.add(p);
-    const c = new THREE.Mesh(new THREE.ConeGeometry(5, 220, 24, 1, true), glow(0xffffff, 0.04)); c.geometry.translate(0, -110, 0); c.rotation.x = Math.PI; p.add(c);
-    return { p, ph: i * 1.7 };
-  });
 }
 function updateAsia(time) {
   if (!ASIA_FX.sun) return;
@@ -1138,12 +1123,23 @@ function roof(w) {
   const c = CASES[w.id]; tagAt(c.title, c.pass.клиент, V(w.F.x, w.F.y + BANNER.h / 2 + 3, w.F.z), w.cam, 18);
   solid(g);
 }
+// все кейсы пока — бетонные кубы-плейсхолдеры в габарите будущего носителя: ничего не отвлекает от города и маршрута
+const PH = concrete(0x77777a, { scale: 6, ao: 4 });
+function placeholder(w) {
+  const cube = (sx, sy, sz, x, y, z, ry = 0) => { const m = new THREE.Mesh(new THREE.BoxGeometry(sx, sy, sz), PH); m.position.set(x, y, z); m.rotation.y = ry; m.castShadow = m.receiveShadow = true; m.userData.case = w.id; scene.add(m); clickable.push(m); return solid(m); };
+  if (w.tower) towerBox(w.tower, CONC.wall);
+  if (w.moment === 'izhora') { const s = Math.sign(w.tower.x); return cube(2, 52, 30, w.face - s * 1, 66, w.z); }
+  if (w.kind === 'roof') return cube(16, 16, 16, w.tower.x + 4, w.tower.h + 8, w.z);
+  if (w.kind === 'screen') { const [sw, sh] = w.size; return cube(sw, sh, 3, w.F.x, w.F.y, w.F.z, Math.atan2(w.cam.x - w.F.x, w.cam.z - w.F.z)); }
+  if (w.kind === 'vitrine') return cube(13, 13, 10, w.F.x, 6.5, w.z);
+  const [hw, hd, hh] = w.hero, H = w.heroH || Math.max(hh, 6), c = w.center || w.heroPos;
+  return cube(hw, H, hd, c.x, H / 2, c.z);
+}
 function buildWorld() {
-  for (const w of WORLD) w.moment ? MOMENTS[w.moment].build(w) : ({ station, vitrine, screen, roof })[w.kind](w);
+  for (const w of WORLD) placeholder(w);
   buildAsia();
 }
 function updateWorld(time) {
-  updateMoments(time); updateAsia(time);
   if (lionDance.mixer) { const dt = Math.min(0.05, time - (lionDance.t || time)); lionDance.t = time; lionDance.mixer.update(dt); }
   clips.forEach(c => { const near = c.g.position.distanceTo(camera.position) < 220; if (near && c.v.paused) c.v.play().catch(() => {}); else if (!near && !c.v.paused) c.v.pause(); });
 }
@@ -1179,36 +1175,15 @@ function buildAtmosphere() {
   const chromeEnv = new THREE.PMREMGenerator(renderer).fromScene(envScene, 0.02).texture;
   MAT.chrome.envMap = chromeEnv; MAT.chrome.color.set(0xe8e8ea); MAT.chrome.needsUpdate = true;
 
-  // уличные мелочи и фонари — открытые модели poly haven (cc0); фонарь даёт тёплое пятно на бетоне
-  const dm = new THREE.Object3D();
-  const props = (file, pick, list, k, place) => gltfLoader.loadAsync(`assets/models/props/${file}.glb`).then(gl => {
-    const meshes = []; gl.scene.updateMatrixWorld(true); gl.scene.traverse(o => { if (o.isMesh && pick(o.name)) meshes.push(o); });
-    meshes.forEach(src => { const im = new THREE.InstancedMesh(src.geometry, src.material, list.length); im.castShadow = true; list.forEach((a, i) => { place(a, dm); dm.scale.setScalar(k); dm.updateMatrix(); im.setMatrixAt(i, dm.matrix.clone().multiply(src.matrixWorld)); }); scene.add(im); });
-  }).catch(e => console.warn(file, e));
-  const walk = []; for (let z = 40; z < TAIL.brief; z += 14 + r() * 18) { const side = r() < 0.5 ? -1 : 1, edge = z > 165 && z < TAIL.brief - 10 ? 39 : 18; walk.push([side * (edge - r() * 2), z, side, (r() * 2) | 0]); }
-  props('metal_trash_can', n => !n.includes('rust'), walk.filter(w => w[3] === 0), 2.2, ([x, z, s], d) => { d.position.set(x, 0, z); d.rotation.set(0, r() * 6, 0); });
-  props('utility_box_01', () => true, walk.filter(w => w[3] === 1), 2.6, ([x, z, s], d) => { d.position.set(x, 0, z); d.rotation.set(0, -s * Math.PI / 2, 0); });
-  const lamps = []; for (let z = 60; z < TAIL.brief; z += 80) [-1, 1].forEach(s => lamps.push([s * (z > 165 && z < TAIL.brief - 10 ? 35 : 15), 13, z + s * 6]));
-  props('hanging_industrial_lamp', () => true, lamps, 2.4, ([x, y, z], d) => { d.position.set(x, y, z); d.rotation.set(0, 0, 0); });
-  const glowM = new THREE.SpriteMaterial({ map: softDot, color: 0x806048, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending });
-  const poolM = new THREE.MeshBasicMaterial({ map: softDot, color: 0x4a3426, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending });
-  lamps.forEach(([x, y, z]) => { const s = new THREE.Sprite(glowM); s.scale.setScalar(2.2); s.position.set(x, y - 0.6, z); scene.add(s); const pool = new THREE.Mesh(new THREE.PlaneGeometry(10, 10), poolM); pool.rotation.x = -Math.PI / 2; pool.position.set(x, 0.07, z); scene.add(pool); });
-
   // мосты-перекрытия над проспектом в просветах между кварталами: монолитная плита на двух опорах.
-  // закрывают перспективу улицы, режут свет полосой тени и задают масштаб; по нижнему мосту идёт поезд
+  // закрывают перспективу улицы, режут свет полосой тени и задают масштаб
   const gapZ = (a, b) => (ZR[a][1] + ZR[b][0]) / 2;
-  const bridge = (z, y, deck, k) => {
+  const bridge = (z, y, deck) => {
     const g = new THREE.Group(); g.position.set(0, 0, z); scene.add(g);
     const add = (w, h, d, x, yy, zz, m = CONC.wall) => { const o = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), m); o.position.set(x, yy, zz); o.castShadow = o.receiveShadow = true; g.add(o); return o; };
     add(300, deck, 16, 0, y + deck / 2, 0);                                     // плита
     [-1, 1].forEach(s => { add(10, y, 12, s * 47, y / 2, 0); add(4, 3, 18, s * 47, y - 1.5, 0); });   // опоры и оголовки
     for (let x = -40; x <= 40; x += 8) add(1.4, 2.4, 16, x, y - 1.2, 0, CONC.dark);   // ребра снизу: ритм теней над камерой
-    for (let x = -36; x <= 36; x += 12) { const l = new THREE.Mesh(new THREE.PlaneGeometry(5, 0.35), new THREE.MeshBasicMaterial({ color: new THREE.Color(0xffd8b0).multiplyScalar(1.1), toneMapped: false })); l.rotation.x = Math.PI / 2; l.position.set(x + 4, y - 2.45, 0); g.add(l); }
-    if (k === 1) for (let c = 0; c < 6; c++) {   // поезд: тёмные вагоны, тёплые окна
-      const t = canvasTex(512, 64, (gg) => { gg.fillStyle = '#0d0d10'; gg.fillRect(0, 0, 512, 64); for (let x = 10; x < 500; x += 34) { gg.fillStyle = '#ffd8b0'; gg.fillRect(x, 14, 24, 22); } });
-      const car = new THREE.Mesh(new THREE.BoxGeometry(13, 3.4, 3.2), [CONC.dark, CONC.dark, CONC.dark, CONC.dark, new THREE.MeshBasicMaterial({ map: t }), new THREE.MeshBasicMaterial({ map: t })]);
-      car.material[4].color.setScalar(0.7); scene.add(car); FX.train.push({ car, k: c, y: y + deck + 1.7, z: z - 4 });
-    }
   };
   bridge(gapZ('asia', 'joint'), 30, 6, 1); bridge(gapZ('sport', 'event'), 30, 6, 0); bridge(gapZ('event', 'merch'), 30, 6, 0);
   bridge(gapZ('joint', 'sport'), 120, 14, 0);   // высокий мост-корпус: над эфиром atl, виден снизу как перекрытие неба
@@ -1485,7 +1460,7 @@ function frame() {
   iskra.material.color.copy(ISK_RED).lerp(ISK_BLACK, landed);
   logo.glow.intensity = 420;   // ровный тёплый свет на вывеску, без мигания
   fans.tip.visible = Math.sin(time * 3) > 0;
-  fans.air.pts.visible = pSm < 0.5;   // поток воздуха нужен только у башни
+  fans.air.pts.visible = false;   // поток воздуха нужен только у башни
   updateFans(dt, landed);
 
   updateWebtoon(time);
