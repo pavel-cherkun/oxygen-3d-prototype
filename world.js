@@ -40,16 +40,25 @@ const bloom = new UnrealBloomPass(new THREE.Vector2(innerWidth / 2, innerHeight 
 // плёнка: зерно, виньетка, лёгкая хроматическая аберрация по краям и мягкий контраст
 // фильтр камеры: у каждой локации свой грейдинг — насыщенность, оттенок, контраст, зерно, виньетка, аберрация;
 // red — сколько красного сохранять при обесцвечивании (в ai кадр чёрно-белый, а искра остаётся красной)
-const GRADE0 = { sat: 1, con: 0.18, grain: 0.045, vig: 0.55, ca: 1, red: 0, tint: [1, 1, 1] };
-const film = new ShaderPass({ uniforms: { tDiffuse: { value: null }, uT: { value: 0 }, uSat: { value: 1 }, uCon: { value: 0.18 }, uGrain: { value: 0.045 }, uVig: { value: 0.55 }, uCA: { value: 1 }, uRed: { value: 0 }, uTint: { value: new THREE.Vector3(1, 1, 1) } },
+const GRADE0 = { sat: 1, con: 0.18, grain: 0.045, vig: 0.55, ca: 1, red: 0, tint: [1, 1, 1], rays: 0, streak: 0, rain: 0 };
+const film = new ShaderPass({ uniforms: { tDiffuse: { value: null }, uT: { value: 0 }, uSat: { value: 1 }, uCon: { value: 0.18 }, uGrain: { value: 0.045 }, uVig: { value: 0.55 }, uCA: { value: 1 }, uRed: { value: 0 }, uTint: { value: new THREE.Vector3(1, 1, 1) }, uSunUV: { value: new THREE.Vector2(0.5, 0.5) }, uRays: { value: 0 }, uStreak: { value: 0 }, uRain: { value: 0 }, uAspect: { value: innerWidth / innerHeight } },
   vertexShader: 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
-  fragmentShader: `uniform sampler2D tDiffuse; uniform float uT, uSat, uCon, uGrain, uVig, uCA, uRed; uniform vec3 uTint; varying vec2 vUv;
+  fragmentShader: `uniform sampler2D tDiffuse; uniform float uT, uSat, uCon, uGrain, uVig, uCA, uRed, uRays, uStreak, uRain, uAspect; uniform vec3 uTint; uniform vec2 uSunUV; varying vec2 vUv;
+    vec3 hi(vec2 p){ vec3 t = texture2D(tDiffuse, p).rgb; return max(t - 0.72, 0.0) * 3.0; }
     float h(vec2 p){ return fract(sin(dot(p, vec2(12.9898, 78.233))) * 43758.5453); }
     void main(){ vec2 d = vUv - 0.5; float r2 = dot(d, d); vec2 ca = d * 0.0035 * r2 * 4.0 * uCA;
       vec3 c = vec3(texture2D(tDiffuse, vUv + ca).r, texture2D(tDiffuse, vUv).g, texture2D(tDiffuse, vUv - ca).b);
+      // лучи: яркое тянется к солнцу (рассеяние в воздухе); анаморфный блик: яркое растягивается по горизонтали
+      if (uRays > 0.001) { vec2 st = (uSunUV - vUv) / 28.0; vec2 p = vUv; float w = 1.0; vec3 acc = vec3(0.0); for (int i = 0; i < 28; i++) { p += st; acc += hi(p) * w; w *= 0.93; } c += acc / 28.0 * uRays * 2.2; }
+      if (uStreak > 0.001) { vec3 acc = vec3(0.0); for (int i = 1; i <= 12; i++) { float o = float(i) * 0.012, w = 1.0 - float(i) / 13.0; acc += (hi(vUv + vec2(o, 0.0)) + hi(vUv - vec2(o, 0.0))) * w; } c += acc / 12.0 * uStreak * vec3(0.95, 0.97, 1.05); }
+      // дождь по кадру: косые струи в два слоя
+      if (uRain > 0.001) { float r = 0.0; for (int k = 0; k < 2; k++) { float sc = k == 0 ? 120.0 : 60.0, sp = k == 0 ? 1.9 : 1.2; vec2 q = vec2((vUv.x + vUv.y * 0.08) * sc * uAspect, vUv.y); float col = floor(q.x), rnd = h(vec2(col, float(k) * 7.0));
+          float y = fract(q.y * (0.8 + rnd) + uT / 60.0 * sp * (0.9 + rnd) + rnd * 13.0); float x = abs(fract(q.x) - 0.5);
+          r += step(0.82, rnd) * smoothstep(0.0, 0.03, y) * smoothstep(0.16, 0.03, y) * smoothstep(0.12, 0.0, x) * (k == 0 ? 0.6 : 1.0); }
+        c = mix(c, vec3(0.86, 0.84, 0.82), clamp(r * uRain * 0.35, 0.0, 0.35)); }
       float l = dot(c, vec3(0.2126, 0.7152, 0.0722)), red = smoothstep(0.22, 0.45, c.r - max(c.g, c.b));   // только чистый красный бренда, тёплый кремовый не считается
       c = mix(vec3(l), c, mix(uSat, max(uSat, 1.0), red * uRed));      // насыщенность, красный можно сохранить
-      c *= uTint;                                                        // оттенок
+      c = clamp(c * uTint, 0.0, 1.0);                                    // оттенок; без зажима насыщенный красный уходил в минус и S-кривая выворачивала его в зелёный
       c = mix(c, c * c * (3.0 - 2.0 * c), uCon);                         // S-кривая
       c *= 1.0 - smoothstep(0.18, 0.85, r2 * 1.6) * uVig;                // виньетка
       c += (h(vUv * 1000.0 + uT) - 0.5) * uGrain;                        // зерно
@@ -167,7 +176,7 @@ function lift(q, h) { q.g.position.y += h; for (const r of ['btl', 'atl']) q.pat
 // {00} старт — закрытый барабан из тонких бетонных рёбер на крыше. сквозь щели между рёбрами солнце кладёт на пол веер полос.
 // выходы не дыры: btl — щель в рёбрах с красными кромками и светящаяся дорожка, atl — световое кольцо в окулюсе, сквозь которое камера поднимается
 function rotunda() {
-  const R = 40, q = zone('fork', { grade: { sat: 0.85, con: 0.2, tint: [0.98, 0.99, 1.02] },  hdr: 1, fog: 0.0007, n: '00', t: 'старт', line: 'барабан из рёбер: btl — в щель, atl — сквозь световое кольцо', exp: 1.05, sky: ['#121212', '#333333', '#707070'], hemi: [0x8a8a8a, 0x161616, 0.3], key: [0xf2f2f2, 4.6, V(-0.8, 0.38, 0.3)], bloom: 1, spark: 12 });
+  const R = 40, q = zone('fork', { grade: { sat: 0.85, con: 0.2, tint: [0.98, 0.99, 1.02], rays: 0.7, streak: 0.15 },  hdr: 1, fog: 0.0007, n: '00', t: 'старт', line: 'барабан из рёбер: btl — в щель, atl — сквозь световое кольцо', exp: 1.05, sky: ['#121212', '#333333', '#707070'], hemi: [0x8a8a8a, 0x161616, 0.3], key: [0xf2f2f2, 4.6, V(-0.8, 0.38, 0.3)], bloom: 1, spark: 12 });
   const k = q.kit, W = pbr('wall', 0x9a9a9a), Wd = pbr('wall', 0x6a6a6a, 1, THREE.DoubleSide), floor = pbr('floor', 0x3a3a3a, 0.9), red = glow(RED, 1.4), cr = glow(CREAM, 0.6);
   q.rects.push([-56, 56, -56, R + 4]);
   k.box(pbr('floor', 0x5a5a5a), 440, 2, 2 * R + 16, 0, -2.04, 0);   // поверхность вокруг барабана — чуть ниже пола барабана, без мерцания
@@ -198,7 +207,7 @@ function rotunda() {
 // {01} нейтральная — тёмно-серая поверхность города: гладкие плиты, в них световые прорези (под поверхностью живёт город),
 // огромные чёрные кубы, утопленные в плиты. btl идёт по поверхности, atl летит над ней; кубы atl держит столб света
 function neutral(z0) {
-  const q = zone('neutral', { grade: { sat: 0.7, con: 0.26, grain: 0.05, tint: [0.95, 0.98, 1.04] },  hdr: 1, fog: 0.0012, n: '01', t: 'нейтральная', line: 'тёмно-серая поверхность: световые прорези, чёрные кубы-гиганты', exp: 0.9, sky: ['#0c0c0c', '#262626', '#4e4e4e'], hemi: [0x9a9a9a, 0x1c1c1c, 0.75], key: [0xf0f0f0, 3.8, V(-0.8, 0.3, 0.55)], bloom: 1, sun: [V(-0.8, 0.18, 0.6).normalize(), 0xffffff, 0.7], spark: 9 });
+  const q = zone('neutral', { grade: { sat: 0.7, con: 0.26, grain: 0.05, tint: [0.95, 0.98, 1.04], rays: 0.55, streak: 0.2, rain: 0.8 },  hdr: 1, fog: 0.0012, n: '01', t: 'нейтральная', line: 'тёмно-серая поверхность: световые прорези, чёрные кубы-гиганты', exp: 0.9, sky: ['#0c0c0c', '#262626', '#4e4e4e'], hemi: [0x9a9a9a, 0x1c1c1c, 0.75], key: [0xf0f0f0, 3.8, V(-0.8, 0.3, 0.55)], bloom: 1, sun: [V(-0.8, 0.18, 0.6).normalize(), 0xffffff, 0.7], spark: 9 });
   const z1 = z0 + 400, mid = (z0 + z1) / 2, k = q.kit, S = pbr('floor', 0x5a5a5a), blk = matte(0x141414, 0.35, 0.15), ln = glow(0xf2efe9, 0.6);
   q.rects.push([-220, 220, z0, z1]);
   k.box(S, 440, 2, z1 - z0, 0, -2, mid);
@@ -223,7 +232,7 @@ function neutral(z0) {
 // {02} азия — прорезь в поверхности города: крыши башен вровень с нейтральной поверхностью, переулок уходит вниз.
 // btl спускается по монументальной лестнице на улицу, atl ныряет в прорезь и идёт по уровню зданий
 function asia(z0) {
-  const q = zone('asia', { grade: { sat: 1.18, con: 0.32, grain: 0.06, vig: 0.72, ca: 1.8, tint: [1.05, 0.97, 0.95] },  fog: 0.0045, n: '02', t: 'азия', line: 'прорезь в поверхности: лестница вниз, чёрные башни, красные вывески-лезвия', sky: ['#050102', '#3a0608', '#8a1010'], hemi: [0xa04048, 0x1a0808, 0.6], key: [0xff7a6a, 2.2, V(0.3, 1, -0.2)], bloom: 1.2, sun: [V(0, 0.32, 1).normalize(), 0xff2a1a, 2.2], spark: 18 });
+  const q = zone('asia', { grade: { sat: 1.18, con: 0.32, grain: 0.06, vig: 0.72, ca: 1.8, tint: [1.05, 0.97, 0.95], rays: 0.7, streak: 0.5, rain: 0.35 },  fog: 0.0045, n: '02', t: 'азия', line: 'прорезь в поверхности: лестница вниз, чёрные башни, красные вывески-лезвия', sky: ['#050102', '#3a0608', '#8a1010'], hemi: [0xa04048, 0x1a0808, 0.6], key: [0xff7a6a, 2.2, V(0.3, 1, -0.2)], bloom: 1.2, sun: [V(0, 0.32, 1).normalize(), 0xff2a1a, 2.2], spark: 18 });
   const DS = 230, z1 = z0 + 460, k = q.kit, r = rng(31), B = pbr('wall', 0x2a2828, 0.8, THREE.FrontSide, 0.12), red = glow(RED, 1.5), cr = glow(0xffe0d0, 1.1), tor = matte(0x9a0608, 0.5), step = pbr('floor', 0x2e2828, 0.9, THREE.FrontSide, 0.1), S = pbr('floor', 0x5a5a5a);
   const gy = z => z < z0 + DS ? ROOF * (1 - smooth(clamp01((z - z0) / DS))) : 0;   // высота улицы: плавный спуск с поверхности
   q.rects.push([-70, 70, z0, z1]);
@@ -251,7 +260,7 @@ function asia(z0) {
 
 // {03} спорт — внутри чаши стадиона: btl по полю между кубами, atl пролетает над полем на уровне верхних ярусов
 function sport(z0) {
-  const q = zone('sport', { grade: { sat: 0.75, con: 0.22, grain: 0.035, vig: 0.45, tint: [0.95, 1.0, 1.06] },  fog: 0.0022, n: '03', t: 'спорт', line: 'чаша стадиона: btl по полю, atl на уровне верхних ярусов', sky: ['#05070a', '#1c2228', '#cfd4d8'], hemi: [0xb8bec4, 0x15171a, 0.5], key: [0xf4f6f8, 4.2, V(0.55, 1, 0.35)], sun: [V(0, 0.05, 1), 0xffffff, 0.3], spark: 6 });
+  const q = zone('sport', { grade: { sat: 0.75, con: 0.22, grain: 0.035, vig: 0.45, tint: [0.95, 1.0, 1.06], rays: 0.35, streak: 0.9, rain: 0.3 },  fog: 0.0022, n: '03', t: 'спорт', line: 'чаша стадиона: btl по полю, atl на уровне верхних ярусов', sky: ['#05070a', '#1c2228', '#cfd4d8'], hemi: [0xb8bec4, 0x15171a, 0.5], key: [0xf4f6f8, 4.2, V(0.55, 1, 0.35)], sun: [V(0, 0.05, 1), 0xffffff, 0.3], spark: 6 });
   const z1 = z0 + 400, k = q.kit, cz = (z0 + z1) / 2, C = pbr('wall', 0x8a8e92, 1, THREE.FrontSide, 0.15), D = pbr('wall', 0x4a4e52, 1, THREE.FrontSide, 0.15), seat = pbr('wall', 0x34383c, 1, THREE.FrontSide, 0.1), steel = matte(0x9aa0a6, 0.4, 0.7);
   q.rects.push([-140, 140, z0, z1]);
   k.box(pbr('floor', 0x202326, 0.9, THREE.FrontSide, 0.1), 260, 0.3, z1 - z0, 0, -0.3, cz);
@@ -281,7 +290,7 @@ function sport(z0) {
 // {04} мерч — концепт-стор на два этажа: белая штукатурка, полированный пол, светящиеся потолки, рейлы с одеждой
 // по стенам, чёрные глянцевые постаменты с красным контуром. btl — нижний этаж, atl — верхний
 function merch(z0) {
-  const q = zone('merch', { grade: { sat: 0.92, con: 0.1, grain: 0.022, vig: 0.25, ca: 0.3, tint: [1.02, 1.0, 0.97] },  n: '04', t: 'мерч', line: 'концепт-стор: белые залы, светящиеся потолки, рейлы, чёрные постаменты', exp: 0.9, sky: ['#d0c8be', '#e6e0d7', '#f6f2ec'], hemi: [0xffffff, 0xc8c0b4, 1.15], key: [0xfff6ea, 1.4, V(0.4, 1, 0.25)], bloom: 0.45, spark: 3 });
+  const q = zone('merch', { grade: { sat: 0.92, con: 0.1, grain: 0.022, vig: 0.25, ca: 0.3, tint: [1.02, 1.0, 0.97], rays: 0.12, streak: 0.08 },  n: '04', t: 'мерч', line: 'концепт-стор: белые залы, светящиеся потолки, рейлы, чёрные постаменты', exp: 0.9, sky: ['#d0c8be', '#e6e0d7', '#f6f2ec'], hemi: [0xffffff, 0xc8c0b4, 1.15], key: [0xfff6ea, 1.4, V(0.4, 1, 0.25)], bloom: 0.45, spark: 3 });
   const rooms = 4, L = 46, z1 = z0 + rooms * L, k = q.kit, mid = (z0 + z1) / 2;
   q.wet.push({ w: 36, d: z1 - z0, x: 0, y: 0.03, z: mid, k: 0.3, pol: 1, below: 16 }, { w: 36, d: z1 - z0, x: 0, y: 18.15, z: mid, k: 0.3, pol: 1, above: 16 });   // полированные полы обоих этажей
   const Wl = matte(0xe2dbd0, 0.92), FL = matte(0xd4cec4, 0.3, 0.05), blk = matte(0x0d0d0d, 0.22, 0.3), steel = matte(0xc8c8c8, 0.25, 0.9), lightP = glow(0xfff6ec, 0.95), red = glow(RED, 1.5);
@@ -307,7 +316,7 @@ function merch(z0) {
 
 // {05} ai — чёрная пустота: кремовая сетка гаснет к краям, монолиты проступают только в свете искры; atl парит среди монолитов
 function ai(z0) {
-  const q = zone('ai', { grade: { sat: 0, con: 0.36, grain: 0.07, vig: 0.65, ca: 0, red: 1 },  n: '05', t: 'ai-продакшн', line: 'пустота, кремовая сетка, монолиты в свете искры', sky: ['#000000', '#030303', '#0c0c0c'], hemi: [0x6a6a6a, 0x050505, 0.08], key: [0xe1d9cf, 0.35, V(0, 1, -0.4)], bloom: 1.3, spark: 55 });
+  const q = zone('ai', { grade: { sat: 0, con: 0.36, grain: 0.07, vig: 0.65, ca: 0, red: 1, streak: 0.35 },  n: '05', t: 'ai-продакшн', line: 'пустота, кремовая сетка, монолиты в свете искры', sky: ['#000000', '#030303', '#0c0c0c'], hemi: [0x6a6a6a, 0x050505, 0.08], key: [0xe1d9cf, 0.35, V(0, 1, -0.4)], bloom: 1.3, spark: 55 });
   const z1 = z0 + 300, k = q.kit, r = rng(53), mono = matte(0x0a0a0a, 0.35, 0.2);
   q.rects.push([-120, 120, z0, z1]);
   k.box(matte(0x050505, 0.6), 240, 0.3, z1 - z0, 0, -0.3, (z0 + z1) / 2);
@@ -334,7 +343,7 @@ function ai(z0) {
 
 // финал — чистая чернота после ai: ни стен, ни неба, только логотип, который проявляется в свете искры; искра встаёт в него
 function ending(z0) {
-  const q = zone('final', { grade: { sat: 1, con: 0.3, vig: 0.8, red: 1 },  n: '06', t: 'oxygen', line: 'чистая чернота: искра встаёт в логотип', sky: ['#000000', '#000000', '#000000'], hemi: [0x000000, 0x000000, 0], key: [0x000000, 0, V(0, 1, 0)], bloom: 1.3, spark: 34 });
+  const q = zone('final', { grade: { sat: 1, con: 0.3, vig: 0.8, red: 1, rays: 0.45, streak: 0.5 },  n: '06', t: 'oxygen', line: 'чистая чернота: искра встаёт в логотип', sky: ['#000000', '#000000', '#000000'], hemi: [0x000000, 0x000000, 0], key: [0x000000, 0, V(0, 1, 0)], bloom: 1.3, spark: 34 });
   const cz = z0 + 160; q.rects.push([-120, 120, z0, cz + 60]);
   q.logoAt = V(0, 14, cz); q.look = V(0, 14, cz);
   path(q, 'btl', [0, 5.5, z0 + 12], [0, 9, z0 + 60], [0, 13, cz - 70], [0, 14, cz - 46]);
@@ -381,19 +390,24 @@ const SKYLINE = { mesh: null }; const tmpL = new THREE.Vector3();
   m.renderOrder = -0.5; m.frustumCulled = false; scene.add(m); SKYLINE.mesh = m;
 }
 // мокрый и полированный пол: плоское отражение поверх пола. лужи — по маске (в сухих местах отражение размыто), pol — ровная полировка
-const WETS = [];
+const WETS = [], RAIN = { k: 0 };
 if (HQ) {
   const c = document.createElement('canvas'); c.width = c.height = 512; const g = c.getContext('2d'), r = rng(404); g.fillStyle = '#000'; g.fillRect(0, 0, 512, 512); g.filter = 'blur(10px)';
   for (let i = 0; i < 140; i++) { const x = r() * 512, y = r() * 512, rad = 12 + r() * 60, gr = g.createRadialGradient(x, y, 0, x, y, rad); gr.addColorStop(0, 'rgba(255,255,255,.95)'); gr.addColorStop(0.6, 'rgba(255,255,255,.5)'); gr.addColorStop(1, 'rgba(255,255,255,0)'); g.fillStyle = gr; g.fillRect(x - rad, y - rad, rad * 2, rad * 2); }
   const wetTex = new THREE.CanvasTexture(c); wetTex.wrapS = wetTex.wrapT = THREE.RepeatWrapping;
   const make = (q, o) => { const { w, d, x, y, z, k = 0.6, pol = 0 } = o;
-    const shader = { name: 'WetReflector', uniforms: { color: { value: null }, tDiffuse: { value: null }, textureMatrix: { value: null }, tWet: { value: wetTex }, uK: { value: k }, uPol: { value: pol } },
+    const shader = { name: 'WetReflector', uniforms: { color: { value: null }, tDiffuse: { value: null }, textureMatrix: { value: null }, tWet: { value: wetTex }, uK: { value: k }, uPol: { value: pol }, uT: { value: 0 }, uDrops: { value: 0 } },
       vertexShader: `uniform mat4 textureMatrix; varying vec4 vUv; varying vec3 vW;
         void main(){ vUv = textureMatrix * vec4(position, 1.0); vW = (modelMatrix * vec4(position, 1.0)).xyz; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
-      fragmentShader: `uniform sampler2D tDiffuse, tWet; uniform float uK, uPol; varying vec4 vUv; varying vec3 vW;
+      fragmentShader: `uniform sampler2D tDiffuse, tWet; uniform float uK, uPol, uT, uDrops; varying vec4 vUv; varying vec3 vW;
+        float hh(vec2 p){ return fract(sin(dot(p, vec2(12.9898, 78.233))) * 43758.5453); }
+        // круги от капель: клетки по 2,5 м, в каждой своя капля со своей фазой
+        vec2 ripple(vec2 p){ vec2 acc = vec2(0.0); for (int j = -1; j <= 1; j++) for (int i = -1; i <= 1; i++) { vec2 cell = floor(p / 2.5) + vec2(float(i), float(j)), cp = (cell + vec2(hh(cell), hh(cell + 3.1))) * 2.5;
+          float ph = fract(uT * (0.55 + hh(cell + 7.0) * 0.5) + hh(cell + 1.7)), r = ph * 1.6, d = length(p - cp); float ring = sin((d - r) * 14.0) * smoothstep(0.35, 0.0, abs(d - r)) * (1.0 - ph);
+          acc += normalize(p - cp + 1e-4) * ring; } return acc; }
         void main(){ float wet = mix(smoothstep(0.25, 0.75, texture2D(tWet, vW.xz * 0.012).r), 0.55, uPol);
-          float b = mix(0.018, 0.002, wet); vec3 c = vec3(0.0);
-          for (int i = 0; i < 8; i++) { float a = float(i) * 0.7854; vec4 o = vec4(cos(a) * b, sin(a) * b, 0.0, 0.0) * vUv.w; c += texture2DProj(tDiffuse, vUv + o).rgb; } c /= 8.0;
+          float b = mix(0.018, 0.002, wet); vec3 c = vec3(0.0); vec2 rp = uDrops > 0.0 ? ripple(vW.xz) * 0.008 * uDrops * wet : vec2(0.0);
+          for (int i = 0; i < 8; i++) { float a = float(i) * 0.7854; vec4 o = vec4(cos(a) * b, sin(a) * b, 0.0, 0.0) * vUv.w; c += texture2DProj(tDiffuse, vUv + o + vec4(rp * vUv.w, 0.0, 0.0)).rgb; } c /= 8.0; c += length(rp) * 18.0 * uDrops;
           vec3 V = normalize(cameraPosition - vW); float fres = pow(1.0 - clamp(V.y, 0.0, 1.0), 4.0);
           gl_FragColor = vec4(c, uK * mix(0.05, 1.0, wet) * mix(0.3, 1.0, fres));
           #include <tonemapping_fragment>
@@ -401,7 +415,7 @@ if (HQ) {
         }` };
     const m = new Reflector(new THREE.PlaneGeometry(w, d), { textureWidth: innerWidth * 0.6, textureHeight: innerHeight * 0.6, shader, clipBias: 0.003 });
     m.material.transparent = true; m.material.depthWrite = false; m.rotation.x = -Math.PI / 2; m.position.set(x, y, z); scene.add(m);
-    const ob = m.onBeforeRender; m.onBeforeRender = (...a) => { const v = SKYLINE.mesh.visible; SKYLINE.mesh.visible = false; ob(...a); SKYLINE.mesh.visible = v; }; WETS.push({ m, q, below: o.below, above: o.above });   // кольцо горизонта стоит вокруг камеры — в отражении оно ломается, поэтому не отражаем
+    const ob = m.onBeforeRender; m.onBeforeRender = (...a) => { const v = SKYLINE.mesh.visible; SKYLINE.mesh.visible = false; ob(...a); SKYLINE.mesh.visible = v; }; WETS.push({ m, q, below: o.below, above: o.above, drops: pol ? 0 : 1 });   // кольцо горизонта стоит вокруг камеры — в отражении оно ломается, поэтому не отражаем
   };
   // старт и нейтральная — одна общая мокрая плоскость на поверхности
   const zEnd = Z.neutral.rects[0][3]; make(Z.neutral, { w: 440, d: zEnd + 60, x: 0, y: ROOF + 0.015, z: (zEnd - 60) / 2, k: 0.6 }); WETS[0].also = Z.fork;
@@ -468,12 +482,12 @@ function updateZones(dawn) {
   const x = camera.position.x, z = camera.position.z;
   const ws = ZL.map(q => { const d = rectD(q, x, z); q.g.visible = d < 260; q.d = d; return Math.exp(-((d / 16) ** 2)) + 1e-6; }), sum = ws.reduce((a, b) => a + b, 0);
   for (const k of ['top', 'mid', 'bot', 'key', 'hs', 'hg', 'sunC']) M[k].setRGB(0, 0, 0); M.dir.set(0, 0, 0); M.sun.set(0, 0, 0);
-  let keyI = 0, hemiI = 0, bl = 0, sunK = 0, sp = 0, ex = 0, hd = 0, fg = 0, best = 0; const gr = { sat: 0, con: 0, grain: 0, vig: 0, ca: 0, red: 0, t0: 0, t1: 0, t2: 0 };
+  let keyI = 0, hemiI = 0, bl = 0, sunK = 0, sp = 0, ex = 0, hd = 0, fg = 0, best = 0; const gr = { sat: 0, con: 0, grain: 0, vig: 0, ca: 0, red: 0, rays: 0, streak: 0, rain: 0, t0: 0, t1: 0, t2: 0 };
   ZL.forEach((q, i) => { const w = ws[i] / sum; if (ws[i] > ws[best]) best = i;
     M.top.add(M.c.set(q.sky[0]).multiplyScalar(w)); M.mid.add(M.c.set(q.sky[1]).multiplyScalar(w)); M.bot.add(M.c.set(q.sky[2]).multiplyScalar(w));
     M.key.add(M.c.set(q.key[0]).multiplyScalar(w)); M.hs.add(M.c.set(q.hemi[0]).multiplyScalar(w)); M.hg.add(M.c.set(q.hemi[1]).multiplyScalar(w));
     M.sunC.add(M.c.set(q.sun[1]).multiplyScalar(w)); M.sun.addScaledVector(q.sun[0], w); sunK += q.sun[2] * w;
-    sp += q.spark * w; ex += q.exp * w; { const g = { ...GRADE0, ...q.grade }; for (const k of ['sat', 'con', 'grain', 'vig', 'ca', 'red']) gr[k] += g[k] * w; gr.t0 += g.tint[0] * w; gr.t1 += g.tint[1] * w; gr.t2 += g.tint[2] * w; } hd += q.hdr * w; fg += q.fog * w; keyI += q.key[1] * w; hemiI += q.hemi[2] * w; bl += q.bloom * w; M.dir.addScaledVector(q.key[2].clone().normalize(), w); });
+    sp += q.spark * w; ex += q.exp * w; { const g = { ...GRADE0, ...q.grade }; for (const k of ['sat', 'con', 'grain', 'vig', 'ca', 'red', 'rays', 'streak', 'rain']) gr[k] += g[k] * w; gr.t0 += g.tint[0] * w; gr.t1 += g.tint[1] * w; gr.t2 += g.tint[2] * w; } hd += q.hdr * w; fg += q.fog * w; keyI += q.key[1] * w; hemiI += q.hemi[2] * w; bl += q.bloom * w; M.dir.addScaledVector(q.key[2].clone().normalize(), w); });
   curZone = ZL[best];
   const u = sky.material.uniforms, D = dawn;
   u.uTop.value.copy(M.top).multiplyScalar(D); u.uMid.value.copy(M.mid).multiplyScalar(D); u.uBot.value.copy(M.bot).multiplyScalar(D); u.uSun.value.copy(M.sun); u.uSunC.value.copy(M.sunC); u.uK.value = sunK * D;
@@ -483,10 +497,13 @@ function updateZones(dawn) {
   const fwd = new THREE.Vector3(); camera.getWorldDirection(fwd); key.target.position.copy(camera.position).addScaledVector(fwd, 50); key.target.position.y = Math.max(0, camera.position.y - (camera.position.y > ROOF ? 6 : 8)); if (camera.position.y > ROOF + 20) key.target.position.y = ROOF;
   key.position.copy(key.target.position).addScaledVector(M.dir.normalize(), 300);
   u.uHdr.value = hd * D; scene.fog.color.copy(M.bot).multiplyScalar(0.55 * D); scene.fog.density = fg * D;
-  WETS.forEach(o => { const cy = camera.position.y; o.m.visible = (o.q.g.visible || !!o.also?.g.visible) && !(o.below && cy > o.below) && !(o.above && cy < o.above); });   // в мерче — только пол своего этажа
+  WETS.forEach(o => { const U = o.m.material.uniforms; U.uT.value = performance.now() / 1000; U.uDrops.value = o.drops * RAIN.k; }); WETS.forEach(o => { const cy = camera.position.y; o.m.visible = (o.q.g.visible || !!o.also?.g.visible) && !(o.below && cy > o.below) && !(o.above && cy < o.above); });   // в мерче — только пол своего этажа
   if (SKYLINE.mesh) { SKYLINE.mesh.position.set(camera.position.x, ROOF - 30, camera.position.z); SKYLINE.mesh.material.opacity = clamp01(hd * 1.4) * D; SKYLINE.mesh.visible = hd > 0.02; }
   LABELS.forEach(l => { l.getWorldPosition(tmpL); l.material.opacity = smooth(clamp01((tmpL.distanceTo(camera.position) - 15) / 12)); });
-  { const f = film.uniforms; f.uSat.value = gr.sat; f.uCon.value = gr.con; f.uGrain.value = gr.grain; f.uVig.value = gr.vig; f.uCA.value = gr.ca; f.uRed.value = gr.red; f.uTint.value.set(gr.t0, gr.t1, gr.t2); }
+  { const f = film.uniforms; f.uSat.value = gr.sat; f.uCon.value = gr.con; f.uGrain.value = gr.grain; f.uVig.value = gr.vig; f.uCA.value = gr.ca; f.uRed.value = gr.red; f.uTint.value.set(gr.t0, gr.t1, gr.t2); f.uStreak.value = gr.streak * D; f.uRain.value = gr.rain * D;
+    // солнце на экране: лучи тянутся к нему, только если оно впереди
+    const sp = camera.position.clone().addScaledVector(M.sun.clone().normalize(), 400), front = sp.clone().sub(camera.position).dot(camera.getWorldDirection(new THREE.Vector3())) > 0; sp.project(camera);
+    f.uSunUV.value.set(sp.x * 0.5 + 0.5, sp.y * 0.5 + 0.5); f.uRays.value = front ? gr.rays * D * (1 - smooth(clamp01(Math.hypot(sp.x, sp.y) / 2.2))) : 0; RAIN.k = gr.rain; }
   renderer.toneMappingExposure = ex; bloom.strength = 0.6 * bl; sparkLight.intensity = sp * (0.9 + 0.1 * Math.sin(performance.now() / 140)) * (0.35 + 0.65 * D) + (1 - D) * 25;
   // лампы зоны: три ближайшие точки света из всех видимых зон
   const an = ZL.filter(q => q.g.visible).flatMap(q => q.anchors).map(a => [a, a.p.distanceToSquared(camera.position)]).sort((a, b) => a[1] - b[1]);
@@ -547,7 +564,7 @@ function frame() {
   routeBtn.style.display = route ? 'block' : 'none'; routeBtn.textContent = `маршрут ${route} · сменить ↺`;
   film.uniforms.uT.value = (time * 60) % 1000; composer.render(); requestAnimationFrame(frame);
 }
-addEventListener('resize', () => { camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix(); renderer.setSize(innerWidth, innerHeight); composer.setSize(innerWidth, innerHeight); gtao?.setSize(innerWidth, innerHeight); });
+addEventListener('resize', () => { camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix(); renderer.setSize(innerWidth, innerHeight); composer.setSize(innerWidth, innerHeight); film.uniforms.uAspect.value = innerWidth / innerHeight; gtao?.setSize(innerWidth, innerHeight); });
 
 // ?map — план мира из тех же данных: зоны, маршруты, кубы
 function drawMap() {
