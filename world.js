@@ -459,10 +459,13 @@ const N = 4000, PX = 11;   // пикселей скролла на метр пу
 const R = {};
 for (const [r, raw] of Object.entries(ROUTES)) {
   const pts = raw.filter((p, i) => !i || p.distanceTo(raw[i - 1]) > 1);
-  const curve = new THREE.CatmullRomCurve3(pts, false, 'centripetal'), P = curve.getSpacedPoints(N), C = [0], cubes = ZL.flatMap(q => q.cubes).filter(c => !c.r || c.r === r);
+  // рельсы сглаживаются: высота усредняется окном ~40 м — подъёмы и спуски без изломов
+  const raw0 = new THREE.CatmullRomCurve3(pts, false, 'centripetal').getSpacedPoints(800), ys = raw0.map(p => p.y);
+  for (let it = 0; it < 4; it++) { const c = ys.slice(); for (let i = 0; i < ys.length; i++) { let a = 0, n = 0; for (let j = -6; j <= 6; j++) { const k = Math.min(ys.length - 1, Math.max(0, i + j)); a += c[k]; n++; } ys[i] = a / n; } }
+  const curve = new THREE.CatmullRomCurve3(raw0.map((p, i) => V(0, ys[i], p.z)), false, 'catmullrom', 0.5), P = curve.getSpacedPoints(N), C = [0], cubes = ZL.flatMap(q => q.cubes).filter(c => !c.r || c.r === r);
   // у кубов своего маршрута скролл тянется дольше — камера как бы присаживается
   for (let i = 1; i <= N; i++) { const p = P[i], dn = Math.min(...cubes.map(c => Math.hypot(c.p.x - p.x, c.p.z - p.z, (c.p.y - p.y) * 0.5))); C.push(C[i - 1] + P[i].distanceTo(P[i - 1]) * (1 + 1.1 * Math.exp(-((dn / 16) ** 2)))); }
-  const iF = P.findIndex(p => p.distanceTo(Z.fork.trunk[2]) < 3);
+  const iF = P.findIndex(p => p.z >= Z.fork.trunk[2].z);
   R[r] = { curve, P, C, cubes, iF, trunkW: C[iF], restW: C[N] - C[iF] };
 }
 const TRUNK_W = (R.btl.trunkW + R.atl.trunkW) / 2, REST_W = Math.max(R.btl.restW, R.atl.restW), TOTAL = TRUNK_W + REST_W;
@@ -519,7 +522,9 @@ routeBtn.addEventListener('click', () => { route = null; scrollTo({ top: (TRUNK_
 // ---------- цикл ----------
 let sSm = 0, mouse = new THREE.Vector2(), mSm = new THREE.Vector2(), lastZone = '';
 addEventListener('pointermove', e => mouse.set(e.clientX / innerWidth - 0.5, e.clientY / innerHeight - 0.5));
-let lookInit = false; const tmp2 = V(0, 0, 0);
+let lookInit = false, pitch = 0, wP = 0, vS = 0;
+// настройки камеры: vmax — предел скорости (м/с по пути), amax — предел ускорения; pk/pc — пружина наклона, wmax — предел угловой скорости
+const CAMK = { k: 3.2, c: 3.6, vmax: 22, amax: 18, pk: 5, pc: 4.5, wmax: 0.35 };
 const clock = new THREE.Clock(), look = V(0, 0, 0), tmp = V(0, 0, 0), ahead = V(0, 0, 0), DOCKQ = new THREE.Quaternion().setFromEuler(new THREE.Euler(0, Math.PI, 0)), endEl = document.getElementById('end');
 const REC = { on: /rec/.test(location.search), t: 0 };
 function frame() {
@@ -527,19 +532,19 @@ function frame() {
   let s = scrollY / PX;
   if (!route && s > TRUNK_W) { s = TRUNK_W; scrollTo(0, TRUNK_W * PX); }
   forkEl.classList.toggle('on', !route && s > TRUNK_W - 14);
-  sSm += (s - sSm) * (1 - Math.exp(-dt * 3));
-  const r = route || 'btl', o = R[r], u = uAt(r, sSm), du = 14 / o.curve.getLength();
-  o.curve.getPointAt(u, camera.position); o.curve.getPointAt(Math.min(1, u + du), ahead);
-  // камера на рельсах: взгляд — по касательной к пути на 30 м вперёд, сглажен; без поворотов к кубам и без сдвига от мыши
-  // направление всегда вперёд по оси, наклон ограничен — на вертикальном подъёме и крутом спуске камера не переворачивается
-  o.curve.getPointAt(Math.min(1, u + 30 / o.curve.getLength()), tmp);
-  { const L = 30, dy = Math.max(-0.7 * L, Math.min(0.42 * L, tmp.y - 0.6 - camera.position.y)); tmp.set(camera.position.x, camera.position.y + dy, camera.position.z + L); }
+  // движение: скролл задаёт только цель, камера догоняет её пружиной с пределом скорости и ускорения — без рывков
+  if (!REC_) { let acc = CAMK.k * (s - sSm) - CAMK.c * vS; acc = Math.max(-CAMK.amax, Math.min(CAMK.amax, acc)); vS = Math.max(-CAMK.vmax, Math.min(CAMK.vmax, vS + acc * dt)); sSm += vS * dt; if (Math.abs(s - sSm) < 0.01 && Math.abs(vS) < 0.05) { sSm = s; vS = 0; } }
+  const r = route || 'btl', o = R[r], len = o.curve.getLength(), u = uAt(r, sSm), du = 14 / len;
+  o.curve.getPointAt(u, camera.position);
+  // взгляд всегда вперёд по ходу; наклон — по уклону рельсов на 40 м вперёд, доводится пружиной с пределом угловой скорости
+  o.curve.getPointAt(Math.min(1, u + 40 / len), tmp);
   const dLogo = camera.position.distanceTo(FIN.logoAt), dock = smooth(clamp01((72 - dLogo) / 24)), landed = clamp01((dock - 0.92) / 0.08);
-  tmp.lerp(FIN.look, smooth(clamp01((110 - dLogo) / 50)));
-  look.lerp(tmp, REC.on || !lookInit || look.distanceTo(tmp) > 50 ? 1 : 1 - Math.exp(-dt * 4)); lookInit = true;   // после прыжка по навигации — сразу, без разворота
-  // лёгкое движение от мыши: камера чуть смещается и чуть смотрит в сторону курсора, без вращения
-  mSm.lerp(mouse, REC.on ? 0 : 1 - Math.exp(-dt * 2.5)); camera.position.x += mSm.x * 0.8; camera.position.y -= mSm.y * 0.5;
-  tmp2.copy(look).add(V(mSm.x * 2.4, -mSm.y * 1.6, 0)); camera.lookAt(tmp2);
+  let pT = Math.max(-0.42, Math.min(0.3, Math.atan2(tmp.y - camera.position.y, 40)));
+  const toLogo = Math.atan2(FIN.logoAt.y - camera.position.y, Math.max(8, FIN.logoAt.z - camera.position.z)); pT += (toLogo - pT) * smooth(clamp01((140 - dLogo) / 70));
+  if (REC_ || !lookInit) { pitch = pT; wP = 0; lookInit = true; } else { let a = CAMK.pk * (pT - pitch) - CAMK.pc * wP; wP = Math.max(-CAMK.wmax, Math.min(CAMK.wmax, wP + a * dt)); pitch += wP * dt; }
+  // мышь: лёгкий сдвиг и чуть-чуть поворот головы, медленно
+  mSm.lerp(mouse, REC_ ? 0 : 1 - Math.exp(-dt * 1.6)); camera.position.x += mSm.x * 0.7; camera.position.y -= mSm.y * 0.45;
+  camera.rotation.set(pitch - mSm.y * 0.035, Math.PI - mSm.x * 0.05, 0, 'YXZ');
   // искра впереди, чуть выше линии взгляда; в начале — прямо по центру кадра
   const intro = 1 - clamp01(sSm / 40);
   o.curve.getPointAt(Math.min(1, u + du * (0.9 - 0.45 * intro)), tmp);
@@ -592,7 +597,7 @@ function drawMap() {
 // ---------- старт ----------
 history.scrollRestoration = 'manual'; scrollTo(0, 0);
 // отладка и съёмка: ?at=asia:0.3 — встать в зону на долю её пути
-const go = (r, s) => { lookInit = false; route = r; document.documentElement.classList.remove('lock'); scrollTo(0, s * PX); sSm = s; };
+const go = (r, s) => { lookInit = false; vS = 0; route = r; document.documentElement.classList.remove('lock'); scrollTo(0, s * PX); sSm = s; };
 const goZone = (k, f = 0.3, r = 'btl') => { const o = R[r], q = Z[k]; const idx = o.P.map((p, i) => rectD(q, p.x, p.z) < 0.01 ? i : -1).filter(i => i >= 0); const i = idx[Math.floor(f * (idx.length - 1))]; const w = o.C[i]; const s = w <= o.trunkW ? w / o.trunkW * TRUNK_W : TRUNK_W + (w - o.trunkW) / o.restW * REST_W; go(k === 'fork' && f < 0.5 ? null : r, s); };
 // проверка пути: лучи от камеры в шесть сторон — ни одна стена ближе 1,5 м
 function check() {
