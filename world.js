@@ -524,7 +524,7 @@ let sSm = 0, mouse = new THREE.Vector2(), mSm = new THREE.Vector2(), lastZone = 
 addEventListener('pointermove', e => mouse.set(e.clientX / innerWidth - 0.5, e.clientY / innerHeight - 0.5));
 let lookInit = false, pitch = 0, wP = 0, vS = 0;
 // настройки камеры: vmax — предел скорости (м/с по пути), amax — предел ускорения; pk/pc — пружина наклона, wmax — предел угловой скорости
-const CAMK = { k: 3.2, c: 3.6, vmax: 22, amax: 18, pk: 5, pc: 4.5, wmax: 0.35 };
+const CAMK = { k: 7, c: 5.3, vmax: 38, amax: 32, pk: 5, pc: 4.5, wmax: 0.35 };
 const clock = new THREE.Clock(), look = V(0, 0, 0), tmp = V(0, 0, 0), ahead = V(0, 0, 0), DOCKQ = new THREE.Quaternion().setFromEuler(new THREE.Euler(0, Math.PI, 0)), endEl = document.getElementById('end');
 const REC = { on: /rec/.test(location.search), t: 0 };
 function frame() {
