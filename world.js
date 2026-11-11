@@ -35,7 +35,7 @@ const scene = new THREE.Scene(); scene.background = new THREE.Color(0x000000); s
 const camera = new THREE.PerspectiveCamera(52, innerWidth / innerHeight, 0.3, 700);   // дальняя плоскость 700 м: дальше мир не рисуется вовсе
 const composer = new EffectComposer(renderer, new THREE.WebGLRenderTarget(innerWidth, innerHeight, { type: THREE.HalfFloatType, samples: HQ ? 4 : 0 })); composer.addPass(new RenderPass(scene, camera));
 const gtao = HQ ? new GTAOPass(scene, camera, innerWidth, innerHeight) : null;   // мягкие тени в углах и под предметами
-if (gtao) { gtao.updateGtaoMaterial({ radius: 2.2, distanceExponent: 1.6, thickness: 1.2, scale: 1, samples: 12 }); gtao.blendIntensity = 0.85; composer.addPass(gtao); }
+if (gtao) { gtao.updateGtaoMaterial({ radius: 2.2, distanceExponent: 1.6, thickness: 1.2, scale: 1, samples: 12 }); gtao.blendIntensity = 0.85; composer.addPass(gtao); const r0 = gtao.render.bind(gtao); gtao.render = (...a) => { const v = WETS.map(o => o.m.visible); WETS.forEach(o => { o.m.visible = false; }); r0(...a); WETS.forEach((o, i) => { o.m.visible = v[i]; }); }; }   // зеркала не пересчитываются ради затенения
 const bloom = new UnrealBloomPass(new THREE.Vector2(innerWidth / 2, innerHeight / 2), 0.6, 0.5, 0.86); composer.addPass(bloom); composer.addPass(new OutputPass());
 // плёнка: зерно, виньетка, лёгкая хроматическая аберрация по краям и мягкий контраст
 const film = new ShaderPass({ uniforms: { tDiffuse: { value: null }, uT: { value: 0 } }, vertexShader: 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
@@ -137,6 +137,7 @@ await Promise.all([document.fonts.load('520 100px TT'), document.fonts.load('20p
 const ZL = [], Z = {};
 function zone(k, o) { const z = Object.assign({ k, exp: 1, hdr: 0, fog: 0, wet: [], g: new THREE.Group(), kit: new Kit(), paths: { btl: [], atl: [] }, cubes: [], anchors: [], rects: [], bloom: 1, sun: [V(0, 0.2, 1), 0x000000, 0] }, o); scene.add(z.g); ZL.push(z); Z[k] = z; return z; }
 const PLINTH = conc(0x3a3836, true);
+const LABELS = [];   // подписи кубов: вплотную гаснут, чтобы не лезть в кадр
 // куб-плейсхолдер кейса. r — маршрут (btl на земле, atl над городом); у atl куб стоит на консоли или парит
 function cube(q, x, y, z, title, r, o = {}) {
   const s = o.s || 5, mat = o.mat || matte(CREAM, 0.55);
@@ -148,7 +149,7 @@ function cube(q, x, y, z, title, r, o = {}) {
   q.cubes.push({ p: V(x, top + s / 2, z), title, r });
   const n = String(q.cubes.filter(c => c.r === r).length).padStart(2, '0');
   const lab = new THREE.Mesh(new THREE.PlaneGeometry(9, 2.25), new THREE.MeshBasicMaterial({ map: labelTex(title, `{${q.n}·${r || 'финал'}${r ? '·' + n : ''}} ${q.t}`), transparent: true, depthWrite: false, toneMapped: false }));
-  lab.position.set(x, top + s + 2.2, z); lab.rotation.y = Math.PI; q.g.add(lab);
+  lab.position.set(x, top + s + 2.2, z); lab.rotation.y = Math.PI; q.g.add(lab); LABELS.push(lab);
 }
 const path = (q, r, ...pts) => pts.forEach(p => q.paths[r].push(V(...p)));
 
@@ -275,7 +276,7 @@ function sport(z0) {
 function merch(z0) {
   const q = zone('merch', { n: '04', t: 'мерч', line: 'концепт-стор: белые залы, светящиеся потолки, рейлы, чёрные постаменты', exp: 0.9, sky: ['#d0c8be', '#e6e0d7', '#f6f2ec'], hemi: [0xffffff, 0xc8c0b4, 1.15], key: [0xfff6ea, 1.4, V(0.4, 1, 0.25)], bloom: 0.45, spark: 3 });
   const rooms = 4, L = 46, z1 = z0 + rooms * L, k = q.kit, mid = (z0 + z1) / 2;
-  q.wet.push({ w: 36, d: z1 - z0, x: 0, y: 0.03, z: mid, k: 0.3, pol: 1 }, { w: 36, d: z1 - z0, x: 0, y: 18.15, z: mid, k: 0.3, pol: 1 });   // полированные полы обоих этажей
+  q.wet.push({ w: 36, d: z1 - z0, x: 0, y: 0.03, z: mid, k: 0.3, pol: 1, below: 16 }, { w: 36, d: z1 - z0, x: 0, y: 18.15, z: mid, k: 0.3, pol: 1, above: 16 });   // полированные полы обоих этажей
   const Wl = matte(0xe2dbd0, 0.92), FL = matte(0xd4cec4, 0.3, 0.05), blk = matte(0x0d0d0d, 0.22, 0.3), steel = matte(0xc8c8c8, 0.25, 0.9), lightP = glow(0xfff6ec, 0.95), red = glow(RED, 1.5);
   q.rects.push([-30, 30, z0 - 60, z1 + 10]);
   k.box(FL, 38, 0.3, z1 - z0, 0, -0.3, mid); k.box(Wl, 38, 2, z1 - z0, 0, 16, mid); k.box(FL, 36, 0.12, z1 - z0, 0, 18, mid); k.box(Wl, 38, 1, z1 - z0, 0, 34.5, mid);
@@ -350,7 +351,7 @@ const sky = new THREE.Mesh(new THREE.SphereGeometry(600, 48, 24), new THREE.Shad
       float s = max(dot(d, normalize(uSun)), 0.0); c += uSunC * (pow(s, 700.0) * 4.0 + pow(s, 14.0) * 0.4) * uK;
       if (uHdr > 0.001) { vec2 e = vec2(atan(d.z, d.x) * 0.15915 + 0.5, asin(clamp(d.y, -1.0, 1.0)) * 0.31831 + 0.5); vec3 hc = texture2D(tHdr, e).rgb * uHdrK;
         float l = dot(hc, vec3(0.2126, 0.7152, 0.0722)); hc = mix(hc, vec3(l), 0.65);   // небо почти без цвета — палитра бренда ахроматична
-        c = mix(c, hc, uHdr * smoothstep(0.13, 0.38, y)); }   // горизонт HDRI (деревья) прячем в градиент — видны только облака
+        c = mix(c, hc, uHdr * smoothstep(0.2, 0.46, y)); }   // горизонт HDRI (деревья) прячем в градиент — видны только облака
       c += (h(gl_FragCoord.xy) - 0.5) / 255.0; gl_FragColor = vec4(c, 1.0); }`,
 }));
 sky.renderOrder = -1; sky.frustumCulled = false; scene.add(sky);
@@ -361,13 +362,24 @@ sky.renderOrder = -1; sky.frustumCulled = false; scene.add(sky);
   ENV.mats.forEach(m => { m.envMap = ENV.tex; m.needsUpdate = true; });
 }
 // мокрый бетон: плоское отражение поверх поверхности старта и нейтральной; лужи — по маске, в сухих местах отражение размыто
+// горизонт поверхности: силуэт города в дымке по кругу вокруг камеры — закрывает деревья HDRI и даёт масштаб
+const SKYLINE = { mesh: null }; const tmpL = new THREE.Vector3();
+{
+  const c = document.createElement('canvas'); c.width = 4096; c.height = 256; const g = c.getContext('2d'), r = rng(808);
+  const layer = (shade, hMin, hMax, wMin, wMax) => { g.fillStyle = shade; for (let x = 0; x < 4096;) { const w = wMin + r() * (wMax - wMin), h = hMin + r() * (hMax - hMin); g.fillRect(x, 256 - h, w, h); if (r() < 0.18) g.fillRect(x + w / 2 - 1.5, 256 - h - 10 - r() * 30, 3, 40); x += w + r() * 4; } };
+  layer('rgba(255,255,255,.55)', 90, 236, 14, 60); layer('rgba(255,255,255,1)', 50, 160, 10, 46);
+  g.globalCompositeOperation = 'destination-out'; for (let i = 0; i < 2600; i++) { g.fillStyle = 'rgba(0,0,0,.9)'; g.fillRect(r() * 4096, 160 + r() * 90, 2, 2); }   // редкие окна-прорези
+  const t = new THREE.CanvasTexture(c); t.wrapS = THREE.RepeatWrapping; t.repeat.x = 2;
+  const m = new THREE.Mesh(new THREE.CylinderGeometry(560, 560, 200, 128, 1, true), new THREE.MeshBasicMaterial({ map: t, color: 0x2a2a2a, transparent: true, alphaTest: 0.02, side: THREE.BackSide, fog: true, depthWrite: false }));
+  m.renderOrder = -0.5; m.frustumCulled = false; scene.add(m); SKYLINE.mesh = m;
+}
 // мокрый и полированный пол: плоское отражение поверх пола. лужи — по маске (в сухих местах отражение размыто), pol — ровная полировка
 const WETS = [];
 if (HQ) {
   const c = document.createElement('canvas'); c.width = c.height = 512; const g = c.getContext('2d'), r = rng(404); g.fillStyle = '#000'; g.fillRect(0, 0, 512, 512); g.filter = 'blur(10px)';
   for (let i = 0; i < 140; i++) { const x = r() * 512, y = r() * 512, rad = 12 + r() * 60, gr = g.createRadialGradient(x, y, 0, x, y, rad); gr.addColorStop(0, 'rgba(255,255,255,.95)'); gr.addColorStop(0.6, 'rgba(255,255,255,.5)'); gr.addColorStop(1, 'rgba(255,255,255,0)'); g.fillStyle = gr; g.fillRect(x - rad, y - rad, rad * 2, rad * 2); }
   const wetTex = new THREE.CanvasTexture(c); wetTex.wrapS = wetTex.wrapT = THREE.RepeatWrapping;
-  const make = (q, { w, d, x, y, z, k = 0.6, pol = 0 }) => {
+  const make = (q, o) => { const { w, d, x, y, z, k = 0.6, pol = 0 } = o;
     const shader = { name: 'WetReflector', uniforms: { color: { value: null }, tDiffuse: { value: null }, textureMatrix: { value: null }, tWet: { value: wetTex }, uK: { value: k }, uPol: { value: pol } },
       vertexShader: `uniform mat4 textureMatrix; varying vec4 vUv; varying vec3 vW;
         void main(){ vUv = textureMatrix * vec4(position, 1.0); vW = (modelMatrix * vec4(position, 1.0)).xyz; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
@@ -381,7 +393,7 @@ if (HQ) {
           #include <colorspace_fragment>
         }` };
     const m = new Reflector(new THREE.PlaneGeometry(w, d), { textureWidth: innerWidth * 0.6, textureHeight: innerHeight * 0.6, shader, clipBias: 0.003 });
-    m.material.transparent = true; m.material.depthWrite = false; m.rotation.x = -Math.PI / 2; m.position.set(x, y, z); scene.add(m); WETS.push({ m, q });
+    m.material.transparent = true; m.material.depthWrite = false; m.rotation.x = -Math.PI / 2; m.position.set(x, y, z); scene.add(m); WETS.push({ m, q, below: o.below, above: o.above });
   };
   // старт и нейтральная — одна общая мокрая плоскость на поверхности
   const zEnd = Z.neutral.rects[0][3]; make(Z.neutral, { w: 440, d: zEnd + 60, x: 0, y: ROOF + 0.03, z: (zEnd - 60) / 2, k: 0.6 }); WETS[0].also = Z.fork;
@@ -463,7 +475,9 @@ function updateZones(dawn) {
   const fwd = new THREE.Vector3(); camera.getWorldDirection(fwd); key.target.position.copy(camera.position).addScaledVector(fwd, 50); key.target.position.y = Math.max(0, camera.position.y - (camera.position.y > ROOF ? 6 : 8)); if (camera.position.y > ROOF + 20) key.target.position.y = ROOF;
   key.position.copy(key.target.position).addScaledVector(M.dir.normalize(), 300);
   u.uHdr.value = hd * D; scene.fog.color.copy(M.bot).multiplyScalar(0.55 * D); scene.fog.density = fg * D;
-  WETS.forEach(o => { o.m.visible = o.q.g.visible || !!o.also?.g.visible; });
+  WETS.forEach(o => { const cy = camera.position.y; o.m.visible = (o.q.g.visible || !!o.also?.g.visible) && !(o.below && cy > o.below) && !(o.above && cy < o.above); });   // в мерче — только пол своего этажа
+  if (SKYLINE.mesh) { SKYLINE.mesh.position.set(camera.position.x, ROOF - 30, camera.position.z); SKYLINE.mesh.material.opacity = clamp01(hd * 1.4) * D; SKYLINE.mesh.visible = hd > 0.02; }
+  LABELS.forEach(l => { l.getWorldPosition(tmpL); l.material.opacity = smooth(clamp01((tmpL.distanceTo(camera.position) - 15) / 12)); });
   renderer.toneMappingExposure = ex; bloom.strength = 0.6 * bl; sparkLight.intensity = sp * (0.9 + 0.1 * Math.sin(performance.now() / 140)) * (0.35 + 0.65 * D) + (1 - D) * 25;
   // лампы зоны: три ближайшие точки света из всех видимых зон
   const an = ZL.filter(q => q.g.visible).flatMap(q => q.anchors).map(a => [a, a.p.distanceToSquared(camera.position)]).sort((a, b) => a[1] - b[1]);
