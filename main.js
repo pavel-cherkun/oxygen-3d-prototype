@@ -37,7 +37,7 @@ const scene = new THREE.Scene();
 // туман не слоями, а аналитический по высоте: плотность падает с высотой, и для каждого пикселя считается, сколько тумана
 // на луче от камеры (интеграл экспоненты). у земли — плотная мгла, из неё поднимаются чёрные объёмы, верхушки чище.
 // параметры: fogNear — базовая плотность ×10⁴, fogFar — добавка у земли ×10⁴; спад по высоте — 0.035 на метр
-scene.fog = new THREE.Fog(0x4f4f4f, 1.1, 4);   // туман светится со стороны ключа: силуэты на светлой дымке, как на рефе   // туман тёмный: дальнее уходит в черноту неба, у земли — лёгкая дымка
+scene.fog = new THREE.Fog(0x060606, 0.5, 1.2);   // почти без тумана: только дальнее гаснет в черноту, никакой дымки   // туман тёмный: дальнее уходит в черноту неба, у земли — лёгкая дымка
 THREE.ShaderChunk.fog_pars_vertex = '#ifdef USE_FOG\n varying vec3 vFogWP;\n#endif';
 THREE.ShaderChunk.fog_vertex = '#ifdef USE_FOG\n vFogWP = mvPosition.xyz * mat3(viewMatrix) + cameraPosition;\n#endif';
 THREE.ShaderChunk.fog_pars_fragment = '#ifdef USE_FOG\n uniform vec3 fogColor; uniform float fogNear; uniform float fogFar; varying vec3 vFogWP;\n#endif';
@@ -45,8 +45,7 @@ THREE.ShaderChunk.fog_fragment = `#ifdef USE_FOG
   vec3 fr = vFogWP - cameraPosition; float fd = length(fr), fk = clamp(0.035 * fr.y, -60.0, 60.0);
   float hint = exp(-0.035 * cameraPosition.y) * (abs(fk) > 1e-3 ? (1.0 - exp(-fk)) / fk : 1.0);
   float fogFactor = 1.0 - exp(-fd * (fogNear + fogFar * hint) * 1e-4);
-  float sg = pow(max(dot(normalize(fr), normalize(vec3(0.32, 0.2, 0.93))), 0.0), 7.0);
-  gl_FragColor.rgb = mix(gl_FragColor.rgb, mix(fogColor, vec3(0.78), sg), fogFactor);
+  gl_FragColor.rgb = mix(gl_FragColor.rgb, fogColor, fogFactor);
 #endif`;
 scene.background = new THREE.Color(0x000000);
 const camera = new THREE.PerspectiveCamera(50, innerWidth / innerHeight, 2, 2600);   // ближний план 2 м: точнее глубина, пол не мерцает
@@ -58,7 +57,8 @@ const gtao = new GTAOPass(scene, camera, innerWidth, innerHeight);
 gtao.updateGtaoMaterial({ radius: 7, distanceExponent: 1.4, thickness: 3, scale: 1.3, samples: 12 });
 gtao.updatePdMaterial({ lumaPhi: 10, depthPhi: 2, normalPhi: 3, radius: 6, rings: 2, samples: 12 });
 gtao.blendIntensity = 1; composer.addPass(gtao);
-const bloom = new UnrealBloomPass(new THREE.Vector2(innerWidth / 2, innerHeight / 2), 0.18, 0.4, 0.97);   // половинное разрешение: быстрее и мягче, без пересветов
+const bloom = new UnrealBloomPass(new THREE.Vector2(innerWidth / 2, innerHeight / 2), 0, 0, 1);
+bloom.enabled = false;   // без ореолов и засветов   // половинное разрешение: быстрее и мягче, без пересветов
 composer.addPass(bloom);
 composer.addPass(new OutputPass());
 // плёнка как на рефе: зерно и уход низа кадра в черноту
@@ -66,7 +66,7 @@ const grain = new ShaderPass({ uniforms: { tDiffuse: { value: null }, t: { value
   vertexShader: 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
   fragmentShader: `uniform sampler2D tDiffuse; uniform float t; varying vec2 vUv;
     float h(vec2 p){ return fract(sin(dot(p, vec2(12.9898, 78.233)) + t) * 43758.5453); }
-    void main(){ vec4 c = texture2D(tDiffuse, vUv); c.rgb += (h(vUv * 1371.0) - 0.5) * 0.07; c.rgb *= mix(0.45, 1.0, smoothstep(0.0, 0.42, vUv.y)); gl_FragColor = c; }` });
+    void main(){ vec4 c = texture2D(tDiffuse, vUv); c.rgb += (h(vUv * 1371.0) - 0.5) * 0.035; gl_FragColor = c; }` });
 composer.addPass(grain);
 
 import('three/addons/environments/RoomEnvironment.js').then(({ RoomEnvironment }) => {
@@ -78,8 +78,8 @@ import('three/addons/environments/RoomEnvironment.js').then(({ RoomEnvironment }
 });
 // свет брутализма: один холодный ключ под низким углом сбоку улицы — одна стена каньона светлая, другая в тени,
 // сквозь просветы между домами на асфальт ложатся полосы. тень считается только вокруг точки, куда смотрит камера
-renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFSoftShadowMap; renderer.shadowMap.autoUpdate = false;   // тени считаем раз за кадр, зеркало пола не пересчитывает их второй раз
-scene.add(new THREE.HemisphereLight(0x9aa3b4, 0x2a2622, 0.35));
+renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFShadowMap; renderer.shadowMap.autoUpdate = false;   // тени считаем раз за кадр, зеркало пола не пересчитывает их второй раз
+scene.add(new THREE.HemisphereLight(0xffffff, 0x111111, 0.12));
 // небесный свет как карта окружения: светлый купол, тёмная земля, яркое пятно со стороны ключа — мягкий рассеянный свет
 // во всех тенях, грани домов, смотрящие в небо и в сторону солнца, получают разную подсветку (дешёвая замена GI)
 {
@@ -87,17 +87,17 @@ scene.add(new THREE.HemisphereLight(0x9aa3b4, 0x2a2622, 0.35));
   env.add(new THREE.Mesh(new THREE.SphereGeometry(50, 32, 16), new THREE.MeshBasicMaterial({ map: sky, side: THREE.BackSide })));
   const hot = new THREE.Mesh(new THREE.CircleGeometry(9, 32), new THREE.MeshBasicMaterial({ color: 0xfff4e6, side: THREE.DoubleSide })); hot.position.set(0.55, 0.74, -0.38).normalize().multiplyScalar(45); hot.lookAt(0, 0, 0); env.add(hot);
   const bounce = new THREE.Mesh(new THREE.CircleGeometry(30, 32), new THREE.MeshBasicMaterial({ color: 0x4a443e, side: THREE.DoubleSide })); bounce.position.set(0, -40, 0); bounce.lookAt(0, 0, 0); env.add(bounce);
-  scene.environment = new THREE.PMREMGenerator(renderer).fromScene(env, 0.02).texture; scene.environmentIntensity = 0.55;
+  scene.environment = new THREE.PMREMGenerator(renderer).fromScene(env, 0.02).texture; scene.environmentIntensity = 0.22;
 }
 function canvasTexSky() {
   const c = document.createElement('canvas'); c.width = 8; c.height = 256; const g = c.getContext('2d'), gr = g.createLinearGradient(0, 0, 0, 256);
   gr.addColorStop(0, '#c9d0dc'); gr.addColorStop(0.45, '#7d838e'); gr.addColorStop(0.55, '#2a2826'); gr.addColorStop(1, '#141312');   // рассеянный свет сверху — мягкая заливка теней (глобальное освещение)
   g.fillStyle = gr; g.fillRect(0, 0, 8, 256); const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; return t;
 }
-const KEY_DIR = new THREE.Vector3(0.32, 0.2, 0.93).normalize();   // контровой низкий ключ впереди по ходу: объёмы — тёмные силуэты, длинные тени к камере
-const sun = new THREE.DirectionalLight(0xf4f2ee, 5.0);   // жёсткий белый ключ: чёрное и белое, чёткие тени sun.castShadow = true;
+const KEY_DIR = new THREE.Vector3(0.82, 0.5, 0.28).normalize();   // жёсткий боковой ключ вне кадра: одна грань белая, другая чёрная, тени с резким краем
+const sun = new THREE.DirectionalLight(0xffffff, 6.5);   // жёсткий белый ключ: чёрное и белое, чёткие тени sun.castShadow = true;
 sun.shadow.mapSize.set(4096, 4096); Object.assign(sun.shadow.camera, { left: -300, right: 300, top: 300, bottom: -300, near: 1, far: 1300 });
-sun.shadow.radius = 2; sun.shadow.bias = -0.0006; sun.shadow.normalBias = 0.6; scene.add(sun, sun.target);
+sun.shadow.radius = 0; sun.shadow.bias = -0.0006; sun.shadow.normalBias = 0.6; scene.add(sun, sun.target);
 function updateSun(lookAt) {
   // ось тени — земля под точкой взгляда; шаг привязан к текселю карты, чтобы тени не дрожали при движении
   const e = 600 / 4096, gx = Math.round(lookAt.x / e) * e, gz = Math.round(lookAt.z / e) * e;
@@ -1228,7 +1228,7 @@ function buildWorld() {
 }
 function updateGlow() {
   const near = GLOW.pts.map(p => [p, p.distanceTo(camera.position)]).sort((a, b) => a[1] - b[1]);
-  GLOW.pool.forEach((l, i) => { const [p, d] = near[i]; l.position.copy(p); l.color.copy(p.col); l.intensity = 640 * clamp01((260 - d) / 120); });
+  GLOW.pool.forEach((l, i) => { const [p, d] = near[i]; l.position.copy(p); l.color.copy(p.col); l.intensity = 160 * clamp01((260 - d) / 120); });
 }
 function updateWorld(time) {
   updateGlow();
@@ -1260,11 +1260,10 @@ function canvasTex(w, h, draw, srgb = true) { const c = document.createElement('
 const softDot = canvasTex(128, 128, g => { const gr = g.createRadialGradient(64, 64, 0, 64, 64, 64); gr.addColorStop(0, 'rgba(255,255,255,1)'); gr.addColorStop(0.4, 'rgba(255,255,255,.35)'); gr.addColorStop(1, 'rgba(255,255,255,0)'); g.fillStyle = gr; g.fillRect(0, 0, 128, 128); });
 function buildAtmosphere() {
   const r = mulberry(2026);
-  // небо — купол с шейдером: к зениту чёрное, у горизонта — цвет тумана, в стороне ключа — светящаяся дымка
+  // небо — чёрный купол без свечения
   const sky = new THREE.Mesh(new THREE.SphereGeometry(2200, 48, 24), new THREE.ShaderMaterial({ side: THREE.BackSide, depthWrite: false, fog: false,
     vertexShader: 'varying vec3 vD; void main(){ vD = position; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
-    fragmentShader: `varying vec3 vD; void main(){ vec3 d = normalize(vD); float sg = pow(max(dot(d, normalize(vec3(0.32, 0.2, 0.93))), 0.0), 7.0);
-      vec3 base = mix(vec3(0.1), vec3(0.004), smoothstep(0.0, 0.55, d.y)); gl_FragColor = vec4(mix(base, vec3(0.78), sg * smoothstep(-0.05, 0.1, d.y)), 1.0); }` }));
+    fragmentShader: `varying vec3 vD; void main(){ vec3 d = normalize(vD); gl_FragColor = vec4(mix(vec3(0.006), vec3(0.0), smoothstep(0.0, 0.3, d.y)), 1.0); }` }));
   sky.renderOrder = -1; sky.frustumCulled = false; scene.add(sky); CITY.sky = sky;
   // отражения для хрома стоек: тёмная комната с белыми полосами света, без красного
   const envScene = new THREE.Scene(); envScene.background = new THREE.Color(0x030303);
