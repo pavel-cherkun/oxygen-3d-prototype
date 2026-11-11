@@ -5,6 +5,7 @@ import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
+import { GTAOPass } from 'three/addons/postprocessing/GTAOPass.js';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { DRACOLoader } from 'three/addons/loaders/DRACOLoader.js';
@@ -37,6 +38,11 @@ const camera = new THREE.PerspectiveCamera(50, innerWidth / innerHeight, 0.5, 25
 
 const composer = new EffectComposer(renderer);
 composer.addPass(new RenderPass(scene, camera));
+// контактные тени в углах, под козырьками и у земли — то, чего не даёт один направленный свет
+const gtao = new GTAOPass(scene, camera, innerWidth, innerHeight);
+gtao.updateGtaoMaterial({ radius: 7, distanceExponent: 1.4, thickness: 3, scale: 1.3, samples: 12 });
+gtao.updatePdMaterial({ lumaPhi: 10, depthPhi: 2, normalPhi: 3, radius: 6, rings: 2, samples: 12 });
+gtao.blendIntensity = 1; composer.addPass(gtao);
 const bloom = new UnrealBloomPass(new THREE.Vector2(innerWidth / 2, innerHeight / 2), 0.55, 0.45, 0.84);   // половинное разрешение: быстрее и мягче, без пересветов
 composer.addPass(bloom);
 composer.addPass(new OutputPass());
@@ -51,14 +57,28 @@ import('three/addons/environments/RoomEnvironment.js').then(({ RoomEnvironment }
 // свет брутализма: один холодный ключ под низким углом сбоку улицы — одна стена каньона светлая, другая в тени,
 // сквозь просветы между домами на асфальт ложатся полосы. тень считается только вокруг точки, куда смотрит камера
 renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFSoftShadowMap;
-scene.add(new THREE.HemisphereLight(0x9aa3b4, 0x161616, 0.75));
+scene.add(new THREE.HemisphereLight(0x9aa3b4, 0x2a2622, 0.35));
+// небесный свет как карта окружения: светлый купол, тёмная земля, яркое пятно со стороны ключа — мягкий рассеянный свет
+// во всех тенях, грани домов, смотрящие в небо и в сторону солнца, получают разную подсветку (дешёвая замена GI)
+{
+  const env = new THREE.Scene(), sky = canvasTexSky();
+  env.add(new THREE.Mesh(new THREE.SphereGeometry(50, 32, 16), new THREE.MeshBasicMaterial({ map: sky, side: THREE.BackSide })));
+  const hot = new THREE.Mesh(new THREE.CircleGeometry(9, 32), new THREE.MeshBasicMaterial({ color: 0xfff4e6, side: THREE.DoubleSide })); hot.position.set(0.55, 0.74, -0.38).normalize().multiplyScalar(45); hot.lookAt(0, 0, 0); env.add(hot);
+  const bounce = new THREE.Mesh(new THREE.CircleGeometry(30, 32), new THREE.MeshBasicMaterial({ color: 0x4a443e, side: THREE.DoubleSide })); bounce.position.set(0, -40, 0); bounce.lookAt(0, 0, 0); env.add(bounce);
+  scene.environment = new THREE.PMREMGenerator(renderer).fromScene(env, 0.02).texture; scene.environmentIntensity = 0.55;
+}
+function canvasTexSky() {
+  const c = document.createElement('canvas'); c.width = 8; c.height = 256; const g = c.getContext('2d'), gr = g.createLinearGradient(0, 0, 0, 256);
+  gr.addColorStop(0, '#c9d0dc'); gr.addColorStop(0.45, '#7d838e'); gr.addColorStop(0.55, '#2a2826'); gr.addColorStop(1, '#141312');
+  g.fillStyle = gr; g.fillRect(0, 0, 8, 256); const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; return t;
+}
 const KEY_DIR = new THREE.Vector3(0.55, 0.74, -0.38).normalize();   // сбоку и чуть из-за спины камеры, высоко — свет заходит в каньон улицы
-const sun = new THREE.DirectionalLight(0xe9edf6, 5.2); sun.castShadow = true;
-sun.shadow.mapSize.set(2048, 2048); Object.assign(sun.shadow.camera, { left: -200, right: 200, top: 200, bottom: -200, near: 1, far: 1100 });
+const sun = new THREE.DirectionalLight(0xfff1e2, 4.6); sun.castShadow = true;
+sun.shadow.mapSize.set(4096, 4096); Object.assign(sun.shadow.camera, { left: -300, right: 300, top: 300, bottom: -300, near: 1, far: 1300 });
 sun.shadow.bias = -0.0006; sun.shadow.normalBias = 0.6; scene.add(sun, sun.target);
 function updateSun(lookAt) {
   // ось тени — земля под точкой взгляда; шаг привязан к текселю карты, чтобы тени не дрожали при движении
-  const e = 400 / 2048, gx = Math.round(lookAt.x / e) * e, gz = Math.round(lookAt.z / e) * e;
+  const e = 600 / 4096, gx = Math.round(lookAt.x / e) * e, gz = Math.round(lookAt.z / e) * e;
   sun.target.position.set(gx, 0, gz); sun.position.set(gx, 0, gz).addScaledVector(KEY_DIR, 600);
 }
 
@@ -87,27 +107,21 @@ const MAT = {
 // фактура монолита с опалубкой: доски, швы панелей, отверстия от стяжек, подтёки. на дома ложится по мировым координатам
 // (трипланар), поэтому одна плитка 14 м одинаково читается и на коробке 20 м, и на ребре 0,7 м; у земли бетон темнеет — дешёвый AO
 function concreteTexture(seed) {
+  // чистый гладкий бетон: только очень мягкая неравномерность тона и тонкое зерно — без досок, швов и подтёков
   const r = mulberry(seed), S = 512, c = document.createElement('canvas'); c.width = c.height = S; const g = c.getContext('2d');
   g.fillStyle = '#8a8a8a'; g.fillRect(0, 0, S, S);
-  for (let i = 0; i < 70; i++) {   // неровный набор: светлые и тёмные пятна, повторены через край — плитка без шва
-    const x = r() * S, y = r() * S, rr = 30 + r() * 140, v = r() < 0.55 ? '0,0,0' : '255,255,255', a = 0.05 + r() * 0.08;
+  for (let i = 0; i < 40; i++) {
+    const x = r() * S, y = r() * S, rr = 80 + r() * 200, v = r() < 0.5 ? '0,0,0' : '255,255,255', a = 0.015 + r() * 0.025;
     for (const dx of [-S, 0, S]) for (const dy of [-S, 0, S]) { const gr = g.createRadialGradient(x + dx, y + dy, 0, x + dx, y + dy, rr); gr.addColorStop(0, `rgba(${v},${a})`); gr.addColorStop(1, `rgba(${v},0)`); g.fillStyle = gr; g.fillRect(x + dx - rr, y + dy - rr, rr * 2, rr * 2); }
   }
-  for (let y = 0; y < S; y += 32) {   // доски опалубки: у каждой свой тон, шов тёмный, кромка светлая
-    g.fillStyle = `rgba(${r() < 0.5 ? '0,0,0' : '255,255,255'},${r() * 0.07})`; g.fillRect(0, y, S, 32);
-    g.fillStyle = 'rgba(0,0,0,.32)'; g.fillRect(0, y, S, 1.5); g.fillStyle = 'rgba(255,255,255,.07)'; g.fillRect(0, y + 2, S, 1);
-  }
   const img = g.getImageData(0, 0, S, S), d = img.data;
-  for (let i = 0; i < d.length; i += 4) { const n = (r() - 0.5) * 30; d[i] += n; d[i + 1] += n; d[i + 2] += n; }
+  for (let i = 0; i < d.length; i += 4) { const n = (r() - 0.5) * 7; d[i] += n; d[i + 1] += n; d[i + 2] += n; }
   g.putImageData(img, 0, 0);
-  g.fillStyle = 'rgba(0,0,0,.6)'; g.fillRect(0, 0, 3, S); g.fillRect(0, 0, S, 3);   // шов панели совпадает с краем плитки
-  for (let y = 64; y < S; y += 128) for (let x = 64; x < S; x += 128) { g.fillStyle = 'rgba(0,0,0,.6)'; g.beginPath(); g.arc(x, y, 4.5, 0, 7); g.fill(); g.fillStyle = 'rgba(255,255,255,.12)'; g.beginPath(); g.arc(x + 1, y + 1.5, 4.5, 0, 3.2); g.fill(); }
-  for (let i = 0; i < 46; i++) { const x = r() * S, w = 1 + r() * 6, h = 40 + r() * 280, y = r() * S, gr = g.createLinearGradient(0, y, 0, y + h); gr.addColorStop(0, 'rgba(0,0,0,.26)'); gr.addColorStop(1, 'rgba(0,0,0,0)'); g.fillStyle = gr; g.fillRect(x, y, w, h); g.fillRect(x, y - S, w, h); }
   const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.wrapS = t.wrapT = THREE.RepeatWrapping; t.anisotropy = 8; return t;
 }
 const CONC_TEX = concreteTexture(1966);
 function concrete(tone = 0x3c3c3e, { scale = 14, fog = true, ao = 18 } = {}) {
-  const m = new THREE.MeshStandardMaterial({ color: tone, roughness: 0.94, metalness: 0, fog });
+  const m = new THREE.MeshStandardMaterial({ color: tone, roughness: 0.88, metalness: 0, fog });
   m.onBeforeCompile = sh => {
     sh.uniforms.cTex = { value: CONC_TEX }; sh.uniforms.cScale = { value: 1 / scale }; sh.uniforms.cAo = { value: ao };
     sh.vertexShader = 'varying vec3 vWP; varying vec3 vWN;\n' + sh.vertexShader.replace('#include <worldpos_vertex>', `#include <worldpos_vertex>
@@ -124,7 +138,7 @@ function concrete(tone = 0x3c3c3e, { scale = 14, fog = true, ao = 18 } = {}) {
   m.customProgramCacheKey = () => 'concrete' + scale + ao;
   return m;
 }
-const CONC = { wall: concrete(0x3c3c3e), dark: concrete(0x242426), ground: concrete(0x1d1d1f, { scale: 9 }), far: concrete(0x2a2a2c, { scale: 40, fog: false, ao: 60 }) };
+const CONC = { wall: concrete(0x3c3c3e, { scale: 30 }), dark: concrete(0x242426, { scale: 30 }), ground: concrete(0x1d1d1f, { scale: 20 }), far: concrete(0x2a2a2c, { scale: 60, fog: false, ao: 60 }) };
 
 // ---------- текстуры ----------
 function textTexture(lines, { w = 1024, h = 512, bg = '#111111', color = '#E1D9CF', label = '', accent = 0 } = {}) {
@@ -246,8 +260,8 @@ function buildTower() {
   // башня — тот же монолит: тело, глухая корона, вертикальные пилоны по краям фасада, мачта с сигнальным огнём
   const body = new THREE.Mesh(new THREE.BoxGeometry(TOWER.w, TOWER.h, TOWER.d), CONC.wall); body.position.y = TOWER.h / 2; body.castShadow = body.receiveShadow = true; scene.add(body);
   const crown = new THREE.Mesh(new THREE.BoxGeometry(TOWER.w * 0.7, 18, TOWER.d * 0.7), CONC.wall); crown.position.y = TOWER.h + 9; crown.castShadow = true; scene.add(crown);
-  const mast = new THREE.Mesh(new THREE.CylinderGeometry(0.6, 1, 40), CONC.dark); mast.position.y = TOWER.h + 38; scene.add(mast);
-  const tip = new THREE.Mesh(new THREE.SphereGeometry(1.4), new THREE.MeshBasicMaterial({ color: RED, toneMapped: false })); tip.position.y = TOWER.h + 59; scene.add(tip); fans.tip = tip;
+  
+  const tip = new THREE.Mesh(new THREE.SphereGeometry(1.4), new THREE.MeshBasicMaterial({ color: RED, toneMapped: false })); tip.position.y = TOWER.h + 59; fans.tip = tip;
   [-1, 1].forEach(s => { const p = new THREE.Mesh(new THREE.BoxGeometry(6, TOWER.h + 6, 6), CONC.wall); p.position.set(s * (TOWER.w / 2 + 1), (TOWER.h + 6) / 2, TOWER.d / 2 - 1); p.castShadow = p.receiveShadow = true; scene.add(p); });
   const cap = new THREE.Mesh(new THREE.BoxGeometry(TOWER.w + 8, 4, TOWER.d + 6), CONC.wall); cap.position.y = TOWER.h + 2; cap.castShadow = true; scene.add(cap);
 
@@ -269,7 +283,7 @@ function buildTower() {
     d.rotateX(Math.PI / 2); d.updateMatrix(); hubs.setMatrixAt(i, d.matrix);
     fans.list.push({ pos, rot, phase: rand() * 6 });
   });
-  scene.add(housing, hubs, blades);
+  // вентиляторы убраны из кадра: башня — чистый монолит
   fans.blades = blades; fans.housing = housing;
 
   // поток воздуха из вентиляторов
@@ -277,7 +291,7 @@ function buildTower() {
   for (let i = 0; i < N; i++) { const f = fans.list[i % fans.list.length]; fans.air.seeds.push({ f, t: rand(), spread: new THREE.Vector2(rand() - .5, rand() - .5) }); }
   g.setAttribute('position', new THREE.BufferAttribute(p, 3));
   const pts = new THREE.Points(g, new THREE.PointsMaterial({ color: CREAM, size: 0.5, transparent: true, opacity: 0, depthWrite: false, blending: THREE.AdditiveBlending }));
-  scene.add(pts); fans.air.mat = pts.material; fans.air.pts = pts;
+  fans.air.mat = pts.material; fans.air.pts = pts;
 }
 const dmy = new THREE.Object3D(), fwd = new THREE.Vector3();
 function updateFans(dt, power) {
@@ -825,21 +839,6 @@ function buildAsia() {
   }
   towers.forEach(t => brutalBlock(t, r, Math.abs(t.x) < 80));
   ASIA_FX.towers = towers;
-  // пагода: девять бетонных ярусов, у каждого — тонкая плита-кровля с выносом; тени от выносов дают ритм
-  const pg = { x: -96, z: 262 };
-  for (let i = 0, y = 0; i < 9; i++) { const sz = 26 - i * 2.1, h = 13 - i * 0.6;
-    BR.boxes.push([pg.x, y + h / 2, pg.z, sz, h, sz], [pg.x, y + h + 0.5, pg.z, sz + 8, 1, sz + 8]);
-    y += h + 1; }
-  BR.boxes.push([pg.x, 125, pg.z, 1.2, 14, 1.2]);
-  // тории поперёк улицы: столбы за коридором камеры, кровля с загнутыми концами — всё из того же бетона
-  [184, 262, 322].forEach(z => {
-    const g = new THREE.Group(); g.position.set(-1, 0, z); scene.add(g);
-    const add = m => { m.castShadow = m.receiveShadow = true; g.add(m); return m; };
-    [-25, 23].forEach(x => add(new THREE.Mesh(new THREE.CylinderGeometry(1.3, 1.6, 27, 20), CONC.wall)).position.set(x, 13.5, 0));
-    const cv = new THREE.CatmullRomCurve3([V(-32, 30.5, 0), V(-20, 28.4, 0), V(0, 27.8, 0), V(20, 28.4, 0), V(30, 30.5, 0)]);
-    add(new THREE.Mesh(new THREE.TubeGeometry(cv, 48, 1.3, 12), CONC.wall));
-    add(new THREE.Mesh(new THREE.BoxGeometry(56, 1.6, 1.6), CONC.wall)).position.set(-1, 22.6, 0);
-  });
 }
 function updateAsia(time) {
   if (!ASIA_FX.sun) return;
@@ -1267,11 +1266,11 @@ const MORE = {
 const STORIES = WORLD.map(w => [w.id, w.a, w.b, w.r, w.story, [ZONES[w.zone].more, ...(w.also || [])].filter(Boolean), w.orbit]);
 STORIES.forEach(([id, a, b, r, side, more, orbitBtn]) => {
   const c = CASES[id], el = document.createElement('section'), w = WORLD.find(w => w.id === id);
-  if (w.moment) {
-    // у момента вместо окна — титр: заходит после пролёта камеры, всё остальное в «кейс целиком»
+  if (true) {
+    // у каждого кейса вместо окна — титр во весь экран: заходит после пролёта камеры, всё остальное в «кейс целиком»
     const res = c.result.filter(x => x[0] !== '—')[0];
     el.className = 'ov left flex'; el.dataset.a = w.p - w.span * 0.12; el.dataset.b = b; el.dataset.f = 0.004; el.dataset.route = r;
-    el.innerHTML = `<span class="t">${r === 'btl' ? '{04} btl' : '{05} atl'} · ${c.pass.клиент}</span><h2>${c.title}</h2><p class="idea">${c.idea}</p>
+    el.innerHTML = `<span class="t">${c.pass.клиент}</span><h2>${c.title}</h2><p class="idea">${c.idea}</p>
       ${res ? `<div class="hit"><b>${res[0]}</b><span class="t">${res[1]}</span></div>` : ''}<button class="btn" data-case="${id}">кейс целиком</button>`;
     return document.body.insertBefore(el, document.getElementById('orbitUi'));
   }
@@ -1301,10 +1300,8 @@ function updateOverlay(p) {
     o.el.style.opacity = op; o.el.classList.toggle('on', op > 0.5);
     o.el.style.translate = `0 ${(1 - op) * 18}px`;
   });
-  hudPct.textContent = String(Math.round(p * 100)).padStart(3, '0');
-  hudStage.textContent = STAGES.filter(s => p >= s[0] && (!s[2] || s[2] === route)).pop()[1];
   routeBtn.style.display = route ? '' : 'none'; routeBtn.textContent = `маршрут: ${route} · сменить ↺`;
-  micro.classList.toggle('dim', ovs.some(o => o.el.classList.contains('right') && o.el.classList.contains('panel') && o.el.classList.contains('on')));
+  micro?.classList.toggle('dim', ovs.some(o => o.el.classList.contains('right') && o.el.classList.contains('panel') && o.el.classList.contains('on')));
 }
 const modal = document.getElementById('modal'), modalBody = document.getElementById('modalBody');
 const openModal = html => { modalBody.innerHTML = html; modal.classList.add('on'); modal.scrollTop = 0; };
@@ -1365,14 +1362,14 @@ const jumpTo = (p, r) => {
   setTimeout(() => { scrollTo(0, t * max); pSm = t; curtain.className = 'out'; }, 380);
 };
 const WORD_OF = p => (INDEX.filter(s => Math.abs(s[2] - p) < 1e-6)[0] || [, ''])[1];
-micro.addEventListener('click', e => { const d = e.target.closest('[data-j]'); if (!d) return; e.preventDefault(); jumpTo(+d.dataset.j, d.dataset.r || null); });
+micro?.addEventListener('click', e => { const d = e.target.closest('[data-j]'); if (!d) return; e.preventDefault(); jumpTo(+d.dataset.j, d.dataset.r || null); });
 let lastStage = '', sqT = 0, frameN = 0;
 function hud2d(p, time) {
   frameN++;
   const cur = INDEX.filter(s => p >= s[2] && (!s[3] || s[3] === route)).pop();
   const stop = route && p > FORK && p < 0.93 ? WORLD.filter(w => w.r === route && p >= w.a).pop() : null, moreKey = stop && ZONES[stop.zone].more;
   const html = INDEX.filter(s => !s[3] || !route || s[3] === route).map(s => `<div class="${s === cur ? 'on' : ''}" data-j="${s[2]}"${s[3] ? ` data-r="${s[3]}"` : ''}>${s[0]} ${s[1]}${s === cur ? ' ←' : ''}</div>`).join('') + (moreKey ? `<div style="margin-top:8px;pointer-events:auto"><a href="#" data-more="${moreKey}" style="color:var(--cream)">${MORE[moreKey].t} →</a></div>` : '');
-  if (html !== micro._h) { micro.innerHTML = html; micro._h = html; }
+  if (micro && html !== micro._h) { micro.innerHTML = html; micro._h = html; }
   if (cur && cur[1] !== lastStage) {
     lastStage = cur[1];
   }
@@ -1459,9 +1456,7 @@ function frame() {
   logo.mat.color.copy(LOGO_DARK).lerp(ISK_RED, landed);
   iskra.material.color.copy(ISK_RED).lerp(ISK_BLACK, landed);
   logo.glow.intensity = 420;   // ровный тёплый свет на вывеску, без мигания
-  fans.tip.visible = Math.sin(time * 3) > 0;
   fans.air.pts.visible = false;   // поток воздуха нужен только у башни
-  updateFans(dt, landed);
 
   updateWebtoon(time);
   updateWorld(time);

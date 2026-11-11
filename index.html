@@ -135,7 +135,6 @@ body.qview .ov,body.qview #orbitUi,body.qview #wipe{display:none!important}
 <body>
 <div id="loader"><div class="halo"></div><div class="spark"><img src="assets/iskra.svg" alt=""></div><span class="t pct" id="ldPct">000</span></div>
 <canvas id="gl"></canvas>
-<div id="micro" class="t"></div>
 <div id="curtain"><b id="curtainWord"></b></div>
 
 <header>
@@ -144,9 +143,7 @@ body.qview .ov,body.qview #orbitUi,body.qview #wipe{display:none!important}
     <a href="#" data-go="btl">btl</a><a href="#" data-go="atl">atl</a><a href="#" data-go="awards">награды</a><a href="#" data-modal="jobs">вакансии</a><a href="#" data-go="brief">контакты</a><a href="#" class="cta" data-go="brief">есть задача</a>
   </nav>
 </header>
-<div class="hud bl t" id="hudStage">{00} вход</div>
-<button class="hud t" id="routeBtn" data-go="cross" style="display:none;left:28px;bottom:44px;pointer-events:auto;background:none;border:0;cursor:pointer;text-decoration:underline"></button>
-<div class="hud br t"><span id="hudPct">000</span>% · 20_26</div>
+<button class="hud t" id="routeBtn" data-go="cross" style="display:none;left:28px;bottom:24px;pointer-events:auto;background:none;border:0;cursor:pointer;text-decoration:underline"></button>
 
 <!-- текст живёт в HTML: его видят поисковики и нейросети, 3D только иллюстрирует -->
 <section class="ov left" data-a="0" data-b="0.05">
@@ -158,29 +155,26 @@ body.qview .ov,body.qview #orbitUi,body.qview #wipe{display:none!important}
 </section>
 
 <section class="ov right" data-a="0.12" data-b="0.27">
-  <span class="t">{01} как работаем</span>
   <p class="lead" style="margin-top:12px">берём на себя скучное<br>и возвращаем интересное</p>
   <p style="margin-top:10px;max-width:40ch">провести концепцию через сорок носителей, три подрядчика и два круга правок, не растеряв драйв, — в этом мы так же устойчивы, как в креативе</p>
   <p class="lead" style="margin-top:18px">раскручиваем то, что в брифе<br>только намечалось</p>
 </section>
 
 <section class="ov left" data-a="0.36" data-b="0.43">
-  <span class="t">{01} как работаем</span>
   <p class="lead" style="margin-top:12px">вам есть что показать —<br>мы делаем так, чтобы это заметили</p>
   <p style="margin-top:10px;max-width:40ch">после этого рекламу перестают терпеть и начинают пересматривать</p>
 </section>
 
 <section class="ov right panel" data-a="0.45" data-b="0.51">
-  <span class="t">{02} шоурил</span>
   <h2>фильм бренда</h2>
   <p>фильм бренда на экране главной башни. по клику — окно с видео и звуком</p>
   <button class="btn" data-modal="reel">смотреть ▶</button>
 </section>
 
 <section class="ov" id="fork" data-a="0.535" data-b="0.62">
-  <div class="ask"><span class="t">{03} перекрёсток</span><h2>с чем пришли?</h2><p class="t" style="margin-top:6px">выберите маршрут: наверх или вниз — дальше скролл пойдёт по нему</p></div>
-  <button data-go="atl" class="up"><span class="t">{05} эфир · над городом ↑</span><b>atl</b><p>кампании, которые продолжаются без нас: вселенные, бренд-платформы, сезонные рамки и ai-продакшн</p></button>
-  <button data-go="btl"><span class="t">{04} проспект · на земле ↓</span><b>btl</b><p>гости приходят зрителями — и становятся участниками: фестивали, гонки, марафоны, промо</p></button>
+  <div class="ask"><h2>с чем пришли?</h2><p class="t" style="margin-top:6px">выберите маршрут: наверх или вниз — дальше скролл пойдёт по нему</p></div>
+  <button data-go="atl" class="up"><b>atl</b><p>кампании, которые продолжаются без нас: вселенные, бренд-платформы, сезонные рамки и ai-продакшн</p></button>
+  <button data-go="btl"><b>btl</b><p>гости приходят зрителями — и становятся участниками: фестивали, гонки, марафоны, промо</p></button>
 </section>
 
 
@@ -198,7 +192,6 @@ body.qview .ov,body.qview #orbitUi,body.qview #wipe{display:none!important}
 
 
 <section class="ov right panel" data-a="0.935" data-b="0.965">
-  <span class="t">{06} награды</span>
   <h2>оценили не только клиенты</h2>
   <div class="list">
     <button data-case="treschnutye"><span>треснутые · дикси</span><span class="t">silver ×2 · bronze ×3</span></button>
@@ -215,7 +208,6 @@ body.qview .ov,body.qview #orbitUi,body.qview #wipe{display:none!important}
 
 
 <section class="ov right panel" data-a="0.982" data-b="1.01" id="brief" style="width:min(460px,calc(100vw - 32px))">
-  <span class="t">{07} бриф · горит? раздуем</span>
   <h2>с чем вы приходите?</h2>
   <form id="briefForm" onsubmit="event.preventDefault();this.innerHTML='<p>прототип: данные никуда не отправлены</p>'">
     <select id="briefDir"><option value="">выберите задачу</option><option value="atl">нужна кампания к запуску</option><option value="tender">скоро тендер</option><option value="btl">нужно мероприятие или промо</option><option value="audience">хотим выйти на новую аудиторию</option><option value="special">нужен спецпроект</option></select>
@@ -234,7 +226,6 @@ body.qview .ov,body.qview #orbitUi,body.qview #wipe{display:none!important}
 
 <div id="orbitUi">
   <div class="panel">
-    <span class="t">{04} btl · кейс</span>
     <h2 style="font-weight:520;font-size:40px;line-height:1;margin:8px 0 10px">ozon corp</h2>
     <p>бренд-зона ozon на фестивале vk. крутите мышью или пальцем, колесо — ближе и дальше</p>
     <p class="t" style="margin-top:10px">модель собрана Higgsfield по рендеру из презентации. в рабочей версии — экспорт из исходника визуализации</p>
