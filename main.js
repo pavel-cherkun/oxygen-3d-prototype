@@ -62,14 +62,41 @@ bloom.enabled = false;   // без ореолов и засветов   // по�
 composer.addPass(bloom);
 composer.addPass(new OutputPass());
 // плёнка как на рефе: зерно и уход низа кадра в черноту
-const grain = new ShaderPass({ uniforms: { tDiffuse: { value: null }, t: { value: 0 }, px: { value: new THREE.Vector2(1 / innerWidth, 1 / innerHeight) } },
+const grain = new ShaderPass({ uniforms: { tDiffuse: { value: null }, t: { value: 0 }, fin: { value: 0 }, px: { value: new THREE.Vector2(1 / innerWidth, 1 / innerHeight) } },
   vertexShader: 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
-  fragmentShader: `uniform sampler2D tDiffuse; uniform float t; uniform vec2 px; varying vec2 vUv;
+  fragmentShader: `uniform sampler2D tDiffuse; uniform float t; uniform float fin; uniform vec2 px; varying vec2 vUv;
+    float lum(vec2 u){ return dot(texture2D(tDiffuse, u).rgb, vec3(0.299, 0.587, 0.114)); }
+    float bayer(vec2 p){ vec2 q = mod(floor(p), 4.0); float m[16]; m[0]=0.;m[1]=8.;m[2]=2.;m[3]=10.;m[4]=12.;m[5]=4.;m[6]=14.;m[7]=6.;m[8]=3.;m[9]=11.;m[10]=1.;m[11]=9.;m[12]=15.;m[13]=7.;m[14]=13.;m[15]=5.; int i = int(q.y * 4.0 + q.x); float v = 0.; for (int k = 0; k < 16; k++) if (k == i) v = m[k]; return (v + 0.5) / 16.0; }
     float h(vec2 p){ return fract(sin(dot(p, vec2(12.9898, 78.233)) + t) * 43758.5453); }
     void main(){ vec4 c = texture2D(tDiffuse, vUv);
       vec3 bl = (texture2D(tDiffuse, vUv + vec2(px.x, 0.0)).rgb + texture2D(tDiffuse, vUv - vec2(px.x, 0.0)).rgb + texture2D(tDiffuse, vUv + vec2(0.0, px.y)).rgb + texture2D(tDiffuse, vUv - vec2(0.0, px.y)).rgb) * 0.25;
       c.rgb = clamp(c.rgb + (c.rgb - bl) * 0.45, 0.0, 1.0);   // лёгкая резкость: строгие грани
-      c.rgb += (h(vUv * 1371.0) - 0.5) * 0.03; gl_FragColor = c; }` });
+      c.rgb += (h(vUv * 1371.0) - 0.5) * 0.03;
+      // финал «сигнал»: 1) полутоновый растр, растущие точки, красные бренд-пиксели в полутонах;
+      // 2) срыв сигнала — строки рвутся и сдвигаются, каналы расходятся, проступают белые контуры граней;
+      // 3) свет стекает вниз потёками (как сортировка пикселей) и всё уходит в белый проём
+      if (fin > 0.0) {
+        float A = smoothstep(0.0, 0.35, fin), B = smoothstep(0.3, 0.7, fin), C = smoothstep(0.62, 1.0, fin);
+        float tick = floor(t * 14.0), row = floor(vUv.y * 70.0);
+        float tear = step(0.8, h(vec2(row, tick))) * (h(vec2(row + 7.0, tick)) - 0.5) * 0.3 * B;
+        vec2 u = vUv + vec2(tear, 0.0);
+        vec3 col = vec3(texture2D(tDiffuse, u + vec2(0.006 * B, 0.0)).r, texture2D(tDiffuse, u).g, texture2D(tDiffuse, u - vec2(0.006 * B, 0.0)).b);
+        vec3 mx = col;
+        for (int k = 1; k < 28; k++) { vec3 sm = texture2D(tDiffuse, u + vec2(0.0, float(k) * px.y * 9.0 * C)).rgb; mx = max(mx, sm * (1.0 - float(k) / 28.0)); }
+        col = mix(col, mx, C);
+        float cs = mix(3.0, 7.0, A), cpx = cs;
+        vec2 g = vUv / px / cpx, cc = (floor(g) + 0.5) * cpx * px;
+        float L = dot(mix(texture2D(tDiffuse, cc).rgb, mx, C), vec3(0.299, 0.587, 0.114));
+        float dotv = step(length(fract(g) - 0.5), sqrt(L) * 0.72);
+        vec3 ht = vec3(dotv);
+        ht = mix(ht, vec3(0.957, 0.027, 0.035), step(0.18, L) * step(L, 0.42) * dotv);
+        col = mix(col, ht, A * (1.0 - 0.5 * C));
+        float gx = lum(u + vec2(px.x, 0.)) - lum(u - vec2(px.x, 0.)), gy = lum(u + vec2(0., px.y)) - lum(u - vec2(0., px.y));
+        col = max(col, vec3(smoothstep(0.05, 0.16, length(vec2(gx, gy)))) * B);
+        col = mix(col, vec3(1.0), smoothstep(0.92, 1.0, fin) * smoothstep(0.55, 0.9, lum(vUv)));   // проём вспыхивает белым
+        c.rgb = col;
+      }
+gl_FragColor = c; }` });
 composer.addPass(grain);
 
 import('three/addons/environments/RoomEnvironment.js').then(({ RoomEnvironment }) => {
@@ -227,7 +254,7 @@ const CASE_IMGS = ['ozon-fandom-kv-1', 'ozon-fandom-real-1', 'ozon-fandom-real-2
 // пояса-козырьки и рёбра-пилоны на фасадах к улице режут ключевой свет на полосы. все коробки собираются в BR и в конце
 // раскладываются по кускам улицы (flushBrutal): кусок рисуется, только пока он ближе границы темноты
 const TOWER = { w: 80, h: 260, d: 40 };
-const BR = { boxes: [], lit: [], rays: [], chunks: [], CH: 140 };
+const BR = { boxes: [], lit: [], rays: [], frames: [], chunks: [], CH: 140 };
 // запечённые в Blender куски: матовые коробки этого куска рисуются одной сеткой с картами рассеянного света и AO (Cycles)
 const BAKED = {};   // пробный запечённый кусок (assets/bake) отключён: на чёрном бетоне разница почти не видна
 // чёрные монументальные объёмы по доске «blach arch»: монолит, стопка плит со скруткой, консоль над улицей,
@@ -239,6 +266,9 @@ function brutalBlock(c, r) {
   brutalForm(c, r);
   for (let i = n0; i < BR.boxes.length; i++) BR.boxes[i][7] = glass ? 1 : 0;
   const side = Math.sign(c.x) || 1, fx = c.x - side * c.w / 2;
+  if (!glass && BR.boxes.length - n0 === 1 && Math.abs(c.x) < 160 && r() < 0.32) {   // кадр кейса врезан в грань монолита: без рамки, как проём
+    const fw = c.d * 0.78, fh = fw * 0.5625; BR.frames.push([fx - side * 0.06, Math.min(c.h * 0.42, 40) + fh / 2, c.z, fw, fh, side, BR.frames.length]); return;
+  }
   if (!glass && BR.boxes.length - n0 === 1 && Math.abs(c.x) < 200 && r() < 0.7) {
     const k = 1 + (r() * 3 | 0);
     for (let i = 0; i < k; i++) { const zz = c.z + (i - (k - 1) / 2) * c.d / (k + 1) * 1.6, hh = c.h * (0.45 + r() * 0.4), wd = 0.7 + r() * 0.6;
@@ -297,6 +327,10 @@ function flushBrutal() {
     if (l.length) { const lm = new THREE.InstancedMesh(plane, litM, l.length); l.forEach(([x, y, z, w, h, s], i) => { d.position.set(x, y, z); d.rotation.set(0, -s * Math.PI / 2, 0); d.scale.set(w, h, 1); d.updateMatrix(); lm.setMatrixAt(i, d.matrix); }); lm.computeBoundingSphere(); g.add(lm); }
     if (r.length) { const rm = new THREE.InstancedMesh(plane, rayM, r.length); r.forEach(([fx, z, len, wd, s], i) => { d.position.set(fx - s * len / 2, 0.14, z); d.rotation.set(-Math.PI / 2, 0, s * Math.PI / 2); d.scale.set(wd, len, 1); d.updateMatrix(); rm.setMatrixAt(i, d.matrix); }); rm.computeBoundingSphere(); g.add(rm); }
     if (BAKED[k]) loadBaked(BAKED[k], g);
+    BR.frames.filter(f => key(f[2]) === k).forEach(([x, y, z, w, h, s, i]) => {
+      const m = new THREE.Mesh(new THREE.PlaneGeometry(w, h), new THREE.MeshBasicMaterial({ map: caseTexture(CASE_IMGS[i % CASE_IMGS.length], false, 1024, 576), toneMapped: false }));
+      m.material.color.setScalar(0.92); m.position.set(x, y, z); m.rotation.y = -s * Math.PI / 2; g.add(m);
+    });
     BR.chunks.push({ g, z0: k * BR.CH, z1: (k + 1) * BR.CH });
   }
 }
@@ -1235,7 +1269,28 @@ const PHM = {}, phMat = id => PHM[id] ||= new THREE.MeshStandardMaterial({ color
 // а число источников в сцене не меняется (шейдеры не пересобираются)
 const GLOW = { pts: [], pool: [] };
 function placeholder(w) {
-  const cube = (sx, sy, sz, x, y, z, ry = 0) => { w.cube = { c: V(x, y, z), h: sy, w: Math.max(sx, sz) }; const m = new THREE.Mesh(new THREE.BoxGeometry(sx, sy, sz), phMat(w.id)); m.position.set(x, y, z); m.rotation.y = ry; m.castShadow = m.receiveShadow = true; m.userData.case = w.id; scene.add(m); clickable.push(m); return solid(m); };
+  // куб кейса — стопка из шести плит цвета бренда; на подлёте плиты расходятся по высоте и разъезжаются в стороны,
+  // как ящики, а внутри проявляется кадр кейса (см. updateCubes)
+  const cube = (sx, sy, sz, x, y, z, ry = 0) => {
+    w.cube = { c: V(x, y, z), h: sy, w: Math.max(sx, sz) };
+    const g = new THREE.Group(); g.position.set(x, y, z); g.rotation.y = ry; g.userData.case = w.id; scene.add(g);
+    const n = 6, mat = phMat(w.id), along = sx >= sz ? 'x' : 'z', span = Math.max(sx, sz), sl = [];
+    const ax = along === 'x' ? V(Math.cos(ry), 0, -Math.sin(ry)) : V(Math.sin(ry), 0, Math.cos(ry)), away = Math.sign(ax.x * x || ax.z) || 1;   // плиты едут от оси улицы
+    for (let i = 0; i < n; i++) {
+      const m = new THREE.Mesh(new THREE.BoxGeometry(sx, sy / n * 0.985, sz), mat); m.position.y = -sy / 2 + sy / n * (i + 0.5);
+      m.castShadow = m.receiveShadow = true; m.userData.case = w.id; g.add(m); clickable.push(m); sl.push({ m, y0: m.position.y, k: i - (n - 1) / 2, dir: away * (i % 2 ? 1.1 : 0.25) });   // плиты уезжают от улицы, не на камеру
+    }
+    const air = w.r === 'atl', cam = air ? V(0, y + 6, z - 46) : V(x + 22, 6, z - 34), img = (w.imgs && w.imgs[0]) || w.img;
+    let face = null;
+    if (img) {
+      const fw = span * 0.92, fh = Math.min(fw * 0.625, sy * 1.25);
+      face = new THREE.Mesh(new THREE.PlaneGeometry(fw, fh), new THREE.MeshBasicMaterial({ map: caseTexture(`assets/cases/${img}.jpg`, false, 1024, 640), toneMapped: false, transparent: true, opacity: 0 }));
+      g.add(face); g.updateMatrixWorld(true); face.lookAt(cam); face.userData.case = w.id; clickable.push(face);
+    }
+    CUBES.push({ g, sl, face, along, span, sy });
+    const ex = span * 0.5, bb = new THREE.Mesh(new THREE.BoxGeometry(sx + (along === 'x' ? ex : 0), sy * 1.5, sz + (along === 'z' ? ex : 0)));
+    bb.position.copy(g.position).addScaledVector(ax, away * ex / 2); bb.rotation.y = ry; return solid(bb);
+  };
   const onRock = w.kind === 'screen' && (w.zone === 'city' || w.zone === 'arena');
   if (onRock) {   // баннер на скале: вместо башни — скальный массив, плита кейса висит на его грани к улице
     const sd = Math.sign(w.tower.x);
@@ -1262,7 +1317,17 @@ function buildWorld() {
   for (let i = 0; i < 4; i++) { const l = new THREE.PointLight(RED, 0, 60, 1.6); scene.add(l); GLOW.pool.push(l); }
   buildAsia();
 }
+const CUBES = [];
+function updateCubes() {
+  for (const q of CUBES) {
+    const t = clamp01((150 - q.g.position.distanceTo(camera.position)) / 70), I = t * t * (3 - 2 * t);
+    if (I === 0 && q.I === 0) continue; q.I = I;
+    q.sl.forEach(s => { s.m.position.y = s.y0 + s.k * I * q.sy * 0.16; s.m.position[q.along] = s.dir * I * q.span * 0.46; });
+    if (q.face) { q.face.material.opacity = clamp01((I - 0.35) / 0.4); q.face.visible = I > 0.3; }
+  }
+}
 function updateGlow() {
+  updateCubes();
   const near = GLOW.pts.map(p => [p, p.distanceTo(camera.position)]).sort((a, b) => a[1] - b[1]);
   GLOW.pool.forEach((l, i) => { const [p, d] = near[i]; l.position.copy(p); l.color.copy(p.col); l.intensity = 160 * clamp01((260 - d) / 120); });
 }
@@ -1359,9 +1424,9 @@ function buildTimeline() {
     { p: 0.585, pos: V(0, 14, 120), look: V(0, 16, 210) },                      // развилка
   ];
   const tail = [
-    { p: 0.94, pos: V(0, 12, TAIL.awards - 40), look: V(0, 22, TAIL.awards + 60) },
-    { p: 0.975, pos: V(0, 20, TAIL.brief - 150), look: V(0, 50, TAIL.brief + 50) },
-    { p: 1.00, pos: V(0, 34, TAIL.brief - 70), look: V(0, 58, TAIL.brief + 50) },   // финал: светлый проём в чёрной стене
+    { p: 0.94, pos: V(26, 110, TAIL.awards - 190), look: V(0, 30, TAIL.brief) },            // финал: взлёт над городом — шейдер разбирает живой город, а не пустую стену
+    { p: 0.972, pos: V(0, 70, TAIL.brief - 230), look: V(0, 60, TAIL.brief + 50) },
+    { p: 1.00, pos: V(0, 40, TAIL.brief - 80), look: V(0, 58, TAIL.brief + 50) },         // светлый проём в чёрной стене
   ];
   // остановка: подлёт (a) и посадка (b), куб — в правой трети, взгляд смещён к левому краю кадра (+x при взгляде вдоль +z)
   const stop = w => {
@@ -1619,7 +1684,7 @@ function frame() {
   if (promo.v && !promo.started && pSm > 0.3) { promo.started = true; promo.v.play().catch(() => addEventListener('pointerdown', () => promo.v.play(), { once: true })); }
   hud2d(pSm, time);
   updateOverlay(pSm);
-  CITY.sky.position.copy(camera.position); grain.uniforms.t.value = time % 100;
+  CITY.sky.position.copy(camera.position); grain.uniforms.t.value = time % 100; grain.uniforms.fin.value = clamp01((pSm - 0.928) / 0.068);
   renderer.shadowMap.needsUpdate = true; composer.render();
   requestAnimationFrame(frame);
 }
