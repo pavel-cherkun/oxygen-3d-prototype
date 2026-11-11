@@ -28,9 +28,9 @@ renderer.toneMapping = THREE.ACESFilmicToneMapping;
 renderer.toneMappingExposure = 1.12;
 
 const scene = new THREE.Scene();
-scene.fog = new THREE.FogExp2(0x1a1f2e, 0.0026);
-scene.background = skyTexture();
-const camera = new THREE.PerspectiveCamera(50, innerWidth / innerHeight, 0.5, 2500);
+scene.background = new THREE.Color(0x020203);   // мегаструктура: вне света — пустота, никакого неба и тумана
+renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+const camera = new THREE.PerspectiveCamera(50, innerWidth / innerHeight, 0.5, 1400);
 
 const composer = new EffectComposer(renderer);
 composer.addPass(new RenderPass(scene, camera));
@@ -45,8 +45,7 @@ import('three/addons/environments/RoomEnvironment.js').then(({ RoomEnvironment }
   set(MAT.cream, 0.5); set(MAT.gloss, 0.6); set(MAT.glass, 0.8); set(MAT.glassO, 0.8);
   const later = () => { if (!logo.mat || !iskra) return setTimeout(later, 200); set(logo.mat, 0.45); set(iskra.material, 0.5); }; later();
 });
-scene.add(new THREE.HemisphereLight(0x8a5060, 0x1a0a0c, 0.95));
-const moon = new THREE.DirectionalLight(0x8090c0, 0.7); moon.position.set(-200, 400, 300); scene.add(moon);
+const hemi = new THREE.HemisphereLight(0x9aa0b0, 0x1a1612, 0); scene.add(hemi);   // общий свет почти ноль: видно только то, что освещено
 
 function skyTexture() {
   const c = document.createElement('canvas'); c.width = 4; c.height = 256;
@@ -105,7 +104,22 @@ function textTexture(lines, { w = 1024, h = 512, bg = '#111111', color = '#E1D9C
   const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; return t;
 }
 
+const LOAD = { loaded: 0, total: 0 };
+THREE.DefaultLoadingManager.onProgress = (u, l, t) => { LOAD.loaded = l; LOAD.total = t; const el = document.getElementById('loadPct'); if (el) el.textContent = String(Math.round(100 * l / Math.max(1, t))).padStart(3, '0'); };
 const texLoader = new THREE.TextureLoader();
+// ---------- бетон мегаструктуры: бесшовная опалубка 16×16 м (assets/concrete, сгенерирована процедурно) ----------
+const CONC = (() => {
+  const ld = u => { const t = texLoader.load(u); t.wrapS = t.wrapT = THREE.RepeatWrapping; t.anisotropy = 8; return t; };
+  const map = ld('assets/concrete/albedo.jpg'); map.colorSpace = THREE.SRGBColorSpace;
+  return new THREE.MeshStandardMaterial({ map, normalMap: ld('assets/concrete/normal.jpg'), roughnessMap: ld('assets/concrete/rough.jpg'), color: 0xa09d98, normalScale: new THREE.Vector2(1.4, 1.4) });
+})();
+const CONC_FLOOR = CONC.clone(); CONC_FLOOR.color.set(0x6e6c68); CONC_FLOOR.roughness = 0.62;   // пол чуть влажный: ловит блики ламп
+// коробка с UV в метрах: текстура ложится одинаково на стену в 480 м и на тумбу в 4 м
+function cgeo(w, h, d, T = 16) {
+  const g = new THREE.BoxGeometry(w, h, d), uv = g.attributes.uv, dims = [[d, h], [d, h], [w, d], [w, d], [w, h], [w, h]];
+  for (let k = 0; k < 24; k++) { const f = dims[k >> 2]; uv.setXY(k, uv.getX(k) * f[0] / T, uv.getY(k) * f[1] / T); }
+  return g;
+}
 function caseTexture(url, tint = true, W = 512, H = 320) {
   const c = document.createElement('canvas'); c.width = W; c.height = H; const g = c.getContext('2d');
   g.fillStyle = '#2a0506'; g.fillRect(0, 0, W, H);
@@ -295,15 +309,12 @@ async function buildLogo() {
   const depth = 10;
   const geo = new THREE.ExtrudeGeometry(shapes, { depth, bevelEnabled: false, curveSegments: 8 });
   geo.translate(-cx, -cy, 0);
-  logo.mat = new THREE.MeshPhysicalMaterial({ color: 0x1a0707, emissive: RED, emissiveIntensity: 0, roughness: 0.2, clearcoat: 1, clearcoatRoughness: 0.06, side: THREE.DoubleSide });
+  logo.mat = new THREE.MeshPhysicalMaterial({ color: 0x1a0707, emissive: RED, emissiveIntensity: 0, roughness: 0.75, clearcoat: 0.15, clearcoatRoughness: 0.6, side: THREE.DoubleSide });   // до посадки Искры — тусклый, пыльный
   const mesh = new THREE.Mesh(geo, logo.mat);
   logo.group = new THREE.Group(); logo.group.add(mesh);
   logo.group.scale.set(S, -S, S);
-  logo.group.position.set(0, TOWER.h - 22, TOWER.d / 2 + 0.6);
-  scene.add(logo.group);
-  // подложка, чтобы неон читался
-  const plate = new THREE.Mesh(new THREE.PlaneGeometry(TOWER.w - 2, 30), new THREE.MeshStandardMaterial({ color: 0x07070a, roughness: 0.9 }));
-  plate.position.set(0, TOWER.h - 22, TOWER.d / 2 + 0.3); scene.add(plate);
+  logo.group.position.set(0, LOGO_Y, W0 + 0.6);
+  scene.add(logo.group); mesh.castShadow = true;
 
   // Искра
   const ib = new THREE.Box2(); iskraPts.forEach(pt => ib.expandByPoint(pt));
@@ -315,10 +326,10 @@ async function buildLogo() {
   iskra = new THREE.Mesh(igeo, imat);
   iskra.userData.slotScale = S * 0.998;
   scene.add(iskra);
-  const key = new THREE.PointLight(0xffe0d0, 260, 0, 1.2); scene.add(key); iskra.userData.key = key;
+  const key = new THREE.PointLight(0xffc8a8, 0, 230, 1.25); scene.add(key); iskra.userData.key = key;   // свет самой Искры: в темноте он один
   logo.group.updateMatrixWorld(true);
   slotWorld.set(icx - cx, icy - cy, depth / 2).applyMatrix4(logo.group.matrixWorld);
-  const glow = new THREE.PointLight(0xffe8dc, 0, 260, 1.2); glow.position.copy(slotWorld).add(new THREE.Vector3(0, -14, 120)); scene.add(glow); logo.glow = glow;
+  const glow = new THREE.PointLight(0xffe8dc, 0, 260, 1.2); glow.position.copy(slotWorld).add(new THREE.Vector3(0, -14, 90)); scene.add(glow); logo.glow = glow;
 }
 
 // ---------- разделы на улице ----------
@@ -326,16 +337,16 @@ async function buildLogo() {
 const diorama = new THREE.Group();
 const clickable = [];
 // носители: плоский экран и красная рамка вокруг него
+const promo = { v: null, started: false, rim: null };
 const board = (tex, w, h, pos, ry) => { const m = new THREE.Mesh(new THREE.PlaneGeometry(w, h), new THREE.MeshBasicMaterial({ map: tex, toneMapped: false })); m.position.copy(pos); m.rotation.y = ry; scene.add(m); return m; };
-const rim = (w, h, pos, ry) => { const g = new THREE.Mesh(new THREE.PlaneGeometry(w + 1.6, h + 1.6), new THREE.MeshBasicMaterial({ color: new THREE.Color(RED).multiplyScalar(2.5), toneMapped: false })); g.position.copy(pos); g.rotation.y = ry; g.translateZ(-0.05); scene.add(g); };
-const promo = { v: null, started: false };
+const rim = (w, h, pos, ry) => { const g = promo.rim = new THREE.Mesh(new THREE.PlaneGeometry(w + 1.6, h + 1.6), new THREE.MeshBasicMaterial({ color: new THREE.Color(RED).multiplyScalar(2.5), toneMapped: false })); g.position.copy(pos); g.rotation.y = ry; g.translateZ(-0.05); scene.add(g); };
 function buildSections() {
 
   // площадь: экран шоурила
   const video = Object.assign(document.createElement('video'), { src: 'assets/oxygen_promo_v2.mp4', muted: true, loop: true, playsInline: true, crossOrigin: 'anonymous', preload: 'none' });
   promo.v = video;   // шоурил качается, когда камера начинает спуск к башне, а не при открытии страницы
   const vtex = new THREE.VideoTexture(video); vtex.colorSpace = THREE.SRGBColorSpace;
-  const reelPos = V(0, 30, TOWER.d / 2 + 0.8);
+  const reelPos = V(0, 30, W0 + 0.8);
   rim(64, 36, reelPos, 0);
   const reel = board(vtex, 64, 36, reelPos, 0); reel.position.z += 0.1; reel.userData.modal = 'reel'; clickable.push(reel);
 
@@ -1061,7 +1072,7 @@ const reservedByWorld = (x, z) => inAsia(x, z) || (Math.abs(x) < 44 && z > 165 &
 
 const SOLIDS = [];   // коробки всего, что стоит у маршрута, — для проверки камеры на столкновения
 const solid = o => { o.updateMatrixWorld(true); SOLIDS.push({ box: new THREE.Box3().setFromObject(o), name: o.userData.case || o.name || '' }); return o; };
-const towerMat = (() => { const t = windowsTexture(55, 0.06); t.repeat.set(2, 4); return new THREE.MeshStandardMaterial({ color: 0x5a5c68, map: t, emissiveMap: t, emissive: 0xffffff, emissiveIntensity: 0.6, roughness: 0.7 }); })();
+const towerMat = CONC;   // башни носителей — бетонные пилоны мегаструктуры
 const heroMat = new THREE.MeshStandardMaterial({ color: 0x9a9ca6, emissive: 0x2a2a30, roughness: 0.8 });   // временный серый блок вместо героя
 
 function stand(id, imgs, pos, cam) {
@@ -1109,7 +1120,7 @@ function videoOn(m, name) {
   v.addEventListener('playing', () => { if (m.material.map?.isVideoTexture) return; const t = new THREE.VideoTexture(v); t.colorSpace = THREE.SRGBColorSpace; m.material.map = t; m.material.needsUpdate = true; }, { once: true });
   return v;
 }
-function towerBox(t, mat) { const m = new THREE.Mesh(new THREE.BoxGeometry(t.w, t.h, t.d), mat); m.position.set(t.x, t.h / 2, t.z); scene.add(m); return solid(m); }
+function towerBox(t, mat) { const m = new THREE.Mesh(mat === CONC ? cgeo(t.w, t.h, t.d) : new THREE.BoxGeometry(t.w, t.h, t.d), mat); m.position.set(t.x, t.h / 2, t.z); m.castShadow = m.receiveShadow = true; scene.add(m); return solid(m); }
 function screen(w) {
   towerBox(w.tower, w.zone === 'ai' ? MAT.matte : towerMat);
   const [sw, sh] = w.size, c = CASES[w.id];
@@ -1131,10 +1142,9 @@ function roof(w) {
 }
 function buildWorld() {
   for (const w of WORLD) w.moment ? MOMENTS[w.moment].build(w) : ({ station, vitrine, screen, roof })[w.kind](w);
-  buildAsia();
 }
 function updateWorld(time) {
-  updateMoments(time); updateAsia(time);
+  updateMoments(time);
   if (lionDance.mixer) { const dt = Math.min(0.05, time - (lionDance.t || time)); lionDance.t = time; lionDance.mixer.update(dt); }
   clips.forEach(c => { const near = c.g.position.distanceTo(camera.position) < 220; if (near && c.v.paused) c.v.play().catch(() => {}); else if (!near && !c.v.paused) c.v.pause(); });
 }
@@ -1154,6 +1164,130 @@ function checkPath() {
   return hits;
 }
 
+
+// ---------- мегаструктура ----------
+// один бесконечный бетонный объём, разрезанный переборками на камеры: в каждой камере — квартал кейсов.
+// как ограничиваем обзор без тумана (приём «первого Silent Hill» другими средствами):
+// 1) темнота вместо тумана: общий свет нулевой, видно только то, что освещено лампами, шахтами и Искрой;
+// 2) переборки с проёмами-порталами: рисуются только камера, где стоит зритель, и соседние, остальное скрыто (culling по z);
+// 3) за проёмом — светящиеся рамки всех следующих порталов (дешёвые линии, их не прячем): коридор уходит в темноту бесконечно;
+// 4) масштаб задают ориентиры: колонны во всю высоту, ярусы галерей с цепочками ламп, крошечные фигуры людей, косые световые шахты.
+const W0 = -200, LOGO_Y = 92;
+const HALL = { x: 120, h: 480, col: 100, gw: 44, gh: 140 };
+const MEGA = { gates: [], cham: [], cull: [], lamps: [], anchors: [], pool: [], shafts: [], L: -1, figs: [] };
+function megaSlab(x0, x1, y0, y1, z0, z1, mat = CONC) {
+  const m = new THREE.Mesh(cgeo(x1 - x0, y1 - y0, z1 - z0), mat); m.position.set((x0 + x1) / 2, (y0 + y1) / 2, (z0 + z1) / 2);
+  m.castShadow = m.receiveShadow = true; scene.add(m); return m;
+}
+// мягкие градиенты для «ненастоящего» света: размывка по колонне и пятно на полу
+const washTex = canvasTex(64, 256, (g, w, h) => { const gr = g.createLinearGradient(0, h, 0, 0); gr.addColorStop(0, 'rgba(255,255,255,1)'); gr.addColorStop(0.18, 'rgba(255,255,255,.45)'); gr.addColorStop(1, 'rgba(255,255,255,0)'); g.fillStyle = gr; g.fillRect(0, 0, w, h); const sg = g.createLinearGradient(0, 0, w, 0); sg.addColorStop(0, 'rgba(0,0,0,1)'); sg.addColorStop(0.25, 'rgba(0,0,0,0)'); sg.addColorStop(0.75, 'rgba(0,0,0,0)'); sg.addColorStop(1, 'rgba(0,0,0,1)'); g.globalCompositeOperation = 'destination-out'; g.fillStyle = sg; g.fillRect(0, 0, w, h); });
+function megaInst(geo, mat, list) {
+  const im = new THREE.InstancedMesh(geo, mat, list.length), d = new THREE.Object3D();
+  list.forEach((l, i) => { d.position.copy(l.p); d.rotation.set(l.rx || 0, l.ry || 0, 0); d.scale.set(l.sx || 1, l.sy || 1, l.sz || 1); d.updateMatrix(); im.setMatrixAt(i, d.matrix); im.setColorAt(i, new THREE.Color(0)); });
+  im.frustumCulled = false; im.userData.noCull = true; im.userData.list = list; scene.add(im); MEGA.lamps.push(im); return im;
+}
+const addMat = (map) => new THREE.MeshBasicMaterial({ map, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, toneMapped: false, side: THREE.DoubleSide });
+const beamMat = () => new THREE.ShaderMaterial({
+  transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide,
+  uniforms: { uK: { value: 0 }, uC: { value: new THREE.Color(0xc9d4ff) } },
+  vertexShader: 'varying float vY; varying float vF; void main(){ vY = uv.y; vec4 wp = modelMatrix * vec4(position, 1.); vec3 n = normalize(mat3(modelMatrix) * normal); vF = abs(dot(n, normalize(cameraPosition - wp.xyz))); gl_Position = projectionMatrix * viewMatrix * wp; }',
+  fragmentShader: 'uniform float uK; uniform vec3 uC; varying float vY; varying float vF; void main(){ float a = uK * pow(vF, 2.) * mix(.3, 1., vY); gl_FragColor = vec4(uC, a); }',
+});
+function buildMega() {
+  // переборки: между кварталами btl, перед наградами; первая — между залом логотипа и маршрутами
+  const btl = WORLD.filter(w => w.r === 'btl');
+  const G = [190]; for (let i = 1; i < btl.length; i++) if (btl[i].zone !== btl[i - 1].zone) G.push((btl[i].z + btl[i - 1].z) / 2);
+  G.push(Math.max(...WORLD.map(w => w.z)) + 60);
+  const END = TAIL.brief + 40; MEGA.gates = G; MEGA.end = END;
+  const bounds = [W0, ...G, END];
+  for (let i = 0; i < bounds.length - 1; i++) MEGA.cham.push([bounds[i], bounds[i + 1]]);
+  const { x: X, h: H, col: C, gw, gh } = HALL, T = 12;
+  // торцы
+  megaSlab(-X - 12, X + 12, 0, H, W0 - 14, W0); megaSlab(-X - 12, X + 12, 0, H, END, END + 14);
+  const washL = [], poolL = [], dotL = [], stripL = [], winL = [];
+  const fig = new THREE.MeshStandardMaterial({ color: 0x0c0c0d, roughness: 0.9 });
+  const figGeo = new THREE.CapsuleGeometry(0.32, 1.1, 3, 8); figGeo.translate(0, 0.87, 0);
+  MEGA.cham.forEach(([z0, z1], ci) => {
+    megaSlab(-X, X, -3, 0, z0, z1, CONC_FLOOR);                                   // пол
+    megaSlab(-X, X, H, H + 10, z0, z1);                                            // перекрытие
+    [-1, 1].forEach(s => megaSlab(s < 0 ? -X - 12 : X, s < 0 ? -X : X + 12, 0, H, z0, z1));   // стены
+    // колоннада во всю высоту + размывка света от напольных ламп по внутренней грани
+    for (let z = z0 + 22; z < z1 - 12; z += 40) [-1, 1].forEach(s => {
+      megaSlab(s * C - 5, s * C + 5, 0, H, z - 5, z + 5);
+      washL.push({ p: V(s * (C - 5.05), 34, z), ry: Math.PI / 2, sx: 10, sy: 68, z });
+      poolL.push({ p: V(s * (C - 14), 0.05, z), rx: -Math.PI / 2, sx: 30, sy: 30, z });
+    });
+    // ярусы галерей: тонкие плиты вдоль стен, перила и цепочки маленьких ламп — масштаб
+    [130, 270, 390].forEach((y, k) => [-1, 1].forEach(s => {
+      if ((ci + k) % 3 === 2 && s > 0) return;   // не на каждой стене: ритм, а не сетка
+      megaSlab(s < 0 ? -X : X - 9, s < 0 ? -X + 9 : X, y - 1.6, y, z0 + 2, z1 - 2);
+      const rail = new THREE.Mesh(new THREE.BoxGeometry(0.18, 0.18, z1 - z0 - 4), MAT.graphite); rail.position.set(s * (X - 9), y + 1.1, (z0 + z1) / 2); scene.add(rail);
+      for (let z = z0 + 8; z < z1 - 4; z += 12) dotL.push({ p: V(s * (X - 8.6), y - 2.4, z), sx: 0.7, sy: 0.35, sz: 0.7, z });
+      // фигуры людей у перил: 1,8 м на фоне стены в 480 м
+      if ((ci * 7 + k * 3) % 4 === 0) for (let n = 0; n < 2; n++) { const f = new THREE.Mesh(figGeo, fig); f.position.set(s * (X - 6 - n * 1.2), y, z0 + 30 + ((ci * 37 + k * 53 + n * 3) % Math.max(10, z1 - z0 - 60))); f.castShadow = true; scene.add(f); }
+    }));
+    // косая световая шахта: окно высоко в стене, луч через весь зал, пятно на полу (настоящий свет с тенями — пул)
+    const s = ci % 2 ? 1 : -1, zc = (z0 + z1) / 2, win = V(s * (X - 0.2), 400, zc - 30), spot = V(-s * 26, 0, zc + 26);
+    winL.push({ p: win, ry: Math.PI / 2, sx: 16, sy: 54, z: zc });
+    const dir = spot.clone().sub(win), len = dir.length();
+    const beam = new THREE.Mesh(new THREE.CylinderGeometry(9, 24, len, 4, 1, true), beamMat());
+    beam.position.copy(win).addScaledVector(dir, 0.5); beam.quaternion.setFromUnitVectors(V(0, 1, 0), dir.clone().normalize().negate()); beam.rotateY(Math.PI / 4);
+    beam.userData.noCull = true; scene.add(beam); MEGA.shafts.push({ beam, win, spot, z: zc });
+    // фигуры на полу у границ светового пятна
+    for (let n = 0; n < 3; n++) { const f = new THREE.Mesh(figGeo, fig); f.position.set(spot.x + (n - 1) * 3 + s * 8, 0, spot.z + 18 + n * 2); f.castShadow = true; scene.add(f); }
+  });
+  // переборки с порталом и рамка света по проёму; рамку видно и из дальних камер — коридор порталов в темноту
+  G.forEach(g => {
+    solid(megaSlab(-X, -gw, 0, H, g - T / 2, g + T / 2)); solid(megaSlab(gw, X, 0, H, g - T / 2, g + T / 2)); solid(megaSlab(-gw, gw, gh, H, g - T / 2, g + T / 2));
+    [[-gw + 0.3, gh / 2, 0.6, gh], [gw - 0.3, gh / 2, 0.6, gh]].forEach(([x, y, w, h]) => stripL.push({ p: V(x, y, g - T / 2 - 0.1), sx: w, sy: h, sz: 0.4, z: g }));
+    stripL.push({ p: V(0, gh - 0.3, g - T / 2 - 0.1), sx: gw * 2, sy: 0.6, sz: 0.4, z: g });
+    MEGA.anchors.push({ p: V(0, gh - 10, g - 14), k: 1.0 });
+  });
+  // торцевая стена с логотипом: ряд напольных светильников размывает свет вверх по бетону — на отлёте видно, какая она огромная
+  const endL = []; for (let x = -96; x <= 96; x += 48) { endL.push({ p: V(x, 110, W0 + 0.3), sx: 16, sy: 220, z: W0 + 1 }); poolL.push({ p: V(x, 0.05, W0 + 6), rx: -Math.PI / 2, sx: 22, sy: 14, z: W0 + 1 }); }
+  const warm = new THREE.Color(0xffb27a);
+  MEGA.wash = megaInst(new THREE.PlaneGeometry(1, 1), addMat(washTex), washL); MEGA.wash.userData.col = warm.clone().multiplyScalar(0.8);
+  MEGA.endWash = megaInst(new THREE.PlaneGeometry(1, 1), addMat(washTex), endL); MEGA.endWash.userData.col = warm.clone().multiplyScalar(0.3);
+  MEGA.pools = megaInst(new THREE.PlaneGeometry(1, 1), addMat(softDot), poolL); MEGA.pools.userData.col = warm.clone().multiplyScalar(0.35);
+  MEGA.dots = megaInst(new THREE.BoxGeometry(1, 1, 1), new THREE.MeshBasicMaterial({ toneMapped: false }), dotL); MEGA.dots.userData.col = new THREE.Color(0xffd2a0).multiplyScalar(2.2);
+  MEGA.strips = megaInst(new THREE.BoxGeometry(1, 1, 1), new THREE.MeshBasicMaterial({ toneMapped: false }), stripL); MEGA.strips.userData.col = new THREE.Color(0xfff1e0).multiplyScalar(2.6);
+  MEGA.wins = megaInst(new THREE.PlaneGeometry(1, 1), new THREE.MeshBasicMaterial({ toneMapped: false, side: THREE.DoubleSide }), winL); MEGA.wins.userData.col = new THREE.Color(0xdfe6ff).multiplyScalar(2.4);
+  // настоящий свет — пул из четырёх ламп и одной шахты с тенью; лампы садятся к ближайшим точкам у камеры, число источников постоянно (без перекомпиляции шейдеров)
+  WORLD.forEach(w => MEGA.anchors.push({ p: w.F.clone().add(V(w.F.x < 0 ? 18 : -18, 26, -16)), k: 1.25 }));
+  MEGA.anchors.push({ p: V(0, 60, W0 + 60), k: 1.4 }, { p: V(-70, 20, W0 + 120), k: 0.8 }, { p: V(70, 20, W0 + 120), k: 0.8 });
+  for (let i = 0; i < 4; i++) { const l = new THREE.PointLight(0xffc89a, 0, 170, 1); scene.add(l); MEGA.pool.push(l); }
+  const sun = new THREE.SpotLight(0xcfd8ff, 0, 0, 0.16, 0.5, 0); sun.castShadow = true; sun.shadow.mapSize.set(1024, 1024); sun.shadow.camera.near = 60; sun.shadow.camera.far = 700; sun.shadow.bias = -0.0004;
+  scene.add(sun, sun.target); MEGA.sun = sun;
+  // всё, что есть в сцене к этому моменту, кроме ламп и Искры, прячется вне соседних камер
+  scene.updateMatrixWorld(true);
+  const b = new THREE.Box3();
+  scene.traverse(o => { if (!(o.isMesh || o.isLine || o.isPoints || o.isSprite) || o.userData.noCull || o === iskra || o.parent?.userData.noCull) return; b.setFromObject(o); if (b.isEmpty()) return; MEGA.cull.push({ o, z0: b.min.z - 20, z1: b.max.z + 20 }); });
+  scene.traverse(o => { if (o.isMesh && !o.castShadow && o.material?.isMeshStandardMaterial) { o.castShadow = true; o.receiveShadow = true; } });
+}
+const chamberAt = z => { const c = MEGA.cham; for (let i = 0; i < c.length; i++) if (z < c[i][1]) return i; return c.length - 1; };
+let megaCh = -1;
+function updateMega(time, L) {
+  const cz = camera.position.z, ci = chamberAt(cz);
+  if (ci !== megaCh) {
+    megaCh = ci; const c = MEGA.cham, lo = c[Math.max(0, ci - 1)][0], hi = c[Math.min(c.length - 1, ci + 1)][1];
+    MEGA.cull.forEach(e => { e.o.visible = e.z1 >= lo && e.z0 <= hi; });
+  }
+  // включение света волной от логотипа: каждая лампа вспыхивает, мигнув, когда до неё доходит фронт
+  if (L !== MEGA.L || (L > 0 && L < 1)) {
+    MEGA.L = L; const front = L * L * (MEGA.end - W0 + 200), col = new THREE.Color();
+    MEGA.lamps.forEach(im => { const base = im.userData.col; im.userData.list.forEach((l, i) => {
+      const k = clamp01((front - (l.z - W0)) / 60), flick = k > 0 && k < 1 ? (Math.sin(time * 47 + i * 3.1) > 0.2 ? 1 : 0.15) : 1;
+      im.setColorAt(i, col.copy(base).multiplyScalar(k * flick)); }); im.instanceColor.needsUpdate = true; });
+  }
+  // лампы пула — к ближайшим точкам; яркость гаснет с расстоянием, чтобы пересадка была незаметной
+  const cp = camera.position, near = MEGA.anchors.map(a => ({ a, d: a.p.distanceTo(cp) })).sort((x, y) => x.d - y.d);
+  MEGA.pool.forEach((l, i) => { const n = near[i]; l.position.copy(n.a.p); l.intensity = 40 * n.a.k * L * clamp01((420 - n.d) / 160); });
+  // шахта с тенью — в камере зрителя
+  const sh = MEGA.shafts[ci], lamp = clamp01((MEGA.L * (MEGA.end - W0 + 200) * MEGA.L - (sh.z - W0)) / 60);
+  MEGA.sun.position.copy(sh.win); MEGA.sun.target.position.copy(sh.spot); MEGA.sun.intensity = 9 * lamp;
+  MEGA.shafts.forEach(s => { s.beam.material.uniforms.uK.value = 0.16 * clamp01((MEGA.L * MEGA.L * (MEGA.end - W0 + 200) - (s.z - W0)) / 60); });
+  hemi.intensity = 0.09 * L;
+}
 
 // ---------- атмосфера города по рефам ----------
 // небо со звёздами и красным горизонтом, красный туман слоями, дождь, мокрый асфальт с отражениями неона,
@@ -1371,17 +1505,19 @@ const FORK = 0.592;
 let CAM = {}, ISK = [], route = null;
 function buildTimeline() {
   const s = slotWorld;
+  // интро: темнота → Искра летит к торцевой стене и подсвечивает её → встаёт в тусклое лого → свет включается волной → отлёт на весь объём
   const head = [
-    { p: 0.00, pos: V(0, 430, 330), look: V(0, 400, 200) },
-    { p: 0.05, pos: V(0, 430, 330), look: V(0, 400, 200) },
-    { p: 0.17, pos: V(30, 370, 250), look: V(0, 300, 80) },
-    { p: 0.31, pos: V(6, s.y + 14, s.z + 70), look: s },
-    { p: 0.37, pos: V(0, s.y - 4, s.z + 95), look: V(0, s.y - 10, 0) },
-    { p: 0.43, pos: V(90, 220, 220), look: V(0, 170, 0) },
-    { p: 0.48, pos: V(0, 30, 112), look: V(0, 30, 20) },
-    { p: 0.502, pos: V(0, 30, 108), look: V(0, 30, 20) },
-    { p: 0.528, pos: V(0, 34, 114), look: V(0, 150, 60) },
-    { p: 0.552, pos: V(0, 24, 116), look: V(0, 95, 210) },
+    { p: 0.00, pos: V(0, LOGO_Y + 6, W0 + 250), look: V(0, LOGO_Y, W0 + 100) },
+    { p: 0.05, pos: V(0, LOGO_Y + 6, W0 + 250), look: V(0, LOGO_Y, W0 + 100) },
+    { p: 0.17, pos: V(22, LOGO_Y + 16, W0 + 150), look: V(s.x * 0.5, LOGO_Y, W0) },
+    { p: 0.31, pos: V(s.x + 8, s.y + 10, s.z + 62), look: s },
+    { p: 0.37, pos: V(0, s.y - 2, s.z + 92), look: V(0, s.y - 6, W0) },
+    { p: 0.43, pos: V(70, 250, W0 + 340), look: V(0, 150, W0) },
+    { p: 0.48, pos: V(0, 30, W0 + 92), look: V(0, 30, W0) },
+    { p: 0.502, pos: V(0, 30, W0 + 96), look: V(0, 30, W0) },
+    { p: 0.518, pos: V(0, 34, W0 + 130), look: V(-220, 60, W0 + 140) },
+    { p: 0.54, pos: V(0, 30, W0 + 190), look: V(0, 70, 190) },
+    { p: 0.56, pos: V(0, 20, 60), look: V(0, 40, 190) },
     { p: 0.572, pos: V(0, 15, 115), look: V(0, 20, 165) },
     { p: 0.585, pos: V(0, 15, 117), look: V(0, 20, 165) },
   ];
@@ -1404,9 +1540,9 @@ function buildTimeline() {
   const sl = iskra.userData.slotScale;
   const narrow = innerWidth < 760, heroY = narrow ? 412 : 398, heroK = narrow ? 2.2 : 3.2;
   ISK = [
-    { p: 0.00, pos: V(0, heroY, 230), scale: sl * heroK, spin: 0 },
-    { p: 0.05, pos: V(0, heroY, 230), scale: sl * heroK, spin: 1.2 },
-    { p: 0.19, pos: V(-14, 330, 170), scale: sl * 2.0, spin: 7 },
+    { p: 0.00, pos: V(0, LOGO_Y + heroY - 400, W0 + 150), scale: sl * heroK, spin: 0 },
+    { p: 0.05, pos: V(0, LOGO_Y + heroY - 400, W0 + 150), scale: sl * heroK, spin: 1.2 },
+    { p: 0.19, pos: V(-14, LOGO_Y + 12, W0 + 70), scale: sl * 2.0, spin: 7 },
     { p: 0.31, pos: V(s.x, s.y + 6, s.z + 26), scale: sl * 1.2, spin: 11.6 },
     { p: 0.35, pos: s.clone(), scale: sl, spin: 4 * Math.PI },
     { p: 1.00, pos: s.clone(), scale: sl, spin: 4 * Math.PI },
@@ -1620,23 +1756,22 @@ function frame() {
   if (pSm < 0.05) iskra.rotation.y = Math.sin(time * 0.8) * 0.5;
   else iskra.rotation.y = (1 - landed) * Math.sin(time * 2) * 0.6;
   iskra.position.y += (1 - landed) * Math.sin(time * 1.4) * 1.2;
-  iskra.userData.key.position.copy(iskra.position).add(new THREE.Vector3(-30, 40, 60));
-  iskra.userData.key.intensity = 260 * (1 - landed);
+  iskra.userData.key.position.copy(iskra.position).add(new THREE.Vector3(0, 0, 5));
+  iskra.userData.key.intensity = 240 * (1 - landed) * (0.92 + 0.08 * Math.sin(time * 13));   // живое мерцание огня
+  const L = clamp01((pSm - 0.345) / 0.09);   // свет мегаструктуры включается после посадки Искры
 
   // неон загорается с миганием, вентиляторы раздувают
   // после посадки свечение Искры гаснет до уровня логотипа: она становится его частью
   iskra.material.emissiveIntensity = 0.4 * (1 - landed);
   logo.mat.emissiveIntensity = landed * 1.1;
-  logo.mat.color.copy(LOGO_DARK).lerp(ISK_RED, landed);
+  logo.mat.color.copy(LOGO_DARK).lerp(ISK_RED, landed); logo.mat.roughness = 0.75 - 0.55 * landed; logo.mat.clearcoat = 0.15 + 0.85 * landed;
   iskra.material.color.copy(ISK_RED).lerp(ISK_BLACK, landed);
-  logo.glow.intensity = 420;   // ровный тёплый свет на вывеску, без мигания
-  fans.tip.visible = Math.sin(time * 3) > 0;
-  fans.air.pts.visible = pSm < 0.5;   // поток воздуха нужен только у башни
-  updateFans(dt, landed);
+  logo.glow.intensity = 300 * landed;
+  if (promo.rim) promo.rim.visible = L > 0.4;   // рамка шоурила загорается вместе со светом, не раньше
 
   updateWebtoon(time);
   updateWorld(time);
-  updateAtmosphere(time, dt);
+  updateMega(time, L);
   if (promo.v && !promo.started && pSm > 0.3) { promo.started = true; promo.v.play().catch(() => addEventListener('pointerdown', () => promo.v.play(), { once: true })); }
   hud2d(pSm, time);
   updateOverlay(pSm);
@@ -1652,11 +1787,14 @@ addEventListener('resize', () => {
 // ---------- старт ----------
 history.scrollRestoration = 'manual'; scrollTo(0, 0);
 await Promise.all([document.fonts.load('520 100px TT'), document.fonts.load('20px AP')]);
-buildCity(); buildTower(); await buildLogo(); buildSections(); buildAtmosphere(); buildTimeline();
+await buildLogo(); buildSections(); buildMega(); buildTimeline();
 window.__three = { renderer, scene, CAM, THREE, WORLD, checkPath, go: (p, r) => { route = r; scrollTo(0, p * (document.documentElement.scrollHeight - innerHeight)); pSm = p; } };   // для отладки
 if (location.search.includes('dev')) checkPath();   // для отладки производительности
 // ?at=lion:-0.3 — сразу встать на остановку кейса (для скриншотов)
 const AT = new URLSearchParams(location.search).get('at');
 if (AT) { const [id, t] = AT.split(':'), w = WORLD.find(w => w.id === id); window.__three.go(w.p + w.span * (+t || 0), w.r); }
-document.getElementById('loader').classList.add('done');
 frame();
+// прелоадер — та же Искра: пока грузятся модели и текстуры, она висит в темноте; скролл открывается, когда загружено всё
+await new Promise(res => { const t0 = performance.now(); let calm = 0;
+  const tick = () => { const done = LOAD.total === LOAD.loaded; calm = done ? calm + 1 : 0; if (calm > 3 || performance.now() - t0 > 30000) return res(); setTimeout(tick, 150); }; tick(); });
+document.getElementById('loader').classList.add('done'); document.documentElement.classList.remove('lock');

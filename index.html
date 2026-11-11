@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="ru">
+<html lang="ru" class="lock">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -54,9 +54,13 @@ body.orbit #orbitUi{display:block}
 body.orbit .ov,body.orbit .hud.tl{display:none}
 #orbitUi .panel{position:absolute;left:28px;bottom:28px;max-width:420px;pointer-events:auto}
 #orbitUi .hint{position:absolute;right:28px;bottom:28px}
-#loader{position:fixed;inset:0;z-index:10;background:var(--bg);display:flex;align-items:center;justify-content:center;flex-direction:column;gap:16px;transition:opacity .4s ease-out}
-#loader img{width:64px;animation:spin 1.6s cubic-bezier(.2,.8,.3,1) infinite}
-@keyframes spin{to{transform:rotate(360deg)}}
+/* прелоадер — изначальная Искра: висит в темноте и дышит, пока грузится мир; скролл заперт до конца загрузки */
+html.lock,html.lock body{overflow:hidden}
+#loader{position:fixed;inset:0;z-index:10;background:#020203;display:flex;align-items:center;justify-content:center;transition:opacity 1.4s ease-out}
+#loader img{width:clamp(64px,7vw,104px);filter:drop-shadow(0 0 18px rgba(244,7,9,.85)) drop-shadow(0 0 60px rgba(255,120,80,.35));animation:hover 3.2s ease-in-out infinite,flick .13s steps(2) infinite}
+#loader .t{position:absolute;left:50%;bottom:44px;transform:translateX(-50%);color:var(--mute);letter-spacing:.12em}
+@keyframes hover{0%,100%{transform:translateY(-6px) rotate(-6deg)}50%{transform:translateY(6px) rotate(8deg)}}
+@keyframes flick{50%{opacity:.93}}
 #loader.done{opacity:0;pointer-events:none}
 @media(max-width:760px){nav a:not(.cta){display:none}.left,.right{left:16px;right:16px;bottom:8vh;max-width:none}.center{left:16px;right:16px;transform:none}header{padding:16px}.hud.bl,.hud.tl{left:16px}.hud.br{right:16px}.ov p{font-size:16px}}
 .choice{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:16px}
@@ -132,7 +136,7 @@ body.qview .ov,body.qview #orbitUi,body.qview #wipe{display:none!important}
 </script>
 </head>
 <body>
-<div id="loader"><img src="assets/iskra.svg" alt=""><span class="t">сколько кислорода…<br>нужно вашему огню</span></div>
+<div id="loader"><img src="assets/iskra.svg" alt=""><span class="t"><span id="loadPct">000</span>%</span></div>
 <canvas id="gl"></canvas>
 <div id="grid2d"></div>
 <div class="tick" style="left:20px;top:64px;border-width:1px 0 0 1px"></div><div class="tick" style="right:20px;top:64px;border-width:1px 1px 0 0"></div><div class="tick" style="left:20px;bottom:14px;border-width:0 0 1px 1px"></div><div class="tick" style="right:20px;bottom:14px;border-width:0 1px 1px 0"></div>
