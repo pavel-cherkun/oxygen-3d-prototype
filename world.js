@@ -524,7 +524,7 @@ let sSm = 0, mouse = new THREE.Vector2(), mSm = new THREE.Vector2(), lastZone = 
 addEventListener('pointermove', e => mouse.set(e.clientX / innerWidth - 0.5, e.clientY / innerHeight - 0.5));
 let lookInit = false, pitch = 0, wP = 0, vS = 0;
 // настройки камеры: vmax — предел скорости (м/с по пути), amax — предел ускорения; pk/pc — пружина наклона, wmax — предел угловой скорости
-const CAMK = { k: 7, c: 5.3, vmax: 38, amax: 32, pk: 5, pc: 4.5, wmax: 0.35 };
+const CAMK = { k: 7, c: 5.3, vmax: 38, amax: 32, boostLag: 60, boostMax: 4, pk: 5, pc: 4.5, wmax: 0.35 };   // boostLag — на сколько метров отставания пределы удваиваются; boostMax — во сколько раз максимум
 const clock = new THREE.Clock(), look = V(0, 0, 0), tmp = V(0, 0, 0), ahead = V(0, 0, 0), DOCKQ = new THREE.Quaternion().setFromEuler(new THREE.Euler(0, Math.PI, 0)), endEl = document.getElementById('end');
 const REC = { on: /rec/.test(location.search), t: 0 };
 function frame() {
@@ -533,7 +533,8 @@ function frame() {
   if (!route && s > TRUNK_W) { s = TRUNK_W; scrollTo(0, TRUNK_W * PX); }
   forkEl.classList.toggle('on', !route && s > TRUNK_W - 14);
   // движение: скролл задаёт только цель, камера догоняет её пружиной с пределом скорости и ускорения — без рывков
-  if (!REC_) { let acc = CAMK.k * (s - sSm) - CAMK.c * vS; acc = Math.max(-CAMK.amax, Math.min(CAMK.amax, acc)); vS = Math.max(-CAMK.vmax, Math.min(CAMK.vmax, vS + acc * dt)); sSm += vS * dt; if (Math.abs(s - sSm) < 0.01 && Math.abs(vS) < 0.05) { sSm = s; vS = 0; } }
+  if (!REC_) { const boost = Math.min(CAMK.boostMax, 1 + Math.abs(s - sSm) / CAMK.boostLag), am = CAMK.amax * boost, vm = CAMK.vmax * boost;   // чем сильнее отстаём от скролла, тем выше пределы разгона и скорости
+    let acc = CAMK.k * (s - sSm) - CAMK.c * vS; acc = Math.max(-am, Math.min(am, acc)); vS = Math.max(-vm, Math.min(vm, vS + acc * dt)); sSm += vS * dt; if (Math.abs(s - sSm) < 0.01 && Math.abs(vS) < 0.05) { sSm = s; vS = 0; } }
   const r = route || 'btl', o = R[r], len = o.curve.getLength(), u = uAt(r, sSm), du = 14 / len;
   o.curve.getPointAt(u, camera.position);
   // взгляд всегда вперёд по ходу; наклон — по уклону рельсов на 40 м вперёд, доводится пружиной с пределом угловой скорости
