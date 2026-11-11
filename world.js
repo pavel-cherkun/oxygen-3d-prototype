@@ -415,8 +415,9 @@ routeBtn.addEventListener('click', () => { route = null; scrollTo({ top: (TRUNK_
 let sSm = 0, mouse = new THREE.Vector2(), mSm = new THREE.Vector2(), lastZone = '';
 addEventListener('pointermove', e => mouse.set(e.clientX / innerWidth - 0.5, e.clientY / innerHeight - 0.5));
 const clock = new THREE.Clock(), look = V(0, 0, 0), tmp = V(0, 0, 0), ahead = V(0, 0, 0), DOCKQ = new THREE.Quaternion().setFromEuler(new THREE.Euler(0, Math.PI, 0)), endEl = document.getElementById('end');
+const REC = { on: /rec/.test(location.search), t: 0 };
 function frame() {
-  const dt = Math.min(clock.getDelta(), 0.05), time = clock.elapsedTime;
+  const REC_ = REC.on, dt = REC_ ? 0 : Math.min(clock.getDelta(), 0.05), time = REC_ ? REC.t : clock.elapsedTime;   // при записи видео время идёт по кадрам, а не по часам
   let s = scrollY / PX;
   if (!route && s > TRUNK_W) { s = TRUNK_W; scrollTo(0, TRUNK_W * PX); }
   forkEl.classList.toggle('on', !route && s > TRUNK_W - 14);
@@ -492,7 +493,7 @@ function check() {
   for (const r of ['btl', 'atl']) for (let i = 0; i <= N; i += 10) { const p = R[r].P[i]; for (const d of dirs) { rc.set(p, d); rc.far = d.y < 0 ? 0.6 : 1.5; const h = rc.intersectObjects(meshes, false)[0]; if (h && !(h.object.material.transparent)) { hits.push(`${r} ${i} ${p.toArray().map(v => v.toFixed(0)).join(',')} → ${d.toArray().join('')}`); break; } } }
   console[hits.length ? 'warn' : 'log'](`проверка пути: ${hits.length ? hits.length + ' касаний' : 'чисто'}`, hits.slice(0, 20).join(' | ')); return hits;
 }
-window.__w = { scene, camera, R, Z, go, goZone, check, TRUNK_W, TOTAL };
+window.__w = { scene, camera, R, Z, go, goZone, check, TRUNK_W, TOTAL, tick: () => { REC.t += 1 / 24; } };
 const AT = new URLSearchParams(location.search).get('at');
 if (AT) { const [k, f, r] = AT.split(':'); goZone(k, +f || 0.3, r || 'btl'); }
 if (location.search.includes('map')) drawMap();
