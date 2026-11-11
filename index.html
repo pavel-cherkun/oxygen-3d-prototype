@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="ru">
+<html lang="ru" class="lock">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -54,10 +54,18 @@ body.orbit #orbitUi{display:block}
 body.orbit .ov,body.orbit .hud.tl{display:none}
 #orbitUi .panel{position:absolute;left:28px;bottom:28px;max-width:420px;pointer-events:auto}
 #orbitUi .hint{position:absolute;right:28px;bottom:28px}
-#loader{position:fixed;inset:0;z-index:10;background:var(--bg);display:flex;align-items:center;justify-content:center;flex-direction:column;gap:16px;transition:opacity .4s ease-out}
-#loader img{width:64px;animation:spin 1.6s cubic-bezier(.2,.8,.3,1) infinite}
-@keyframes spin{to{transform:rotate(360deg)}}
+/* прелоадер — изначальная Искра: в темноте сразу горит искра и слегка подсвечивает пространство вокруг, скролл заперт до готовности */
+html.lock,html.lock body{overflow:hidden}
+#loader{position:fixed;inset:0;z-index:10;background:#000;display:grid;place-items:center;transition:opacity 1.1s cubic-bezier(.6,0,.2,1)}
+#loader .halo{position:absolute;width:70vmin;height:70vmin;border-radius:50%;background:radial-gradient(circle,rgba(244,7,9,.16),rgba(244,7,9,.05) 32%,transparent 66%);animation:breathe 2.6s ease-in-out infinite}
+#loader .spark{position:relative;width:64px;animation:drift 7s ease-in-out infinite}
+#loader .spark img{width:100%;display:block;filter:drop-shadow(0 0 4px #ff3a1a) drop-shadow(0 0 16px rgba(244,7,9,.9)) drop-shadow(0 0 48px rgba(244,7,9,.5));animation:flick 2.6s ease-in-out infinite}
+#loader .pct{position:absolute;left:50%;bottom:9vh;translate:-50% 0;color:#5d5852;letter-spacing:.2em}
+@keyframes drift{0%,100%{transform:translate(0,0) rotate(-6deg)}25%{transform:translate(14px,-10px) rotate(4deg)}50%{transform:translate(-4px,-18px) rotate(9deg)}75%{transform:translate(-14px,-6px) rotate(-2deg)}}
+@keyframes flick{0%,100%{opacity:.92}47%{opacity:1}50%{opacity:.78}53%{opacity:1}}
+@keyframes breathe{50%{transform:scale(1.12);opacity:.75}}
 #loader.done{opacity:0;pointer-events:none}
+#loader.done .spark{transition:transform 1.1s cubic-bezier(.6,0,.2,1);transform:scale(2.4)}
 @media(max-width:760px){nav a:not(.cta){display:none}.left,.right{left:16px;right:16px;bottom:8vh;max-width:none}.center{left:16px;right:16px;transform:none}header{padding:16px}.hud.bl,.hud.tl{left:16px}.hud.br{right:16px}.ov p{font-size:16px}}
 .choice{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:16px}
 .choice button{background:rgba(17,17,17,.8);border:1px solid #333;color:var(--cream);text-align:left;padding:18px;cursor:pointer;font:400 15px "TT",sans-serif}
@@ -69,7 +77,7 @@ body.orbit .ov,body.orbit .hud.tl{display:none}
 .chips{display:flex;flex-wrap:wrap;gap:6px;margin:10px 0}
 .chips span{border:1px solid #333;padding:4px 10px;border-radius:30px;font-size:14px}
 .flex{max-width:min(720px,calc(100vw - 56px))}
-.flex h2{font-size:clamp(64px,9vw,148px);line-height:.84;margin:6px 0 14px;letter-spacing:-.03em;text-shadow:0 0 40px rgba(58,107,255,.55),0 4px 0 rgba(0,0,0,.4)}
+.flex h2{font-size:clamp(64px,9vw,148px);line-height:.84;margin:6px 0 14px;letter-spacing:-.03em;text-shadow:0 2px 24px rgba(0,0,0,.55)}
 .flex .idea{font-size:clamp(17px,1.5vw,21px);max-width:460px;text-shadow:0 1px 12px rgba(0,0,0,.8)}
 .flex .hit{display:flex;align-items:baseline;gap:12px;margin-top:14px}.flex .hit b{font-weight:620;font-size:clamp(40px,4vw,64px);color:var(--red);line-height:1}
 .nums{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin:12px 0}
@@ -77,19 +85,12 @@ body.orbit .ov,body.orbit .hud.tl{display:none}
 footer.ft{display:flex;gap:18px;margin-top:16px;padding-top:12px;border-top:1px solid #2a2a2a;flex-wrap:wrap}
 footer.ft a{color:var(--cream);font-size:14px}
 select{background:#111;border:0;border-bottom:1px solid #444;color:var(--cream);font:400 17px "TT",sans-serif;padding:8px 0}
-/* 2D-слой по рефу 4: сетка, микротекст, простые формы */
-#grid2d{position:fixed;inset:0;z-index:2;pointer-events:none;background-image:linear-gradient(to right,rgba(225,217,207,.05) 1px,transparent 1px),linear-gradient(to bottom,rgba(225,217,207,.05) 1px,transparent 1px);background-size:calc(100vw/12) calc(100vw/12)}
-.sq{position:fixed;z-index:3;width:7px;height:7px;background:var(--red);pointer-events:none;transition:left .45s cubic-bezier(.2,.8,.2,1),top .45s cubic-bezier(.2,.8,.2,1)}
-.tick{position:fixed;z-index:3;width:14px;height:14px;border-color:rgba(225,217,207,.5);border-style:solid;pointer-events:none}
-#micro{position:fixed;right:28px;top:76px;z-index:5;text-align:right;line-height:1.55;pointer-events:none;font-size:11px;transition:opacity .3s}
+/* 2D-слой: только индекс разделов справа */
+#micro{position:fixed;right:28px;top:76px;z-index:5;text-align:right;line-height:1.55;pointer-events:none;font-size:11px;transition:opacity .3s;color:var(--mute);opacity:.6}#micro:hover{opacity:1}
 #micro a,#micro [data-j]{pointer-events:auto;cursor:pointer}
 #micro [data-j]:hover{color:var(--cream)}
 #micro .on{color:var(--cream)}
 #micro.dim{opacity:.16}#micro.dim:hover{opacity:1}
-#microL{position:fixed;left:28px;top:96px;z-index:5;pointer-events:none;font-size:11px;line-height:1.55;color:var(--mute)}
-#wipe{position:fixed;left:0;right:0;top:50%;z-index:3;pointer-events:none;white-space:nowrap;font-weight:520;font-size:11vw;line-height:.8;translate:0 -50%;color:transparent;-webkit-text-stroke:1px rgba(244,7,9,.35);transform:translateX(100%)}
-#wipe.go{animation:wipe 1.4s cubic-bezier(.2,.8,.2,1) forwards}
-@keyframes wipe{0%{transform:translateX(100%)}35%{transform:translateX(6%)}65%{transform:translateX(-6%)}100%{transform:translateX(-110%)}}
 #curtain{position:fixed;inset:0;z-index:15;background:var(--red);transform:scaleY(0);transform-origin:bottom;pointer-events:none;display:flex;align-items:center;padding-left:28px}
 #curtain b{font-weight:520;font-size:16vw;color:var(--bg);line-height:.85}
 #curtain.in{transition:transform .32s cubic-bezier(.7,0,.3,1);transform:scaleY(1)}
@@ -132,13 +133,9 @@ body.qview .ov,body.qview #orbitUi,body.qview #wipe{display:none!important}
 </script>
 </head>
 <body>
-<div id="loader"><img src="assets/iskra.svg" alt=""><span class="t">сколько кислорода…<br>нужно вашему огню</span></div>
+<div id="loader"><div class="halo"></div><div class="spark"><img src="assets/iskra.svg" alt=""></div><span class="t pct" id="ldPct">000</span></div>
 <canvas id="gl"></canvas>
-<div id="grid2d"></div>
-<div class="tick" style="left:20px;top:64px;border-width:1px 0 0 1px"></div><div class="tick" style="right:20px;top:64px;border-width:1px 1px 0 0"></div><div class="tick" style="left:20px;bottom:14px;border-width:0 0 1px 1px"></div><div class="tick" style="right:20px;bottom:14px;border-width:0 1px 1px 0"></div>
-<div class="sq"></div><div class="sq"></div><div class="sq"></div><div class="sq"></div>
-<div id="micro" class="t"></div><div id="microL" class="t"></div>
-<div id="wipe"></div>
+<div id="micro" class="t"></div>
 <div id="curtain"><b id="curtainWord"></b></div>
 
 <header>
@@ -147,7 +144,6 @@ body.qview .ov,body.qview #orbitUi,body.qview #wipe{display:none!important}
     <a href="#" data-go="btl">btl</a><a href="#" data-go="atl">atl</a><a href="#" data-go="awards">награды</a><a href="#" data-modal="jobs">вакансии</a><a href="#" data-go="brief">контакты</a><a href="#" class="cta" data-go="brief">есть задача</a>
   </nav>
 </header>
-<div class="hud tl t">спб 59°n · 30°e</div>
 <div class="hud bl t" id="hudStage">{00} вход</div>
 <button class="hud t" id="routeBtn" data-go="cross" style="display:none;left:28px;bottom:44px;pointer-events:auto;background:none;border:0;cursor:pointer;text-decoration:underline"></button>
 <div class="hud br t"><span id="hudPct">000</span>% · 20_26</div>
@@ -247,9 +243,7 @@ body.qview .ov,body.qview #orbitUi,body.qview #wipe{display:none!important}
   <div class="hint t">drag · zoom</div>
 </div>
 
-<!-- временно: обзорные виды на кварталы для работы над сценой -->
 <div id="viewInfo" class="panel" style="display:none"></div>
-<div id="views" class="t"><span>виды:</span><button data-view="asia">азия</button><button data-view="dixy">дикси</button><button data-view="sport">спорт</button><button data-view="merch">мерч</button><button data-view="ai">ai</button><button data-view="off">✕</button></div>
 <div id="modal"><button class="btn ghost close" id="modalClose">закрыть ✕</button><div class="wrap" id="modalBody"></div></div>
 
 <div id="scroll"></div>
