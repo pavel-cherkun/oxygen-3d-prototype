@@ -11,6 +11,7 @@ import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js'
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 import { Reflector } from 'three/addons/objects/Reflector.js';
 import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
+import { CASES } from './cases.js';
 
 const RED = 0xf40709, CREAM = 0xe1d9cf;
 const V = (x, y, z) => new THREE.Vector3(x, y, z);
@@ -63,6 +64,30 @@ const grain = new ShaderPass({
       gl_FragColor = vec4(c, 1.0);
     }`,
 });
+// финал: вентилятор гонит воздух — радиальный поток, марево, расслоение цвета и красная ударная волна из Искры
+const finale = new ShaderPass({
+  uniforms: { tDiffuse: { value: null }, uK: { value: 0 }, uT: { value: 0 }, uC: { value: new THREE.Vector2(0.5, 0.5) }, uW: { value: 0 } },
+  vertexShader: 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.); }',
+  fragmentShader: `uniform sampler2D tDiffuse; uniform float uK, uT, uW; uniform vec2 uC; varying vec2 vUv;
+    float n2(vec2 p){ vec2 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f); float a = fract(sin(dot(i, vec2(127.1, 311.7))) * 43758.5), b = fract(sin(dot(i + vec2(1, 0), vec2(127.1, 311.7))) * 43758.5), c = fract(sin(dot(i + vec2(0, 1), vec2(127.1, 311.7))) * 43758.5), d = fract(sin(dot(i + vec2(1, 1), vec2(127.1, 311.7))) * 43758.5); return mix(mix(a, b, f.x), mix(c, d, f.x), f.y); }
+    void main(){
+      if (uK <= 0.001) { gl_FragColor = texture2D(tDiffuse, vUv); return; }
+      vec2 d = vUv - uC; float r = length(d * vec2(1.6, 1.0));
+      float ang = atan(d.y, d.x);
+      vec2 heat = vec2(n2(vec2(ang * 3.0, r * 18.0 - uT * 6.0)), n2(vec2(ang * 3.0 + 9.0, r * 18.0 - uT * 6.0))) - 0.5;
+      vec2 uv = vUv + heat * 0.012 * uK * smoothstep(0.05, 0.6, r);
+      vec3 acc = vec3(0.0);
+      for (int i = 0; i < 10; i++) { float t = float(i) / 9.0; vec2 u = uv - d * t * 0.09 * uK;
+        acc.r += texture2D(tDiffuse, u + d * 0.012 * uK).r; acc.g += texture2D(tDiffuse, u).g; acc.b += texture2D(tDiffuse, u - d * 0.012 * uK).b; }
+      vec3 c = acc / 10.0;
+      float streak = pow(n2(vec2(ang * 40.0, uT * 0.5)), 6.0) * smoothstep(0.1, 0.9, r) * uK;           // струи воздуха
+      c += vec3(1.0, 0.55, 0.3) * streak * 0.35;
+      float wave = smoothstep(0.06, 0.0, abs(r - uW)) * (1.0 - uW) * step(0.001, uW);                    // ударная волна
+      c += vec3(1.0, 0.05, 0.04) * wave * 1.4;
+      gl_FragColor = vec4(c, 1.0);
+    }`,
+});
+composer.addPass(finale);
 composer.addPass(grain);
 
 // ---------- бетон ----------
@@ -184,9 +209,40 @@ const REEL = { w: 48, h: 27 };
 const LOW = -160, STAIR = { x0: 56, x1: 128, z0: -300, z1: -620 };
 const VENT = { x: 110, h: 220, cy: -160 + 110, r: 100 };
 const ZN = { hyp: -1500, asia: -2100, asiaR: 260, ret0: -2420, ret1: -3320, ai0: -3420, ai1: -4440, st1: -5160, fan: -6420 };
-const CUBES = [
-  { p: V(-170, LOW, -880), s: 30, t: 'спорт' }, { p: V(170, LOW, -1220), s: 30, t: 'ивенты' }, { p: V(-222, LOW, -2100), s: 22, t: 'азия' },
-  { p: V(-30, LOW, -2880), s: 14, t: 'ритейл' }, { p: V(235, LOW, -3930), s: 28, t: 'ai-продакшн' }, { p: V(-80, LOW, -4700), s: 30, t: 'мерч' }, { p: V(80, LOW, -4950), s: 34, t: 'atl' },
+// кейсы по локациям: n — нормаль к пути (куда смотрит кадр), w — ширина кадра, img — обложка из портфолио
+const KX = (id, img, x, y, z, n, w = 80, loc = '') => ({ id, img, p: V(x, LOW + y, z), n: n.normalize(), w, loc });
+const CASEPOS = [
+  // гипостиль — ивенты
+  KX('baltikaPlant', 'cases/baltika-plant-1', -195, 34, -790, V(1, 0, 0), 80, 'ивенты'),
+  KX('megafon', 'cases/megafon-1', -195, 34, -985, V(1, 0, 0), 80, 'ивенты'),
+  KX('mice', 'cases/mice-1', 195, 34, -1150, V(-1, 0, 0), 80, 'ивенты'),
+  KX('megafonTravel', 'cases/megafon-travel-1', 195, 34, -1320, V(-1, 0, 0), 80, 'ивенты'),
+  // колодец — города
+  KX('derbent', 'cases/derbent-1', -78, 26, -1610, V(1, 0, 0), 76, 'города'),
+  KX('tevredens', 'cases/tevredens-1', 78, 26, -1745, V(-1, 0, 0), 76, 'города'),
+  // сакура — азия
+  KX('izhora', 'cases/izhora-48-1', 112, 40, -1965, V(-1, 0, 0), 56, 'азия'),
+  KX('fandom', 'cases/ozon-fandom-kv-1', -232, 34, -2030, V(1, 0, 0), 80, 'азия'),
+  KX('tbank', 'cases/tbank-zone-1', -232, 34, -2185, V(1, 0, 0), 80, 'азия'),
+  KX('treschnutye', 'cases/treschnutye-1', 112, 40, -2255, V(-1, 0, 0), 56, 'азия'),
+  // продуктовый — ритейл и мерч: таблички над проходом, как в супермаркете
+  KX('selekt', 'cases/ozon-select-1', 0, 92, -2560, V(0, 0, 1), 92, 'ритейл'),
+  KX('zaklinateli', 'cases/zaklinateli-kv-1', 0, 92, -2700, V(0, 0, 1), 92, 'ритейл'),
+  KX('dino', 'cases/dino-1', 0, 92, -2840, V(0, 0, 1), 92, 'ритейл'),
+  KX('gdriveMerch', 'cases/gdrive-capsule-1', 0, 92, -2980, V(0, 0, 1), 92, 'мерч'),
+  KX('oxygenSet', 'cases/oxygen-set-1', 0, 92, -3110, V(0, 0, 1), 92, 'мерч'),
+  KX('lionMerch', 'dp/lion-cover', 0, 92, -3240, V(0, 0, 1), 92, 'мерч'),
+  // сфера — ai-продакшн
+  KX('aiFonbet', 'cases/ai-fonbet', -92, 34, -3575, V(1, 0, 0), 80, 'ai-продакшн'),
+  KX('aiMango', 'cases/ai-mango', 262, 34, -3820, V(-1, 0, 0), 80, 'ai-продакшн'),
+  KX('aiLavka', 'cases/ai-lavka', 262, 34, -4030, V(-1, 0, 0), 80, 'ai-продакшн'),
+  KX('aiAlfa', 'cases/ai-alfa', -92, 34, -4290, V(1, 0, 0), 80, 'ai-продакшн'),
+  // фермы — спорт
+  KX('lion', 'dp/lion-2', -112, 34, -4530, V(1, 0, 0), 80, 'спорт'),
+  KX('ironstar', 'cases/gdrive-ironstar-1', 112, 34, -4660, V(-1, 0, 0), 80, 'спорт'),
+  KX('gdrive', 'cases/gdrive-silk-1', -112, 34, -4790, V(1, 0, 0), 80, 'спорт'),
+  KX('baltika7', 'cases/baltika7-1', 112, 34, -4920, V(-1, 0, 0), 80, 'спорт'),
+  KX('avangard', 'cases/avangard-1', -112, 34, -5050, V(1, 0, 0), 80, 'спорт'),
 ];
 const SHAFTS = [];   // { x, z, r, k, floor, top }
 const LAMPS = [];    // точечные источники локаций: { p, r, c } — к камере подсаживаются ближайшие 8
@@ -261,7 +317,7 @@ function buildWorld(slot) {
   box(-HX, -320, LOW, HY, -310, -300); box(320, HX, LOW, HY, -310, -300);
   const lampGlow = [];
   for (let x = -630; x <= 630; x += 140) for (let zz = -400; zz >= -1440; zz -= 140) {
-    if (nearPath(x, zz, 50) || CUBES.some(c => Math.hypot(x - c.p.x, zz - c.p.z) < 60) || (x > 30 && x < 160 && zz > -660)) continue;
+    if (nearPath(x, zz, 50) || CASEPOS.some(c => Math.hypot(x - c.p.x, zz - c.p.z) < 75) || (x > 30 && x < 160 && zz > -660)) continue;
     box(x - 15, x + 15, LOW, HY, zz - 15, zz + 15, 0.9 + rnd() * 0.15);
     const lx = x + 70, lz = zz - 70; lampGlow.push(V(lx, HY - 4, lz));
     if (((x + 630) / 140 + (zz + 400) / 140) % 2 === 0) LAMPS.push({ p: V(lx, HY - 30, lz), r: 60, c: V(1, 0.9, 0.78).multiplyScalar(0.55) });
@@ -328,7 +384,7 @@ function buildWorld(slot) {
   for (let i = 0, n = 0; n < 64 && i < 600; i++) {
     const c = V((rf() - 0.5) * 600, LOW + 60 + rf() * 900, ZN.ai1 - 30 - rf() * (ZN.ai1 - ZN.st1 - 60)), L = 260 + rf() * 620, t = 14 + rf() * 26;
     const e = new THREE.Euler(rf() * Math.PI, rf() * Math.PI, rf() * Math.PI), dir = V(0, 1, 0).applyEuler(e);
-    let bad = false; for (let k = -1; k <= 1.001; k += 0.1) { const pnt = c.clone().addScaledVector(dir, k * L / 2); if (Math.abs(pnt.x) < 40 + t && pnt.y < LOW + 110 + t && pnt.z < ZN.ai1 + 20 && pnt.z > ZN.st1 - 20) { bad = true; break; } }
+    let bad = false; for (let k = -1; k <= 1.001; k += 0.1) { const pnt = c.clone().addScaledVector(dir, k * L / 2); if ((Math.abs(pnt.x) < 40 + t && pnt.y < LOW + 110 + t && pnt.z < ZN.ai1 + 20 && pnt.z > ZN.st1 - 20) || CASEPOS.some(c => c.p.distanceTo(pnt) < 75 + t)) { bad = true; break; } }
     if (bad) continue;
     boxR(c, V(t, L, t * (0.8 + rf() * 0.6)), [e.x, e.y, e.z], 0.8 + rf() * 0.3); n++;
   }
@@ -474,17 +530,23 @@ function buildLight() {
   slab(80, 330, V(470, LOW + 260, -299), 2.4); slab(50, 330, V(590, LOW + 260, -299), 2.4);                                                                    // кадр 1: свет из-за края стены
   FX.slitsHyp.forEach(o => slab(o.w, 340, V(o.x, LOW + 190, ZN.hyp + 0.6)));                                 // кадры 2–3
   const bot = new THREE.Mesh(new THREE.CircleGeometry(FX.shaftR - 10, 64), basic(cold, 3)); bot.rotation.x = -Math.PI / 2; bot.position.set(0, LOW - 2560, FX.shaftC.z); scene.add(bot); FX.glows.push(bot);   // кадр 4
-  slab(118, 138, V(0, LOW + 70, ZN.ret1 - 4), 3.2);                                                           // кадр 6: конец прохода
+  slab(118, 138, V(0, LOW + 70, ZN.ret1 - 4), 1.9);                                                           // кадр 6: конец прохода
   const back = new THREE.Mesh(new THREE.CircleGeometry(300, 96), basic(cold, 2.8)); back.position.set(0, LOW + 430, -4350); scene.add(back); FX.glows.push(back);   // кадр 7
   FX.slitsSt.forEach(o => slab(o.w, 600, V(o.x, LOW + 560, ZN.st1 + 0.6), 2.4));                             // кадр 8
   for (let zz = ZN.st1 - 64; zz > ZN.st1 - 520; zz -= 48) [-1, 1].forEach(sd => { const m = slab(3, 180, V(sd * (VENT.x - 0.6), LOW + 100, zz), 2.6); m.rotation.y = -sd * Math.PI / 2; });   // кадр 9: щели
-  // кубы-заглушки кейсов
-  CUBES.forEach(c => {
-    const m = new THREE.Mesh(new THREE.BoxGeometry(c.s, c.s, c.s), basic(CREAM, 1.5)); m.position.set(c.p.x, c.p.y + c.s / 2, c.p.z); scene.add(m);
-    const lab = new THREE.Mesh(new THREE.PlaneGeometry(c.s * 1.6, c.s * 0.4), new THREE.MeshBasicMaterial({ map: canvasTex(512, 128, (g, w, h) => { g.fillStyle = '#E1D9CF'; g.font = '520 64px TT, sans-serif'; g.textAlign = 'center'; g.fillText(c.t, w / 2, 84); }), transparent: true, depthWrite: false, toneMapped: false }));
-    lab.position.copy(m.position).add(V(0, c.s * 0.8, 0)); scene.add(lab); FX.cubes.push({ m, c, lab });
-    LAMPS.push({ p: m.position.clone(), r: c.s * 1.6, c: CREAM_V.clone().multiplyScalar(0.9) });
+  // кадры кейсов: обложка светится в темноте, под ней — красная неоновая черта, сзади — бетонная рама
+  const frames = [];
+  CASEPOS.forEach((c, i) => {
+    const h0 = c.w * 9 / 16, ry = Math.atan2(c.n.x, c.n.z);
+    const m = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), new THREE.MeshBasicMaterial({ color: new THREE.Color(0.8, 0.8, 0.8), toneMapped: true }));
+    m.position.copy(c.p); m.rotation.y = ry; m.scale.set(c.w, h0, 1); scene.add(m);
+    texL.load(`assets/${c.img}.jpg`, t => { t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 8; m.material.map = t; m.material.needsUpdate = true; const a = t.image.width / t.image.height; m.scale.set(a >= 1 ? c.w : h0 * a, a >= 1 ? c.w / a : h0, 1); c.h = m.scale.y; c.ww = m.scale.x; });
+    frames.push({ m: M(c.p.clone().addScaledVector(c.n, -1.2), [0, ry, 0], V(c.w + 6, h0 + 6, 2)), c: new THREE.Color(0.7, 0.7, 0.7) });
+    const bar = new THREE.Mesh(new THREE.BoxGeometry(c.w * 0.5, 0.7, 0.4), basic(RED, 2.2)); bar.position.copy(c.p).add(V(0, -h0 / 2 - 5, 0)).addScaledVector(c.n, 0.6); bar.rotation.y = ry; scene.add(bar);
+    LAMPS.push({ p: c.p.clone().addScaledVector(c.n, 30), r: 70, c: V(0.9, 0.88, 0.85).multiplyScalar(0.35) });
+    FX.cubes.push({ m, bar });
   });
+  inst(new THREE.BoxGeometry(1, 1, 1), concrete, frames);
   // крошечные люди
   const people = [V(30, 0, -290), V(36, 0, -292), V(-150, 0, -40), V(80, LOW, -660), V(-60, LOW, -1300), V(-40, LOW, -1700), V(-200, LOW, -2160), V(10, LOW, -3000), V(-40, LOW, -3800), V(30, LOW, -4400), V(-4, LOW, -6230)];
   const pg = new THREE.CapsuleGeometry(0.32, 1.1, 3, 8); pg.translate(0, 0.87, 0);
@@ -572,15 +634,25 @@ function buildReel() {
 // ---------- таймлайн ----------
 // p 0…0.17 — Искра в темноте летит к стене и встаёт в лого; дальше всё движение привязано к голове ленты.
 const P_LINE = 0.19, P_END = 0.962;
-let CAMK = [], ISK = [], SMAP = [];
+let CAMK = [], ISK = [], SMAP = [], STOPS = [];
 function buildTimeline() {
   const s = slot, L0 = LOGO, rc = REEL.c, sl = iskra.userData.S;
   const sAt = pt => { let best = 0, bd = 1e9; for (let x = 0; x <= S_TOTAL; x += 1) { const d = headAt(x).distanceTo(pt); if (d < bd) { bd = d; best = x; } } return best; };
   const sv = PATH.map(p => sAt(p[0]));
   const at = (x, z) => sAt(V(x, LOW + 0.25, z));
   // p ↔ длина ленты: стена неторопливо, дальше — по локациям, на каждой своё время
-  SMAP = [[P_LINE, 0], [0.25, sv[1]], [0.36, sv[4]], [0.42, sv[6]], [0.53, sv[7]], [0.58, sv[8]], [0.62, sv[9]],
-    [0.675, at(0, -1380)], [0.705, at(0, -1840)], [0.775, at(0, -2440)], [0.825, at(0, -3420)], [0.885, at(0, -4440)], [0.91, at(0, -5160)], [P_END, S_TOTAL]];
+  SMAP = [[P_LINE, 0], [0.25, sv[1]], [0.36, sv[4]], [0.42, sv[6]], [0.53, sv[7]], [0.58, sv[8]], [0.62, sv[9]]];
+  // остановки у кейсов: кадр слева, подпись справа; камера на пути ленты
+  STOPS = CASEPOS.map(c => {
+    const D = c.w * 1.5 + 8, cam = c.p.clone().addScaledVector(c.n, D); cam.y = c.p.y > LOW + 60 ? LOW + 40 : LOW + 36;
+    const right = V(-c.n.x, 0, -c.n.z).cross(V(0, 1, 0)).normalize();
+    return { c, cam, look: c.p.clone().addScaledVector(right, c.w * 0.3), s: sAt(V(cam.x, LOW + 0.25, cam.z)) };
+  }).sort((a, b) => a.s - b.s);
+  const H = 0.0072, budget = (P_END - 0.62) - STOPS.length * H - 0.035;
+  let prevS = sv[9], dist = 0; STOPS.forEach(t => { dist += Math.max(0, t.s - 12 - prevS); prevS = t.s + 12; }); dist += S_TOTAL - prevS;
+  let p = 0.62; prevS = sv[9];
+  STOPS.forEach(t => { p += budget * Math.max(0, t.s - 12 - prevS) / dist; t.p0 = p; SMAP.push([p, t.s - 12]); p += H; t.p1 = p; SMAP.push([p, t.s + 12]); prevS = t.s + 12; });
+  SMAP.push([P_END, S_TOTAL]);
   const pOf = x => { for (let i = 0; i < SMAP.length - 1; i++) if (x <= SMAP[i + 1][1]) return SMAP[i][0] + (SMAP[i + 1][0] - SMAP[i][0]) * (x - SMAP[i][1]) / (SMAP[i + 1][1] - SMAP[i][1] || 1); return P_END; };
   const narrow = innerWidth < 760, Y = y => LOW + y;
   const K = (x, z, pos, look) => ({ p: pOf(at(x, z)), pos, look });
@@ -602,34 +674,25 @@ function buildTimeline() {
     { p: pOf(sv[8]), pos: V(104, 34, -236), look: V(90, -120, -900) },
     { p: pOf((sv[8] + sv[9]) / 2), pos: V(112, -50, -430), look: V(80, -150, -1000) },
     { p: pOf(sv[9]), pos: V(110, -116, -575), look: V(70, -140, -1000) },
-    // 1. гипостиль: камера ведёт за лентой и смотрит то влево, то вправо — в лес колонн и ламп
-    K(90, -700, V(150, Y(42), -600), V(-160, Y(150), -1100)),
-    K(-90, -880, V(-20, Y(30), -770), V(-200, Y(150), -1500)),
-    K(90, -1220, V(30, Y(32), -1100), V(220, Y(140), -1500)),
-    // 2. симметричный кадр в красную трубу (реф 1), затем внутрь
-    K(0, -1380, V(0, Y(34), -1250), V(0, Y(34), -1700)),
-    K(0, -1640, V(26, Y(22), -1560), V(0, Y(-900), -1720)),   // кадр 4: с моста в бездну
-    // 3. Азия: выход из трубы под сакуру — снизу вверх, потом обход вокруг ствола
-    K(0, -1950, V(18, Y(14), -1868), V(0, Y(300), -2100)),
-    K(-150, -2100, V(-175, Y(28), -1975), V(80, Y(210), -2160)),
-    K(0, -2250, V(-110, Y(40), -2262), V(150, Y(320), -2060)),
-    // 4. ритейл: проход по центральному ряду, взгляд то в одни стеллажи, то в другие
-    K(0, -2460, V(0, Y(40), -2390), V(0, Y(70), -2760)),
-    K(0, -2880, V(0, Y(46), -2770), V(-40, Y(110), -3320)),   // кадр 6: строго вдоль прохода
-    K(0, -3250, V(0, Y(42), -3140), V(280, Y(230), -3360)),
-    // 5. ИИ: сфера впереди и над головой
-    K(0, -3500, V(0, Y(30), -3400), V(0, Y(460), -3930)),
-    K(160, -3930, V(110, Y(24), -3760), V(-80, Y(520), -3960)),
-    K(0, -4150, V(110, Y(44), -4110), V(-240, Y(330), -4460)),
-    // 6. колодец лестниц: взгляд вверх, потом налево по пролётам
-    K(0, -4600, V(0, Y(40), -4500), V(0, Y(760), -4820)),
-    K(0, -4950, V(0, Y(36), -4830), V(-290, Y(420), -5000)),
-    // 7. вентшахта: строгая центральная перспектива на вентилятор
+    // дальше ключи строятся от кейсов (ниже); вентшахта — свой финальный проход
     K(0, -5160, V(0, Y(40), -5060), V(0, Y(80), -5600)),
     K(0, -5700, V(0, Y(42), -5600), V(0, Y(104), -6420)),          // кадр 10: строгая перспектива на вентилятор
     { p: P_END, pos: V(0, Y(34), -6120), look: V(0, Y(112), -6420) },
     { p: 1, pos: V(0, Y(30), -6160), look: V(0, Y(116), -6420) },   // кадр 11: вентилятор на весь кадр
   ];
+  // проезды между кейсами: за лентой, взгляд — в главное событие локации (сакура, бездна, сфера) или вперёд по пути
+  const hd = x => headAt(Math.min(Math.max(x, 0), S_TOTAL), V(0, 0, 0));
+  const focus = (h, ahead) => { const z = h.z;
+    if (z < -1512 && z > -1840) return V(0, LOW - 700, -1690);
+    if (z < -1840 && z > -2420) return V(0, LOW + 260, ZN.asia);
+    if (z < -3420 && z > -4440) return V(0, LOW + 430, -3930);
+    return ahead.add(V(0, 46, 0)); };
+  STOPS.forEach((t, i) => {
+    CAMK.push({ p: t.p0, pos: t.cam.clone(), look: t.look.clone() }, { p: t.p1, pos: t.cam.clone().addScaledVector(t.c.n, -5), look: t.look.clone() });
+    const prev = i ? STOPS[i - 1] : { p1: 0.62, s: sv[9] }; if (t.p0 - prev.p1 < 0.006) return;
+    const sm = (prev.s + t.s) / 2, h = hd(sm), back = hd(sm - 25).sub(h).normalize();
+    CAMK.push({ p: (prev.p1 + t.p0) / 2, pos: h.clone().addScaledVector(back, 70).add(V(0, 44, 0)), look: focus(h, hd(sm + 260)) });
+  });
   CAMK.sort((a, b) => a.p - b.p);
   CAMK.pos = new THREE.CatmullRomCurve3(CAMK.map(k => k.pos), false, 'centripetal');
   CAMK.look = new THREE.CatmullRomCurve3(CAMK.map(k => k.look), false, 'centripetal');
@@ -673,9 +736,21 @@ function updateRays() {
   rays.uniforms.uK.value = k;
 }
 const zoneAt = z => { let i = 0; while (i < ZONES.length - 2 && z < ZONES[i + 1].z) i++; const a = ZONES[i], b = ZONES[i + 1], t = smooth(clamp01((a.z - z) / (a.z - b.z))); const mix = (u, v) => u.map((x, k) => x + (v[k] - x) * t); return { haze: mix(a.haze, b.haze), k: a.k + (b.k - a.k) * t, amb: mix(a.amb, b.amb) }; };
+const RAW_A = 0.25;   // доля скролла на интро (до низа лестницы) — дальше скролл отдан кейсам
+const toP = r => r < RAW_A ? r * 0.62 / RAW_A : 0.62 + (r - RAW_A) * 0.38 / (1 - RAW_A);
+const toRaw = p => p < 0.62 ? p * RAW_A / 0.62 : RAW_A + (p - 0.62) * (1 - RAW_A) / 0.38;
+const capEl = document.getElementById('case');
+let capId = null;
+function caption(p) {
+  const t = STOPS.find(t => p > t.p0 - 0.003 && p < t.p1 + 0.002);
+  if (!t) { capEl.classList.remove('on'); capId = null; return; }
+  if (capId !== t.c.id) { capId = t.c.id; const c = CASES[t.c.id] || {}, ps = c.pass || {};
+    capEl.innerHTML = `<span class="t">{${String(STOPS.indexOf(t) + 1).padStart(2, '0')}} ${t.c.loc}</span><h2>${c.title || ''}</h2><p class="m">${[ps.клиент, ps.год].filter(x => x && x !== '—').join(' · ')}</p><p>${c.idea || c.task || ''}</p>`; }
+  capEl.classList.add('on');
+}
 function frame() {
   const dt = Math.min(clock.getDelta(), 0.05), time = clock.elapsedTime;
-  const max = document.documentElement.scrollHeight - innerHeight, p = max > 0 ? clamp01(scrollY / max) : 0;
+  const max = document.documentElement.scrollHeight - innerHeight, p = toP(max > 0 ? clamp01(scrollY / max) : 0);
   pSm += (p - pSm) * (1 - Math.exp(-dt * 2.6));
   U.uT.value = time;
   const k = CAMK; let i = 0; while (i < k.length - 2 && pSm > k[i + 1].p) i++;
@@ -709,7 +784,7 @@ function frame() {
   const zn = zoneAt(cp.z); U.uHaze.value.fromArray(zn.haze); U.uHazeK.value = zn.k * Lh; U.uAmb.value.fromArray(zn.amb);
   FX.beams.forEach(o => { o.b.material.uniforms.uK.value = 0.03 * o.k * Lh; });
   FX.glows.forEach(g => { g.visible = Lh > 0.01; });
-  FX.cubes.forEach(c => { c.m.visible = c.lab.visible = Lh > 0.01; });
+  FX.cubes.forEach(c => { c.m.visible = c.bar.visible = Lh > 0.01; });
   FX.petals.material.uniforms.uO.value = 0.85 * clamp01((-cp.z - 1700) / 150) * clamp01((2600 + cp.z) / 150);
   // вентилятор: на подходе к шахте раскручивается, гонит пыль на зрителя
   const F = FX.fan, spin = smooth(clamp01((pSm - 0.93) / 0.05));
@@ -720,9 +795,12 @@ function frame() {
   dp.needsUpdate = true; FX.vdust.material.opacity = 0.25 + 0.5 * spin;
   // ролик
   if (!promo.on && pSm > 0.2) { promo.on = true; promo.v.play().then(() => promo.m.material.color.set(0xffffff)).catch(() => addEventListener('pointerdown', () => promo.v.play().then(() => promo.m.material.color.set(0xffffff)), { once: true })); }
-  ovs.forEach(o => o.el.classList.toggle('on', pSm >= o.a && pSm <= o.b));
+  ovs.forEach(o => o.el.classList.toggle('on', pSm >= o.a && pSm <= o.b)); caption(pSm);
   pctEl.textContent = `${String(Math.round(pSm * 100)).padStart(3, '0')}% · 20_26`;
   updateRays(); grain.uniforms.uT.value = time;
+  { const fk = smooth(clamp01((pSm - 0.94) / 0.045)); finale.uniforms.uK.value = fk; finale.uniforms.uT.value = time;
+    _sp.set(0, VENT.cy, ZN.fan).project(camera); finale.uniforms.uC.value.set(_sp.x * 0.5 + 0.5, _sp.y * 0.5 + 0.5);
+    finale.uniforms.uW.value = pSm > 0.972 ? ((time * 0.45) % 1.6) : 0; }
   composer.render();
   requestAnimationFrame(frame);
 }
@@ -755,7 +833,7 @@ await document.fonts.load('520 64px TT').catch(() => {});
 await buildLogo();
 buildWorld(slot); buildLight(); buildNeon(); buildReel(); buildWetFloor(); buildTimeline();
 renderer.compile(scene, camera);
-window.__mega = { cam: camera, composer, bloom, go: p => { scrollTo(0, p * (document.documentElement.scrollHeight - innerHeight)); pSm = p; }, renderer, scene };
+window.__mega = { cam: camera, composer, bloom, go: p => { scrollTo(0, toRaw(p) * (document.documentElement.scrollHeight - innerHeight)); pSm = p; }, STOPS: () => STOPS.map(t => [t.c.id, +t.p0.toFixed(4)]), renderer, scene };
 const AT = new URLSearchParams(location.search).get('p'); if (AT) window.__mega.go(+AT);
 frame();
 await new Promise(res => { const t0 = performance.now(); let calm = 0; const tick = () => { calm = LOAD.total === LOAD.loaded ? calm + 1 : 0; if (calm > 3 || performance.now() - t0 > 30000) return res(); setTimeout(tick, 150); }; tick(); });
