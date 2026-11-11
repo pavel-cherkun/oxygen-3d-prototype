@@ -12,6 +12,7 @@ import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 import { Reflector } from 'three/addons/objects/Reflector.js';
 import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
 import { CASES } from './cases.js';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 
 const RED = 0xf40709, CREAM = 0xe1d9cf;
 const V = (x, y, z) => new THREE.Vector3(x, y, z);
@@ -104,7 +105,7 @@ const U = {
   uS: { value: Array.from({ length: NS }, () => new THREE.Vector4(0, 0, 1, 0)) },          // x, z, радиус, сила
   uSY: { value: Array.from({ length: NS }, () => new THREE.Vector2(-1e4, -1e4)) },         // пол под шахтой, верх шахты
   uL: { value: 0 }, uAmb: { value: new THREE.Vector3(0.026, 0.028, 0.036) },
-  uHaze: { value: new THREE.Vector3(0, 0, 0) }, uHazeK: { value: 0 }, uT: { value: 0 },
+  uHaze: { value: new THREE.Vector3(0, 0, 0) }, uHazeK: { value: 0 }, uT: { value: 0 }, uBake: { value: 1 },
 };
 const HAZE = /* glsl */`uniform vec3 uHaze; uniform float uHazeK;
   vec3 haze(vec3 c, vec3 w) { float f = 1.0 - exp(-length(w - cameraPosition) * uHazeK); return mix(c, uHaze, f); }`;
@@ -124,13 +125,21 @@ const LIGHT = /* glsl */`uniform vec4 uP[${NP}]; uniform vec3 uC[${NP}]; uniform
       L += uC[i] * max(dot(N, dl * inversesqrt(d2 + 1e-4)), 0.0) * r2 / (r2 + d2);
     }
     return L;
+  }
+  vec3 lightDyn(vec3 N, vec3 w) {   // только живые источники: Искра, лого, голова ленты и хвост
+    vec3 L = vec3(0.0);
+    for (int i = 0; i < 4; i++) { vec3 dl = uP[i].xyz - w; float d2 = dot(dl, dl), r2 = uP[i].w * uP[i].w; L += uC[i] * max(dot(N, dl * inversesqrt(d2 + 1e-4)), 0.0) * r2 / (r2 + d2); }
+    return L;
   }`;
 // один шейдер на всё: бетон (текстура + сырость) или FLAT — цвет из инстанса (товары, сакура, сталь, кабели)
-function litMat({ flat = false, glow = 0, side = THREE.DoubleSide } = {}) {
+function litMat({ flat = false, glow = 0, side = THREE.DoubleSide, baked = null, ck = 1 } = {}) {
   return new THREE.ShaderMaterial({
-    uniforms: U, side, defines: Object.assign({}, flat ? { FLAT: 1 } : {}, glow ? { GLOW: glow.toFixed(3) } : {}),
+    uniforms: baked ? Object.assign({}, U, { tLM: { value: baked }, uCK: { value: ck } }) : U, side, defines: Object.assign({}, flat ? { FLAT: 1 } : {}, glow ? { GLOW: glow.toFixed(3) } : {}, baked ? { BAKED: 1 } : {}),
     vertexShader: /* glsl */`
       varying vec3 vW; varying vec3 vN; varying vec3 vC;
+      #ifdef BAKED
+        attribute vec2 aLM; attribute vec4 aCol; varying vec2 vLM; varying float vA;
+      #endif
       void main() {
         mat4 m = modelMatrix;
         #ifdef USE_INSTANCING
@@ -141,24 +150,35 @@ function litMat({ flat = false, glow = 0, side = THREE.DoubleSide } = {}) {
         #ifdef USE_INSTANCING_COLOR
           vC = instanceColor;
         #endif
+        #ifdef BAKED
+          vC = aCol.rgb; vA = aCol.a; vLM = aLM;
+        #endif
         gl_Position = projectionMatrix * viewMatrix * w;
       }`,
     fragmentShader: /* glsl */`
-      uniform sampler2D tAlb, tNrm, tStain;
+      uniform sampler2D tAlb, tNrm, tStain; uniform float uBake;
+      #ifdef BAKED
+        uniform sampler2D tLM; uniform float uCK; varying vec2 vLM; varying float vA;
+      #endif
       ${LIGHT}
       ${HAZE}
       varying vec3 vW; varying vec3 vN; varying vec3 vC;
       void main() {
         vec3 n = normalize(vN); if (!gl_FrontFacing) n = -n;
         vec3 N = n, alb;
+        float isFlat = 0.0, tint = vC.r;
         #ifdef FLAT
-          alb = vC;
-        #else
+          isFlat = 1.0;
+        #endif
+        #ifdef BAKED
+          isFlat = vA < 0.5 ? 1.0 : 0.0; tint = vC.r / 0.45;
+        #endif
+        if (isFlat > 0.5) alb = vC; else {
           vec3 a = abs(n); vec2 uv; vec3 t1, t2;
           if (a.y > a.x && a.y > a.z) { uv = vW.xz; t1 = vec3(1., 0., 0.); t2 = vec3(0., 0., 1.); }
           else if (a.x > a.z) { uv = vW.zy; t1 = vec3(0., 0., 1.); t2 = vec3(0., 1., 0.); }
           else { uv = vW.xy; t1 = vec3(1., 0., 0.); t2 = vec3(0., 1., 0.); }
-          alb = pow(texture2D(tAlb, uv / 16.0).rgb, vec3(2.2)) * vC.r;
+          alb = pow(texture2D(tAlb, uv / 16.0).rgb, vec3(2.2)) * tint;
           vec3 tn = texture2D(tNrm, uv / 16.0).xyz * 2.0 - 1.0;
           N = normalize(n * max(tn.z, 0.2) + (t1 * tn.x + t2 * tn.y) * 0.7);
           float wall = 1.0 - smoothstep(0.6, 0.9, a.y);
@@ -169,8 +189,12 @@ function litMat({ flat = false, glow = 0, side = THREE.DoubleSide } = {}) {
           float pud = texture2D(tStain, vW.xz / 300.0).g;
           alb *= mix(1.0, 1.0 - 0.6 * smoothstep(0.35, 0.7, pud), step(0.9, n.y));            // сырые пятна на полу
           alb *= 0.9 + 0.2 * texture2D(tStain, vW.xz / 1900.0 + vW.y / 2300.0).g;              // крупный тон, километрами
+        }
+        #ifdef BAKED
+          vec3 lm = texture2D(tLM, vLM).rgb, L = lm * lm * uCK * uL * uBake * (0.82 + 0.18 * max(dot(N, n), 0.0) * 1.2) + lightDyn(N, vW) + uAmb * 0.3;
+        #else
+          vec3 L = light(N, vW);
         #endif
-        vec3 L = light(N, vW);
         #ifdef GLOW
           L += vec3(GLOW);
         #endif
@@ -779,7 +803,7 @@ function frame() {
   P[2].set(head.x, head.y + 1.5, head.z + 1.5, 10); C[2].copy(RED_V).multiplyScalar(1.7 * lineOn);
   headAt(s - 30, tmp); P[3].set(tmp.x, tmp.y + 1.5, tmp.z + 1.5, 22); C[3].copy(RED_V).multiplyScalar(0.5 * lineOn * clamp01(s / 30));
   const cp = camera.position, near = LAMPS.map(l => [l, l.p.distanceToSquared(cp)]).sort((x, y) => x[1] - y[1]);
-  for (let n = 0; n < 8; n++) { const l = near[n][0]; P[4 + n].set(l.p.x, l.p.y, l.p.z, l.r); C[4 + n].copy(l.c).multiplyScalar(Lh); }
+  for (let n = 0; n < 8; n++) { const l = near[n][0]; P[4 + n].set(l.p.x, l.p.y, l.p.z, l.r); C[4 + n].copy(l.c).multiplyScalar(BAKED.on ? 0 : Lh); }
   // воздух локации
   const zn = zoneAt(cp.z); U.uHaze.value.fromArray(zn.haze); U.uHazeK.value = zn.k * Lh; U.uAmb.value.fromArray(zn.amb);
   FX.beams.forEach(o => { o.b.material.uniforms.uK.value = 0.03 * o.k * Lh; });
@@ -805,6 +829,25 @@ function frame() {
   requestAnimationFrame(frame);
 }
 addEventListener('resize', () => { camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix(); renderer.setSize(innerWidth, innerHeight); composer.setSize(innerWidth, innerHeight); });
+
+// запечённый свет (Blender, Cycles): 7 кусков по локациям; когда все на месте — заменяют собой живой расчёт
+const BAKED = { on: false };
+const BAKE_K = { c0: 0.5, c1: 0.6, c2: 0.7, c3: 0.6, c4: 0.11, c5: 0.13, c6: 0.12 };   // экспозиция локаций после нормировки
+async function loadBaked() {
+  const names = ['c0', 'c1', 'c2', 'c3', 'c4', 'c5', 'c6'], gl = new GLTFLoader(), meshes = [];
+  try {
+    const scales = await (await fetch('assets/baked/scales.json')).json();
+    for (const n of names) {
+      const [g, t] = await Promise.all([gl.loadAsync(`assets/baked/${n}.glb`), texL.loadAsync(`assets/baked/${n}.jpg`)]);
+      t.colorSpace = THREE.NoColorSpace; t.flipY = false; t.generateMipmaps = true; t.anisotropy = 8; t.needsUpdate = true;
+      const mt = litMat({ baked: t, ck: BAKE_K[n] * Math.min(scales[n], 40) });
+      g.scene.traverse(o => { if (!o.isMesh) return; const ge = o.geometry; ge.setAttribute('aLM', ge.attributes.uv); ge.setAttribute('aCol', ge.attributes.color);
+        const m = new THREE.Mesh(ge, mt); o.updateMatrixWorld(true); m.applyMatrix4(o.matrixWorld); m.frustumCulled = false; meshes.push(m); });
+    }
+  } catch (e) { console.warn('запечённый свет не загружен, остаётся живой расчёт', e); return; }
+  scene.traverse(o => { if (o.isMesh && o.material && o.material.uniforms && o.material.uniforms.uAmb && !o.material.defines?.BAKED && o !== FX.fan.bi) o.visible = false; });
+  meshes.forEach(m => scene.add(m)); BAKED.on = true;
+}
 
 // мокрый пол: настоящее отражение (Reflector, половинное разрешение) там, где на бетоне лужи
 function buildWetFloor() {
@@ -832,8 +875,9 @@ history.scrollRestoration = 'manual'; scrollTo(0, 0);
 await document.fonts.load('520 64px TT').catch(() => {});
 await buildLogo();
 buildWorld(slot); buildLight(); buildNeon(); buildReel(); buildWetFloor(); buildTimeline();
+if (!new URLSearchParams(location.search).has('live')) await loadBaked();
 renderer.compile(scene, camera);
-window.__mega = { cam: camera, composer, bloom, go: p => { scrollTo(0, toRaw(p) * (document.documentElement.scrollHeight - innerHeight)); pSm = p; }, STOPS: () => STOPS.map(t => [t.c.id, +t.p0.toFixed(4)]), renderer, scene };
+window.__mega = { cam: camera, composer, bloom, fanMesh: FX.fan.bi, LAMPS, SHAFTS, glows: FX.glows, U, go: p => { scrollTo(0, toRaw(p) * (document.documentElement.scrollHeight - innerHeight)); pSm = p; }, STOPS: () => STOPS.map(t => [t.c.id, +t.p0.toFixed(4)]), renderer, scene };
 const AT = new URLSearchParams(location.search).get('p'); if (AT) window.__mega.go(+AT);
 frame();
 await new Promise(res => { const t0 = performance.now(); let calm = 0; const tick = () => { calm = LOAD.total === LOAD.loaded ? calm + 1 : 0; if (calm > 3 || performance.now() - t0 > 30000) return res(); setTimeout(tick, 150); }; tick(); });
