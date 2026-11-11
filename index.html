@@ -85,7 +85,13 @@ html.lock,html.lock body{overflow:hidden}
 footer.ft{display:flex;gap:18px;margin-top:16px;padding-top:12px;border-top:1px solid #2a2a2a;flex-wrap:wrap}
 footer.ft a{color:var(--cream);font-size:14px}
 select{background:#111;border:0;border-bottom:1px solid #444;color:var(--cream);font:400 17px "TT",sans-serif;padding:8px 0}
-/* 2D-слой: только индекс разделов справа */
+/* светлый мир: тексты поверх сцены — чёрные, панели остаются тёмными */
+header nav{mix-blend-mode:difference}header nav a{color:#fff}nav a.cta{color:#fff;border-color:#fff}
+.ov:not(.panel):not(#fork){color:#fff}
+/* текст поверх сцены инвертируется к фону: на белом небе — чёрный, на чёрном фасаде — белый */
+.ov:not(.panel):not(#fork) :is(h1,h2,p,.lead,.idea){mix-blend-mode:difference}
+.flex h2{text-shadow:none}.flex .idea{text-shadow:none}
+#routeBtn{color:#111!important}
 #micro{position:fixed;right:28px;top:76px;z-index:5;text-align:right;line-height:1.55;pointer-events:none;font-size:11px;transition:opacity .3s;color:var(--mute);opacity:.6}#micro:hover{opacity:1}
 #micro a,#micro [data-j]{pointer-events:auto;cursor:pointer}
 #micro [data-j]:hover{color:var(--cream)}

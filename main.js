@@ -6,6 +6,7 @@ import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 import { GTAOPass } from 'three/addons/postprocessing/GTAOPass.js';
+import { Reflector } from 'three/addons/objects/Reflector.js';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { DRACOLoader } from 'three/addons/loaders/DRACOLoader.js';
@@ -29,13 +30,13 @@ const renderer = new THREE.WebGLRenderer({ canvas, antialias: false, powerPrefer
 renderer.setPixelRatio(Math.min(devicePixelRatio, 1.25));
 renderer.setSize(innerWidth, innerHeight);
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
-renderer.toneMappingExposure = 1.12;
+renderer.toneMappingExposure = 1.0;
 
 const scene = new THREE.Scene();
 // туман не слоями, а аналитический по высоте: плотность падает с высотой, и для каждого пикселя считается, сколько тумана
 // на луче от камеры (интеграл экспоненты). у земли — плотная мгла, из неё поднимаются чёрные объёмы, верхушки чище.
 // параметры: fogNear — базовая плотность ×10⁴, fogFar — добавка у земли ×10⁴; спад по высоте — 0.035 на метр
-scene.fog = new THREE.Fog(0x4b4e52, 8, 34);
+scene.fog = new THREE.Fog(0x050505, 0.7, 2.5);   // туман тёмный: дальнее уходит в черноту неба, у земли — лёгкая дымка
 THREE.ShaderChunk.fog_pars_vertex = '#ifdef USE_FOG\n varying vec3 vFogWP;\n#endif';
 THREE.ShaderChunk.fog_vertex = '#ifdef USE_FOG\n vFogWP = mvPosition.xyz * mat3(viewMatrix) + cameraPosition;\n#endif';
 THREE.ShaderChunk.fog_pars_fragment = '#ifdef USE_FOG\n uniform vec3 fogColor; uniform float fogNear; uniform float fogFar; varying vec3 vFogWP;\n#endif';
@@ -55,7 +56,7 @@ const gtao = new GTAOPass(scene, camera, innerWidth, innerHeight);
 gtao.updateGtaoMaterial({ radius: 7, distanceExponent: 1.4, thickness: 3, scale: 1.3, samples: 12 });
 gtao.updatePdMaterial({ lumaPhi: 10, depthPhi: 2, normalPhi: 3, radius: 6, rings: 2, samples: 12 });
 gtao.blendIntensity = 1; composer.addPass(gtao);
-const bloom = new UnrealBloomPass(new THREE.Vector2(innerWidth / 2, innerHeight / 2), 0.55, 0.45, 0.84);   // половинное разрешение: быстрее и мягче, без пересветов
+const bloom = new UnrealBloomPass(new THREE.Vector2(innerWidth / 2, innerHeight / 2), 0.18, 0.4, 0.97);   // половинное разрешение: быстрее и мягче, без пересветов
 composer.addPass(bloom);
 composer.addPass(new OutputPass());
 
@@ -68,8 +69,8 @@ import('three/addons/environments/RoomEnvironment.js').then(({ RoomEnvironment }
 });
 // свет брутализма: один холодный ключ под низким углом сбоку улицы — одна стена каньона светлая, другая в тени,
 // сквозь просветы между домами на асфальт ложатся полосы. тень считается только вокруг точки, куда смотрит камера
-renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFSoftShadowMap;
-scene.add(new THREE.HemisphereLight(0xb8bcc2, 0x2a2a2a, 0.6));
+renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFSoftShadowMap; renderer.shadowMap.autoUpdate = false;   // тени считаем раз за кадр, зеркало пола не пересчитывает их второй раз
+scene.add(new THREE.HemisphereLight(0x9aa3b4, 0x2a2622, 0.35));
 // небесный свет как карта окружения: светлый купол, тёмная земля, яркое пятно со стороны ключа — мягкий рассеянный свет
 // во всех тенях, грани домов, смотрящие в небо и в сторону солнца, получают разную подсветку (дешёвая замена GI)
 {
@@ -81,13 +82,13 @@ scene.add(new THREE.HemisphereLight(0xb8bcc2, 0x2a2a2a, 0.6));
 }
 function canvasTexSky() {
   const c = document.createElement('canvas'); c.width = 8; c.height = 256; const g = c.getContext('2d'), gr = g.createLinearGradient(0, 0, 0, 256);
-  gr.addColorStop(0, '#dfe2e6'); gr.addColorStop(0.45, '#a9adb3'); gr.addColorStop(0.55, '#4a4c50'); gr.addColorStop(1, '#202022');
+  gr.addColorStop(0, '#c9d0dc'); gr.addColorStop(0.45, '#7d838e'); gr.addColorStop(0.55, '#2a2826'); gr.addColorStop(1, '#141312');   // рассеянный свет сверху — мягкая заливка теней (глобальное освещение)
   g.fillStyle = gr; g.fillRect(0, 0, 8, 256); const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; return t;
 }
 const KEY_DIR = new THREE.Vector3(0.55, 0.74, -0.38).normalize();   // сбоку и чуть из-за спины камеры, высоко — свет заходит в каньон улицы
-const sun = new THREE.DirectionalLight(0xeef0f3, 2.3);   // пасмурное солнце: мягкое, тени есть, но не режут sun.castShadow = true;
+const sun = new THREE.DirectionalLight(0xfff1e2, 4.6);   // жёсткий белый ключ: чёрное и белое, чёткие тени sun.castShadow = true;
 sun.shadow.mapSize.set(4096, 4096); Object.assign(sun.shadow.camera, { left: -300, right: 300, top: 300, bottom: -300, near: 1, far: 1300 });
-sun.shadow.radius = 4; sun.shadow.bias = -0.0006; sun.shadow.normalBias = 0.6; scene.add(sun, sun.target);
+sun.shadow.radius = 2; sun.shadow.bias = -0.0006; sun.shadow.normalBias = 0.6; scene.add(sun, sun.target);
 function updateSun(lookAt) {
   // ось тени — земля под точкой взгляда; шаг привязан к текселю карты, чтобы тени не дрожали при движении
   const e = 600 / 4096, gx = Math.round(lookAt.x / e) * e, gz = Math.round(lookAt.z / e) * e;
@@ -95,10 +96,10 @@ function updateSun(lookAt) {
 }
 
 function skyTexture() {
-  // пасмурное небо: у горизонта ровно цвет тумана (туманные объёмы сливаются с небом), к зениту темнее
+  // чёрное небо: свет в мире идёт снизу — от светлого пола, освещённого ключом
   const c = document.createElement('canvas'); c.width = 8; c.height = 512;
   const g = c.getContext('2d'), gr = g.createLinearGradient(0, 0, 0, 512);
-  gr.addColorStop(0, '#1d1f22'); gr.addColorStop(0.3, '#2b2e32'); gr.addColorStop(0.44, '#404347'); gr.addColorStop(0.5, '#4b4e52'); gr.addColorStop(1, '#4b4e52');
+  gr.addColorStop(0, '#000000'); gr.addColorStop(0.42, '#020202'); gr.addColorStop(0.5, '#050505'); gr.addColorStop(1, '#050505');
   g.fillStyle = gr; g.fillRect(0, 0, 8, 512);
   const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.mapping = THREE.EquirectangularReflectionMapping; return t;
 }
@@ -150,7 +151,39 @@ function concrete(tone = 0x3c3c3e, { scale = 14, fog = true, ao = 18, rough = 0.
   m.customProgramCacheKey = () => 'concrete' + scale + ao + rough;
   return m;
 }
-const CONC = { wall: concrete(0x101011, { scale: 30, rough: 0.72 }), dark: concrete(0x0b0b0c, { scale: 30, rough: 0.72 }), ground: concrete(0x2b2b2c, { scale: 20 }), far: concrete(0x141415, { scale: 60, ao: 60, rough: 0.6 }) };
+// чёрное зеркало: стекло-монолит с тонкой сеткой панелей. сетка — только на части кварталов (по хэшу клетки 60 м),
+// линии матовые и чуть светлее — по ним читается масштаб, как на рефах с вертикальными ламелями
+// отражения чёрного стекла — студийные панели, а не небо
+const MIRROR_ENV = (() => {
+  // чёрная студия с огромными мягкими панелями света: на каждом фасаде — длинные белые блики, форма читается чистым ч/б
+  const env = new THREE.Scene(); env.background = new THREE.Color(0x020202);
+  const soft = (w, h, x, y, z, k = 1) => { const m = new THREE.Mesh(new THREE.PlaneGeometry(w, h), new THREE.MeshBasicMaterial({ color: new THREE.Color(0xffffff).multiplyScalar(k), side: THREE.DoubleSide })); m.position.set(x, y, z); m.lookAt(0, 0, 0); env.add(m); };
+  soft(6, 60, 30, 8, 0, 1.2); soft(6, 60, -30, 8, 0, 0.9); soft(60, 5, 0, 10, 30, 0.8); soft(5, 50, 0, 6, -30, 1.0);   // вертикальные полосы по сторонам света
+  soft(40, 40, 0, 30, 0, 0.25);   // слабый верхний свет
+  soft(70, 70, 0, -30, 0, 0.06);  // тусклый пол
+  return new THREE.PMREMGenerator(renderer).fromScene(env, 0.015).texture;
+})();
+function mirror(tone = 0x050506, { lines = true, fog = true } = {}) {
+  const m = new THREE.MeshPhysicalMaterial({ color: tone, roughness: 0.07, metalness: 0, clearcoat: 0.6, clearcoatRoughness: 0.04, reflectivity: 0.5, fog, envMap: MIRROR_ENV, envMapIntensity: 1 });
+  m.onBeforeCompile = sh => {
+    sh.vertexShader = 'varying vec3 vWP; varying vec3 vWN;\n' + sh.vertexShader.replace('#include <worldpos_vertex>', `#include <worldpos_vertex>
+      vec4 wp4 = vec4(transformed, 1.0); vec3 wn = objectNormal;
+      #ifdef USE_INSTANCING
+        wp4 = instanceMatrix * wp4; wn = mat3(instanceMatrix) * wn;
+      #endif
+      vWP = (modelMatrix * wp4).xyz; vWN = normalize(mat3(modelMatrix) * wn);`);
+    if (lines) sh.fragmentShader = 'varying vec3 vWP; varying vec3 vWN;\n' + sh.fragmentShader.replace('#include <roughnessmap_fragment>', `#include <roughnessmap_fragment>
+      vec3 an = abs(normalize(vWN)); float uu = an.x > an.z ? vWP.z : vWP.x;
+      float pick = step(0.45, fract(sin(dot(floor(vWP.xz / 60.0), vec2(12.9898, 78.233))) * 43758.5453));
+      float fv = fract(uu / 2.4), fh = fract(vWP.y / 4.0), av = fwidth(uu / 2.4) * 1.5, ah = fwidth(vWP.y / 4.0) * 1.5;
+      float ln = max(smoothstep(0.9 - av, 0.9 + av, fv), smoothstep(0.965 - ah, 0.965 + ah, fh) * 0.6) * pick * (1.0 - an.y);
+      roughnessFactor = mix(roughnessFactor, 0.6, ln); diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.045), ln);`);
+    else sh.fragmentShader = 'varying vec3 vWP; varying vec3 vWN;\n' + sh.fragmentShader;
+  };
+  m.customProgramCacheKey = () => 'mirror' + lines;
+  return m;
+}
+const CONC = { wall: mirror(), dark: mirror(0x030303, { lines: false }), ground: concrete(0x2b2b2c, { scale: 20 }), far: mirror(0x050506, { lines: false }) };
 
 // ---------- текстуры ----------
 function textTexture(lines, { w = 1024, h = 512, bg = '#111111', color = '#E1D9CF', label = '', accent = 0 } = {}) {
@@ -183,22 +216,23 @@ const CASE_IMGS = ['ozon-fandom-kv-1', 'ozon-fandom-real-1', 'ozon-fandom-real-2
 // раскладываются по кускам улицы (flushBrutal): кусок рисуется, только пока он ближе границы темноты
 const TOWER = { w: 80, h: 260, d: 40 };
 const BR = { boxes: [], lit: [], chunks: [], CH: 140 };
-// чёрные простые объёмы по доске «blach arch»: монолит, стопка сдвинутых плит, консоль над улицей, парящий куб над основанием
+// чёрные монументальные объёмы по доске «blach arch»: монолит, стопка плит со скруткой, консоль над улицей,
+// парящий куб над основанием. коробка: [x, y, z, ширина, высота, глубина, поворот]
 function brutalBlock(c, r) {
-  const B = BR.boxes, side = Math.sign(c.x) || 1, t = r(), tight = Math.abs(c.x) < 50;
-  if (t < 0.34) { B.push([c.x, c.h / 2, c.z, c.w, c.h, c.d]); return; }
-  if (t < 0.62) {
-    const n = 3 + (r() * 4 | 0), sh = c.h / n; let ox = 0, oz = 0;
-    for (let i = 0; i < n; i++) { ox = (r() - 0.5) * (tight ? 3 : 9); oz = (r() - 0.5) * 9; B.push([c.x + ox, sh * i + sh / 2, c.z + oz, c.w * (0.75 + r() * 0.45), sh, c.d * (0.75 + r() * 0.45)]); }
+  const B = BR.boxes, side = Math.sign(c.x) || 1, t = r(), tight = Math.abs(c.x) < 70;
+  if (t < 0.38) { B.push([c.x, c.h / 2, c.z, c.w, c.h, c.d, 0]); return; }
+  if (t < 0.64) {   // стопка плит: каждая чуть сдвинута и повёрнута — скрученная башня
+    const n = 4 + (r() * 4 | 0), sh = c.h / n, tw = (r() - 0.5) * 0.5;
+    for (let i = 0; i < n; i++) B.push([c.x + (r() - 0.5) * (tight ? 3 : 8), sh * i + sh / 2, c.z + (r() - 0.5) * 8, c.w * (0.8 + r() * 0.35), sh, c.d * (0.8 + r() * 0.35), tw * i / n]);
     return;
   }
-  if (t < 0.82) {
-    const y0 = c.h * (0.45 + r() * 0.25), o = tight ? 3 : 6 + r() * 10;
-    B.push([c.x + side * c.w * 0.18, y0 / 2, c.z, c.w * 0.6, y0, c.d * 0.7]);
-    B.push([c.x - side * o / 2, y0 + (c.h - y0) / 2, c.z, c.w + o, c.h - y0, c.d]); return;
+  if (t < 0.84) {   // консоль: тонкая опора и тяжёлый верх, выезжающий к улице
+    const y0 = c.h * (0.5 + r() * 0.2), o = tight ? 4 : 10 + r() * 14;
+    B.push([c.x + side * c.w * 0.2, y0 / 2, c.z, c.w * 0.45, y0, c.d * 0.6, 0]);
+    B.push([c.x - side * o / 2, y0 + (c.h - y0) / 2, c.z, c.w + o, c.h - y0, c.d, 0]); return;
   }
-  const hb = 6 + r() * 10, sz = Math.min(c.w, c.d) * (0.8 + r() * 0.3), gap = 5 + r() * 9;
-  B.push([c.x, hb / 2, c.z, c.w, hb, c.d], [c.x, hb + gap + sz / 2, c.z, sz, sz, sz]);
+  const hb = 4 + r() * 8, sz = Math.min(c.w, c.d) * (0.9 + r() * 0.3), gap = 8 + r() * 14;   // куб парит над низким основанием
+  B.push([c.x, hb / 2, c.z, c.w, hb, c.d, 0], [c.x, hb + gap + sz / 2, c.z, sz, sz, sz, 0]);
 }
 // скалы с poly haven (cc0, упрощены в blender): чёрный камень с картой нормалей, инстансы по типам
 const ROCKS = { list: [], files: ['mountainside', 'namaqualand_cliff_02', 'boulder_01'] };
@@ -226,7 +260,7 @@ function flushBrutal() {
   for (const [k, { b, l }] of by) {
     const g = new THREE.Group(); scene.add(g);
     const im = new THREE.InstancedMesh(box, CONC.wall, b.length); im.castShadow = im.receiveShadow = true;
-    b.forEach(([x, y, z, w, h, dd], i) => { d.position.set(x, y, z); d.rotation.set(0, 0, 0); d.scale.set(w, h, dd); d.updateMatrix(); im.setMatrixAt(i, d.matrix); });
+    b.forEach(([x, y, z, w, h, dd, ry = 0], i) => { d.position.set(x, y, z); d.rotation.set(0, ry, 0); d.scale.set(w, h, dd); d.updateMatrix(); im.setMatrixAt(i, d.matrix); });
     im.computeBoundingSphere(); g.add(im);
     if (l.length) { const lm = new THREE.InstancedMesh(plane, litM, l.length); l.forEach(([x, y, z, w, h, s], i) => { d.position.set(x, y, z); d.rotation.set(0, -s * Math.PI / 2, 0); d.scale.set(w, h, 1); d.updateMatrix(); lm.setMatrixAt(i, d.matrix); }); lm.computeBoundingSphere(); g.add(lm); }
     BR.chunks.push({ g, z0: k * BR.CH, z1: (k + 1) * BR.CH });
@@ -240,19 +274,17 @@ function updateReach() {
 }
 function buildCity() {
   const cells = [];
-  for (let x = -238; x <= 238; x += 34) for (let z = -340; z <= 1320; z += 34) {   // дальше седьмого ряда дома не нужны: их закрывает каньон и темнота
-    if (Math.abs(x) < 20 && z > -20) continue;               // улица
-    if (Math.abs(x) < 62 && Math.abs(z) < 42) continue;      // площадь у башни
-    if (Math.abs(z - 150) < 15) continue;                    // перекрёсток
+  for (const sx of [-1, 1]) for (let ax = 64; ax <= 330; ax += 54) for (let z = -360; z <= 1340; z += 54) {   // реже и крупнее: монументальный масштаб
+    const x = sx * ax;
+    if (Math.abs(x) < 70 && Math.abs(z) < 50) continue;      // площадь у башни
+    if (Math.abs(z - 150) < 22) continue;                    // перекрёсток
     if (reservedByWorld(x, z)) continue;                      // улица после развилки, башни atl и «дикси»
-    if (Math.abs(x) < 20 && z > TAIL.brief - 10) continue;    // торец проспекта под бриф
-    if (rand() < 0.3) {   // просвет: на части пустых мест — скалы, город врастает в камень
-      if (Math.abs(x) > 90 && rand() < 0.45) { const q = rand(); q < 0.6 ? rock('namaqualand_cliff_02', x, -1, z, 2 + rand() * 1.6, rand() * 6) : q < 0.85 ? rock('mountainside', x, -2, z, 3 + rand() * 3, rand() * 6) : rock('boulder_01', x, -1, z, 10 + rand() * 12, rand() * 6); }
+    if (rand() < 0.32) {   // просвет: на части пустых мест — скалы, город врастает в камень
+      if (ax > 110 && rand() < 0.5) { const q = rand(); q < 0.6 ? rock('namaqualand_cliff_02', x, -1, z, 2.2 + rand() * 1.6, rand() * 6) : q < 0.85 ? rock('mountainside', x, -2, z, 3.5 + rand() * 3, rand() * 6) : rock('boulder_01', x, -1, z, 14 + rand() * 14, rand() * 6); }
       continue;
     }
-    const dist = Math.hypot(x, z * 0.8), near = Math.abs(x) < 80;
-    const h = near ? 48 + rand() * 90 : 30 + rand() * (70 + Math.min(dist, 380) * 0.35);   // у улицы стены выше — каньон
-    cells.push({ x: x + (rand() - .5) * 4, z: z + (rand() - .5) * 4, w: 20 + rand() * 9, d: 20 + rand() * 9, h });
+    const near = ax < 130, h = near ? 70 + rand() * 150 : 50 + rand() * 230;
+    cells.push({ x: x + (rand() - .5) * 6, z: z + (rand() - .5) * 6, w: 30 + rand() * 16, d: 30 + rand() * 16, h });
   }
   CITY.cells = cells;
   cells.forEach(c => brutalBlock(c, rand));
@@ -265,9 +297,19 @@ function buildCity() {
     mega(x, z, w, h, d); if (fr() < 0.55) mega(x - s * (w * 0.3), z + (fr() - 0.5) * d, w * 0.5, h + 60 + fr() * 140, d * 0.5);
   }
   [[-260, -900], [180, -1000], [0, 2250], [-320, 2150], [300, 2300]].forEach(([x, z]) => mega(x, z, 260 + fr() * 200, 400 + fr() * 300, 160));
-  // земля — тёмный камень
-  const ground = new THREE.Mesh(new THREE.PlaneGeometry(5000, 5000), CONC.ground); ground.receiveShadow = true;
-  ground.rotation.x = -Math.PI / 2; scene.add(ground); CITY.ground = ground;
+  // пол — чёрный мокрый камень: снизу настоящее зеркало (Reflector), сверху полупрозрачный тёмный слой с тенями —
+  // в нём отражаются цветные кубы брендов, их свет и силуэты домов, как куб в воде на рефе
+  const mirrorFloor = new Reflector(new THREE.PlaneGeometry(5000, 5000), { textureWidth: innerWidth * 0.5, textureHeight: innerHeight * 0.5, color: 0x9a9a9a });
+  mirrorFloor.rotation.x = -Math.PI / 2; mirrorFloor.position.y = -0.02; scene.add(mirrorFloor); CITY.mirror = mirrorFloor;
+  const ground = new THREE.Mesh(new THREE.PlaneGeometry(5000, 5000), new THREE.MeshStandardMaterial({ color: 0x1a1a1a, roughness: 0.5, transparent: true, opacity: 0.62 }));
+  ground.receiveShadow = true; ground.rotation.x = -Math.PI / 2; scene.add(ground); CITY.ground = ground;
+  // монументы по рефам: парящая плита над перекрёстком, «дерево» из консолей у площади, светлый проём в чёрной стене в финале
+  BR.boxes.push([0, 128, 330, 260, 34, 70, 0]);                                         // плита висит над проспектом, под ней проходят оба маршрута
+  BR.boxes.push([-150, 70, -40, 12, 140, 12, 0]);                                       // ствол «дерева»
+  const tr = mulberry(57); for (let i = 0; i < 22; i++) { const y = 40 + tr() * 110, a = tr() * Math.PI * 2, L = 16 + tr() * 22; BR.boxes.push([-150 + Math.cos(a) * L / 2, y, -40 + Math.sin(a) * L / 2, L, 5 + tr() * 3, 7 + tr() * 4, -a]); }
+  BR.boxes.push([0, 120, TAIL.brief + 60, 420, 240, 20, 0]);                            // чёрная стена в конце проспекта
+  const portal = new THREE.Mesh(new THREE.PlaneGeometry(46, 96), new THREE.MeshBasicMaterial({ color: 0xffffff, fog: false }));
+  portal.position.set(0, 60, TAIL.brief + 49.8); portal.rotation.y = Math.PI; scene.add(portal);
   for (let z = 50; z < TAIL.brief - 10; z += 12) {
     const l = new THREE.Mesh(new THREE.PlaneGeometry(0.4, 5), new THREE.MeshBasicMaterial({ color: 0x2c2c30 }));
     l.rotation.x = -Math.PI / 2; l.position.set(0, 0.05, z); scene.add(l);
@@ -1186,7 +1228,7 @@ function updateWorld(time) {
 }
 // проверка: камера обоих маршрутов не должна заходить ни в один объект (в консоли при ?dev)
 function checkPath() {
-  const boxes = [...SOLIDS, ...BR.boxes.map(([x, y, z, w, h, d]) => ({ box: new THREE.Box3(new THREE.Vector3(x - w / 2, y - h / 2, z - d / 2), new THREE.Vector3(x + w / 2, y + h / 2, z + d / 2)), name: 'дом' }))];
+  const boxes = [...SOLIDS, ...BR.boxes.map(([x, y, z, w0, h, d0, ry = 0]) => { const w = ry ? Math.hypot(w0, d0) : w0, d = ry ? w : d0; return { box: new THREE.Box3(new THREE.Vector3(x - w / 2, y - h / 2, z - d / 2), new THREE.Vector3(x + w / 2, y + h / 2, z + d / 2)), name: 'дом' }; })];
   const hits = [], s = new THREE.Sphere(new THREE.Vector3(), 2.5), q = new THREE.Vector3();
   for (const r of ['btl', 'atl']) {
     const k = CAM[r];
@@ -1269,8 +1311,8 @@ function buildTimeline() {
   ];
   const tail = [
     { p: 0.94, pos: V(0, 12, TAIL.awards - 40), look: V(0, 22, TAIL.awards + 60) },
-    { p: 0.975, pos: V(0, 34, TAIL.brief - 110), look: V(0, 90, TAIL.brief + 120) },
-    { p: 1.00, pos: V(0, 70, TAIL.brief - 90), look: V(0, 170, TAIL.brief + 160) },   // финал: камера поднимается к небу между стенами
+    { p: 0.975, pos: V(0, 20, TAIL.brief - 150), look: V(0, 50, TAIL.brief + 50) },
+    { p: 1.00, pos: V(0, 34, TAIL.brief - 70), look: V(0, 58, TAIL.brief + 50) },   // финал: светлый проём в чёрной стене
   ];
   // остановка: подлёт (a) и посадка (b), куб — в правой трети, взгляд смещён к левому краю кадра (+x при взгляде вдоль +z)
   const stop = w => {
@@ -1527,7 +1569,7 @@ function frame() {
   if (promo.v && !promo.started && pSm > 0.3) { promo.started = true; promo.v.play().catch(() => addEventListener('pointerdown', () => promo.v.play(), { once: true })); }
   hud2d(pSm, time);
   updateOverlay(pSm);
-  composer.render();
+  renderer.shadowMap.needsUpdate = true; composer.render();
   requestAnimationFrame(frame);
 }
 
