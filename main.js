@@ -62,9 +62,9 @@ bloom.enabled = false;   // без ореолов и засветов   // по�
 composer.addPass(bloom);
 composer.addPass(new OutputPass());
 // плёнка как на рефе: зерно и уход низа кадра в черноту
-const grain = new ShaderPass({ uniforms: { tDiffuse: { value: null }, t: { value: 0 }, fin: { value: 0 }, px: { value: new THREE.Vector2(1 / innerWidth, 1 / innerHeight) } },
+const grain = new ShaderPass({ uniforms: { tDiffuse: { value: null }, t: { value: 0 }, fin: { value: 0 }, uA: { value: 0 }, uB: { value: 0 }, uC: { value: 0 }, uW: { value: 0 }, px: { value: new THREE.Vector2(1 / innerWidth, 1 / innerHeight) } },
   vertexShader: 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
-  fragmentShader: `uniform sampler2D tDiffuse; uniform float t; uniform float fin; uniform vec2 px; varying vec2 vUv;
+  fragmentShader: `uniform sampler2D tDiffuse; uniform float t; uniform float fin; uniform float uA; uniform float uB; uniform float uC; uniform float uW; uniform vec2 px; varying vec2 vUv;
     float lum(vec2 u){ return dot(texture2D(tDiffuse, u).rgb, vec3(0.299, 0.587, 0.114)); }
     float bayer(vec2 p){ vec2 q = mod(floor(p), 4.0); float m[16]; m[0]=0.;m[1]=8.;m[2]=2.;m[3]=10.;m[4]=12.;m[5]=4.;m[6]=14.;m[7]=6.;m[8]=3.;m[9]=11.;m[10]=1.;m[11]=9.;m[12]=15.;m[13]=7.;m[14]=13.;m[15]=5.; int i = int(q.y * 4.0 + q.x); float v = 0.; for (int k = 0; k < 16; k++) if (k == i) v = m[k]; return (v + 0.5) / 16.0; }
     float h(vec2 p){ return fract(sin(dot(p, vec2(12.9898, 78.233)) + t) * 43758.5453); }
@@ -75,8 +75,10 @@ const grain = new ShaderPass({ uniforms: { tDiffuse: { value: null }, t: { value
       // финал «сигнал»: 1) полутоновый растр, растущие точки, красные бренд-пиксели в полутонах;
       // 2) срыв сигнала — строки рвутся и сдвигаются, каналы расходятся, проступают белые контуры граней;
       // 3) свет стекает вниз потёками (как сортировка пикселей) и всё уходит в белый проём
-      if (fin > 0.0) {
-        float A = smoothstep(0.0, 0.35, fin), B = smoothstep(0.3, 0.7, fin), C = smoothstep(0.62, 1.0, fin);
+      // один язык эффектов на весь лендинг: A — растр, B — срыв сигнала и контуры, C — потёки света, W — белая вспышка.
+      // в пути камеры — лёгкий растр и разрывы по скорости, у логотипа — вспышка контуров, в финале — всё целиком
+      if (uA + uB + uC + uW > 0.001) {
+        float A = uA, B = uB, C = uC;
         float tick = floor(t * 14.0), row = floor(vUv.y * 70.0);
         float tear = step(0.8, h(vec2(row, tick))) * (h(vec2(row + 7.0, tick)) - 0.5) * 0.3 * B;
         vec2 u = vUv + vec2(tear, 0.0);
@@ -93,7 +95,7 @@ const grain = new ShaderPass({ uniforms: { tDiffuse: { value: null }, t: { value
         col = mix(col, ht, A * (1.0 - 0.5 * C));
         float gx = lum(u + vec2(px.x, 0.)) - lum(u - vec2(px.x, 0.)), gy = lum(u + vec2(0., px.y)) - lum(u - vec2(0., px.y));
         col = max(col, vec3(smoothstep(0.05, 0.16, length(vec2(gx, gy)))) * B);
-        col = mix(col, vec3(1.0), smoothstep(0.92, 1.0, fin) * smoothstep(0.55, 0.9, lum(vUv)));   // проём вспыхивает белым
+        col = mix(col, vec3(1.0), uW);   // белая вспышка: в финале — вход в проём
         c.rgb = col;
       }
 gl_FragColor = c; }` });
@@ -1284,7 +1286,13 @@ function placeholder(w) {
     let face = null;
     if (img) {
       const fw = span * 0.92, fh = Math.min(fw * 0.625, sy * 1.25);
-      face = new THREE.Mesh(new THREE.PlaneGeometry(fw, fh), new THREE.MeshBasicMaterial({ map: caseTexture(`assets/cases/${img}.jpg`, false, 1024, 640), toneMapped: false, transparent: true, opacity: 0 }));
+      const fm = new THREE.MeshBasicMaterial({ map: caseTexture(`assets/cases/${img}.jpg`, false, 1024, 640), toneMapped: false });
+      fm.userData.reveal = { value: 0 };   // кадр проявляется полутоновыми точками: растут от нуля и сливаются в изображение
+      fm.onBeforeCompile = sh => { sh.uniforms.uR = fm.userData.reveal; sh.fragmentShader = 'uniform float uR;\n' + sh.fragmentShader.replace('#include <map_fragment>', `#include <map_fragment>
+        float L = dot(diffuseColor.rgb, vec3(0.299, 0.587, 0.114)); vec2 hg = gl_FragCoord.xy / 7.0;
+        float dv = step(length(fract(hg) - 0.5), sqrt(L) * 0.8 * min(1.0, uR * 1.5));
+        diffuseColor.rgb = mix(diffuseColor.rgb * dv, diffuseColor.rgb, smoothstep(0.75, 1.0, uR));`); };
+      face = new THREE.Mesh(new THREE.PlaneGeometry(fw, fh), fm);
       g.add(face); g.updateMatrixWorld(true); face.lookAt(cam); face.userData.case = w.id; clickable.push(face);
     }
     CUBES.push({ g, sl, face, along, span, sy });
@@ -1323,7 +1331,7 @@ function updateCubes() {
     const t = clamp01((150 - q.g.position.distanceTo(camera.position)) / 70), I = t * t * (3 - 2 * t);
     if (I === 0 && q.I === 0) continue; q.I = I;
     q.sl.forEach(s => { s.m.position.y = s.y0 + s.k * I * q.sy * 0.16; s.m.position[q.along] = s.dir * I * q.span * 0.46; });
-    if (q.face) { q.face.material.opacity = clamp01((I - 0.35) / 0.4); q.face.visible = I > 0.3; }
+    if (q.face) { q.face.material.userData.reveal.value = clamp01((I - 0.35) / 0.55); q.face.visible = I > 0.3; }
   }
 }
 function updateGlow() {
@@ -1344,7 +1352,7 @@ function checkPath() {
     const k = CAM[r];
     for (let n = 0; n <= 800; n++) {
       const p = FORK + (1 - FORK) * n / 800; let i = 0; while (i < k.length - 2 && p > k[i + 1].p) i++;
-      k.pos.getPoint(camU(k, p), q); s.center.copy(q);
+      k.pos.getPointAt(clamp01(sOfP(k, p) / k.L), q); s.center.copy(q);
       const b = boxes.find(b => b.box.intersectsSphere(s)); if (b) hits.push({ r, p: +p.toFixed(3), cam: q.toArray().map(v => +v.toFixed(1)).join(' '), obj: b.name });
     }
   }
@@ -1419,14 +1427,15 @@ function buildTimeline() {
     { p: 0.445, pos: V(-14, 70, 130), look: V(0, 46, 0) },                      // спуск вдоль фасада
     { p: 0.475, pos: V(0, 30, 96), look: V(0, 30, 0) },                         // шоурил на башне в лоб
     { p: 0.518, pos: V(0, 30, 90), look: V(0, 30, 0) },
-    { p: 0.526, pos: V(-2, 24, 98), look: V(-120, 22, 96) },                     // резкий разворот головы через левое плечо
-    { p: 0.534, pos: V(0, 16, 108), look: V(0, 17, 210) },                      // уже смотрим вдоль проспекта
+    { p: 0.528, pos: V(-4, 24, 100), look: V(-120, 22, 110) },                    // плавный разворот через левое плечо
+    { p: 0.542, pos: V(0, 16, 110), look: V(0, 17, 210) },                      // уже смотрим вдоль проспекта
     { p: 0.585, pos: V(0, 14, 120), look: V(0, 16, 210) },                      // развилка
   ];
   const tail = [
     { p: 0.94, pos: V(26, 110, TAIL.awards - 190), look: V(0, 30, TAIL.brief) },            // финал: взлёт над городом — шейдер разбирает живой город, а не пустую стену
     { p: 0.972, pos: V(0, 70, TAIL.brief - 230), look: V(0, 60, TAIL.brief + 50) },
-    { p: 1.00, pos: V(0, 40, TAIL.brief - 80), look: V(0, 58, TAIL.brief + 50) },         // светлый проём в чёрной стене
+    { p: 0.99, pos: V(0, 58, TAIL.brief - 40), look: V(0, 60, TAIL.brief + 50) },
+    { p: 1.00, pos: V(0, 60, TAIL.brief + 43), look: V(0, 60, TAIL.brief + 60) },         // входим в светлый проём: весь экран — белый
   ];
   // остановка: подлёт (a) и посадка (b), куб — в правой трети, взгляд смещён к левому краю кадра (+x при взгляде вдоль +z)
   const stop = w => {
@@ -1441,11 +1450,7 @@ function buildTimeline() {
   const stops = r => WORLD.filter(w => w.r === r).flatMap(stop);
   CAM.btl = [...head, { p: 0.598, pos: V(8, 9, 152), look: V(0, 9, 240) }, ...stops('btl'), ...tail];
   CAM.atl = [...head, { p: 0.598, pos: V(0, 40, 150), look: V(0, 62, 260) }, ...stops('atl'), { p: 0.93, pos: V(0, 40, TAIL.awards - 90), look: V(0, 24, TAIL.awards) }, ...tail];
-  for (const r of ['btl', 'atl']) {
-    const k = CAM[r];
-    k.pos = new THREE.CatmullRomCurve3(k.map(x => x.pos), false, 'centripetal');
-    k.look = new THREE.CatmullRomCurve3(k.map(x => x.look), false, 'centripetal');
-  }
+  for (const r of ['btl', 'atl']) prepRoute(CAM[r]);
   const sl = iskra.userData.slotScale;
   const narrow = innerWidth < 760, heroY = narrow ? 412 : 398, heroK = narrow ? 2.2 : 3.2;
   ISK = [
@@ -1457,7 +1462,27 @@ function buildTimeline() {
     { p: 1.00, pos: s.clone(), scale: sl, spin: 4 * Math.PI },
   ];
 }
-// положение на сплайне: номер отрезка + плавная доля внутри — камера мягко тормозит на каждом ключе
+// ---------- камера, заново ----------
+// путь — сплайн по ключам, но движение по нему идёт по длине дуги (ровная скорость, без рывков на ключах).
+// скролл задаёт целевую точку на пути через гладкую монотонную кривую p → метры (PCHIP: без остановок на каждом ключе,
+// задержки только там, где ключи стоят рядом — на остановках у кейсов). камера догоняет цель с пределом скорости
+// и ускорения, а взгляд поворачивается с пределом угловой скорости — резких разворотов не бывает
+function prepRoute(k) {
+  k.pos = new THREE.CatmullRomCurve3(k.map(x => x.pos), false, 'centripetal');
+  k.look = new THREE.CatmullRomCurve3(k.map(x => x.look), false, 'centripetal');
+  const N = 8000, L = k.pos.getLengths(N), n = k.length; k.L = L[N];
+  k.P = k.map(x => x.p); k.S = k.map((_, i) => L[Math.round(i / (n - 1) * N)]);
+  const d = []; for (let i = 0; i < n - 1; i++) d[i] = (k.S[i + 1] - k.S[i]) / Math.max(1e-6, k.P[i + 1] - k.P[i]);
+  k.M = k.map((_, i) => i === 0 ? d[0] : i === n - 1 ? d[n - 2] : (d[i - 1] <= 1e-6 || d[i] <= 1e-6) ? 0 : 2 / (1 / d[i - 1] + 1 / d[i]));
+}
+function sOfP(k, p) {
+  const P = k.P; let i = 0; while (i < P.length - 2 && p > P[i + 1]) i++;
+  const h = Math.max(1e-6, P[i + 1] - P[i]), t = clamp01((p - P[i]) / h), t2 = t * t, t3 = t2 * t;
+  return (2 * t3 - 3 * t2 + 1) * k.S[i] + (t3 - 2 * t2 + t) * h * k.M[i] + (-2 * t3 + 3 * t2) * k.S[i + 1] + (t3 - t2) * h * k.M[i + 1];
+}
+function pOfS(k, sv) { let a = 0, b = 1; for (let n = 0; n < 26; n++) { const m = (a + b) / 2; sOfP(k, m) < sv ? a = m : b = m; } return (a + b) / 2; }
+function camAt(k, sv, pos, lk) { const u = clamp01(sv / k.L); k.pos.getPointAt(u, pos); k.look.getPoint(k.pos.getUtoTmapping(u), lk); }
+const CS = { s: 0, v: 0, q: new THREE.Quaternion(), init: false, snap: false, m: new THREE.Matrix4(), dq: new THREE.Quaternion() };
 function camU(k, p) { let i = 0; while (i < k.length - 2 && p > k[i + 1].p) i++; const f = clamp01((p - k[i].p) / (k[i + 1].p - k[i].p)); return (i + (p < P0 ? f : f * f * (3 - 2 * f))) / (k.length - 1); }
 function sample(keys, p, fn) {
   let i = 0; while (i < keys.length - 2 && p > keys[i + 1].p) i++;
@@ -1532,7 +1557,7 @@ const goTo = key => {
   if (Math.abs(target - pSm) < 0.12) return scrollTo({ top: toScroll(target), behavior: 'smooth' });
   // далеко: не тащим камеру через весь город, а закрываем шторкой и переставляем
   curtainWord.textContent = WORD[key] || key; curtain.className = 'in';
-  setTimeout(() => { scrollTo(0, toScroll(target)); pSm = Math.max(P0, target); curtain.className = 'out'; }, 380);
+  setTimeout(() => { scrollTo(0, toScroll(target)); CS.snap = true; curtain.className = 'out'; }, 380);
 };
 document.addEventListener('click', e => {
   const el = e.target.closest('[data-go],[data-case],[data-modal],[data-brief],[data-more],#caseOrbit,#openOrbit');
@@ -1540,7 +1565,7 @@ document.addEventListener('click', e => {
   e.preventDefault();
   if (el.id === 'openOrbit') return openOrbit();
   if (el.dataset.more) return openModal(MODALS.more(el.dataset.more));
-  if (el.id === 'caseOrbit') { closeModal(); route = 'btl'; scrollTo(0, toScroll(GO.alley)); pSm = GO.alley; openOrbit(); return; }
+  if (el.id === 'caseOrbit') { closeModal(); route = 'btl'; scrollTo(0, toScroll(GO.alley)); CS.snap = true; openOrbit(); return; }
   if (el.dataset.case) return openModal(renderCase(el.dataset.case));
   if (el.dataset.modal) return openModal(MODALS[el.dataset.modal]);
   if (el.dataset.brief) {   // бриф открывается с подставленным направлением или кейсом
@@ -1572,7 +1597,7 @@ const jumpTo = (p, r) => {
   const max = document.documentElement.scrollHeight - innerHeight, t = p;
   if (Math.abs(t - pSm) < 0.08) return scrollTo({ top: toScroll(t), behavior: 'smooth' });
   curtainWord.textContent = WORD_OF(p); curtain.className = 'in';
-  setTimeout(() => { scrollTo(0, toScroll(t)); pSm = Math.max(P0, t); curtain.className = 'out'; }, 380);
+  setTimeout(() => { scrollTo(0, toScroll(t)); CS.snap = true; curtain.className = 'out'; }, 380);
 };
 const WORD_OF = p => (INDEX.filter(s => Math.abs(s[2] - p) < 1e-6)[0] || [, ''])[1];
 micro?.addEventListener('click', e => { const d = e.target.closest('[data-j]'); if (!d) return; e.preventDefault(); jumpTo(+d.dataset.j, d.dataset.r || null); });
@@ -1642,17 +1667,24 @@ function frame() {
   }
   // развилка: пока направление не выбрано, дальше перекрёстка не листается
   if (!route && !orbitOn && p > FORK) { scrollTo(0, toScroll(FORK)); p = FORK; const f = document.getElementById('fork'); if (!f.classList.contains('pulse')) { f.classList.add('pulse'); setTimeout(() => f.classList.remove('pulse'), 1100); } }
-  pSm = INTRO.done ? pSm + (p - pSm) * (1 - Math.exp(-dt * 2.6)) : p;   // инерция скролла; вступление идёт без задержки
-
   if (orbitOn) { orbit.update(); }
   else {
-    const k = CAM[route || 'btl'];
-    let i = 0; while (i < k.length - 2 && pSm > k[i + 1].p) i++;
-    const u = camU(k, pSm);
-    k.pos.getPoint(u, camera.position); k.look.getPoint(u, look);
-    mouseSm.lerp(mouse, Math.min(1, dt * 3));
-    camera.position.x += mouseSm.x * 1.5; camera.position.y -= mouseSm.y * 1;
-    camera.lookAt(look);
+    const k = CAM[route || 'btl'], sT = sOfP(k, p);
+    if (!CS.init || CS.snap || !INTRO.done) { CS.s = sT; CS.v = 0; }   // вступление и прыжки по меню (под шторкой) — без догона
+    else {   // догон цели: предел скорости растёт с высотой, разгон и торможение ограничены
+      const vmax = 30 + Math.max(0, camera.position.y) * 0.22, amax = 20;
+      const dS = sT - CS.s, want = Math.sign(dS) * Math.min(vmax, Math.abs(dS) * 1.6, Math.sqrt(2 * amax * Math.abs(dS)) * 0.92);   // тормозит заранее, без проскока
+      CS.v += Math.max(-amax * dt, Math.min(amax * dt, want - CS.v)); CS.s += CS.v * dt;
+    }
+    camAt(k, CS.s, camera.position, look);
+    mouseSm.lerp(mouse, Math.min(1, dt * 2));
+    camera.position.x += mouseSm.x * 1.2; camera.position.y -= mouseSm.y * 0.8;
+    // взгляд: мягкое догоняние с пределом угловой скорости (50°/с, во вступлении — быстрее)
+    CS.m.lookAt(camera.position, look, camera.up); CS.dq.setFromRotationMatrix(CS.m);
+    if (!CS.init || CS.snap) CS.q.copy(CS.dq);
+    else { const ang = CS.q.angleTo(CS.dq), wmax = INTRO.done ? 0.87 : 3.5; CS.q.rotateTowards(CS.dq, Math.min(ang * (1 - Math.exp(-dt * 3.2)), wmax * dt)); }
+    camera.quaternion.copy(CS.q); CS.init = true; CS.snap = false;
+    pSm = INTRO.done ? pOfS(k, CS.s) : p;   // тексты, искра и финал привязаны к тому, где камера на самом деле
   }
   updateSun(orbitOn ? orbit.target : look); updateReach();
   // Искра: вращается только она, к посадке разворачивается лицом и замирает
@@ -1684,7 +1716,14 @@ function frame() {
   if (promo.v && !promo.started && pSm > 0.3) { promo.started = true; promo.v.play().catch(() => addEventListener('pointerdown', () => promo.v.play(), { once: true })); }
   hud2d(pSm, time);
   updateOverlay(pSm);
-  CITY.sky.position.copy(camera.position); grain.uniforms.t.value = time % 100; grain.uniforms.fin.value = clamp01((pSm - 0.928) / 0.068);
+  CITY.sky.position.copy(camera.position); grain.uniforms.t.value = time % 100; {
+    const fin = clamp01((pSm - 0.928) / 0.068), ss = (a, b, x) => { const t = clamp01((x - a) / (b - a)); return t * t * (3 - 2 * t); };
+    const spd = INTRO.done && !orbitOn ? clamp01((Math.abs(CS.v) - 8) / 30) : 0;                 // сигнал в движении: чем быстрее едем, тем сильнее растр
+    const ign = INTRO.t0 !== null ? Math.exp(-Math.pow((pSm - 0.352) / 0.01, 2)) : 0;            // искра встала в «О» — вспышка контуров
+    const U = grain.uniforms; U.fin.value = fin;
+    U.uA.value = Math.max(ss(0, 0.35, fin), spd * 0.42); U.uB.value = Math.max(ss(0.3, 0.7, fin), spd * 0.3, ign * 0.9); U.uC.value = ss(0.62, 0.95, fin);
+    U.uW.value = Math.max(ss(0.985, 1.0, pSm), ign * 0.25);
+  }
   renderer.shadowMap.needsUpdate = true; composer.render();
   requestAnimationFrame(frame);
 }
@@ -1706,7 +1745,8 @@ built = true; frame();
 await new Promise(res => { const t0 = performance.now(); let calm = 0; const chk = () => { calm = LD.done >= LD.total ? calm + 1 : 0; if (calm > 4 || performance.now() - t0 > 30000) res(); else setTimeout(chk, 120); }; chk(); });
 await new Promise(r => setTimeout(r, 450));
 clearInterval(ldTick); ldPct.textContent = '100';
-window.__three = { renderer, scene, CAM, THREE, WORLD, BR, checkPath, go: (p, r) => { INTRO.done = true; document.documentElement.classList.remove('lock'); route = r; scrollTo(0, toScroll(p)); pSm = p; } };   // для отладки
+window.__cam = () => ({ p: +pSm.toFixed(4), s: +CS.s.toFixed(1), v: +CS.v.toFixed(1), pos: camera.position.toArray().map(v => +v.toFixed(1)) });
+window.__three = { renderer, scene, CAM, THREE, WORLD, BR, checkPath, go: (p, r) => { INTRO.done = true; document.documentElement.classList.remove('lock'); route = r; scrollTo(0, toScroll(p)); CS.snap = true; } };   // для отладки
 scrollTo(0, 0); unlocked = true;   // скролл откроется после вступления (frame)
 document.getElementById('loader').classList.add('done');
 if (location.search.includes('dev')) checkPath();   // для отладки производительности
