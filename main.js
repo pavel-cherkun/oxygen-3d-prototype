@@ -1123,9 +1123,17 @@ function roof(w) {
   solid(g);
 }
 // все кейсы пока — бетонные кубы-плейсхолдеры в габарите будущего носителя: ничего не отвлекает от города и маршрута
-const PH = concrete(0x77777a, { scale: 6, ao: 4 });
+// кейсы — в цвете бренда клиента (приблизительные фирменные цвета; уточнить по брендбукам клиентов)
+const BRAND = { fandom: 0x005bff, selekt: 0x005bff, tbank: 0xffdd2d, lion: 0x0094d9, izhora: 0x0094d9, lionMerch: 0x0094d9,
+  ironstar: 0xff6a13, gdrive: 0xff6a13, gdriveMerch: 0xff6a13, baltika7: 0x0b3a7e, baltikaPlant: 0x0b3a7e, mice: 0x0b3a7e,
+  megafon: 0x00b956, megafonTravel: 0x00b956, oxygenSet: RED, treschnutye: 0xff7a10, zaklinateli: 0xff7a10, dino: 0xff7a10,
+  avangard: 0xc8102e, derbent: 0xc8873a, tevredens: CREAM, aiFonbet: 0xe30613, aiMango: 0xff8200, aiLavka: 0xffcc00, aiAlfa: 0xef3124 };
+const PHM = {}, phMat = id => PHM[id] ||= new THREE.MeshStandardMaterial({ color: BRAND[id] ?? RED, emissive: BRAND[id] ?? RED, emissiveIntensity: 0.05, roughness: 0.5, metalness: 0 });
+// локальный свет кейсов: пул из четырёх ламп цвета бренда переезжает к ближайшим кубам — бетон вокруг кейса окрашивается брендом,
+// а число источников в сцене не меняется (шейдеры не пересобираются)
+const GLOW = { pts: [], pool: [] };
 function placeholder(w) {
-  const cube = (sx, sy, sz, x, y, z, ry = 0) => { w.cube = { c: V(x, y, z), h: sy, w: Math.max(sx, sz) }; const m = new THREE.Mesh(new THREE.BoxGeometry(sx, sy, sz), PH); m.position.set(x, y, z); m.rotation.y = ry; m.castShadow = m.receiveShadow = true; m.userData.case = w.id; scene.add(m); clickable.push(m); return solid(m); };
+  const cube = (sx, sy, sz, x, y, z, ry = 0) => { w.cube = { c: V(x, y, z), h: sy, w: Math.max(sx, sz) }; const m = new THREE.Mesh(new THREE.BoxGeometry(sx, sy, sz), phMat(w.id)); m.position.set(x, y, z); m.rotation.y = ry; m.castShadow = m.receiveShadow = true; m.userData.case = w.id; scene.add(m); clickable.push(m); return solid(m); };
   if (w.tower) towerBox(w.tower, CONC.wall);
   if (w.moment === 'izhora') { const s = Math.sign(w.tower.x); return cube(2, 52, 30, w.face - s * 1, 66, w.z); }
   if (w.kind === 'roof') return cube(16, 16, 16, w.tower.x + 4, w.tower.h + 8, w.z);
@@ -1136,9 +1144,16 @@ function placeholder(w) {
 }
 function buildWorld() {
   for (const w of WORLD) placeholder(w);
+  for (const w of WORLD) { const { c, h } = w.cube, air = w.r === 'atl'; GLOW.pts.push(Object.assign(air ? V(c.x - Math.sign(c.x) * 20, c.y + 4, c.z - 16) : V(c.x + 16, Math.min(h * 0.6, 10) + 6, c.z - 14), { col: new THREE.Color(BRAND[w.id] ?? RED) })); }
+  for (let i = 0; i < 4; i++) { const l = new THREE.PointLight(RED, 0, 60, 1.6); scene.add(l); GLOW.pool.push(l); }
   buildAsia();
 }
+function updateGlow() {
+  const near = GLOW.pts.map(p => [p, p.distanceTo(camera.position)]).sort((a, b) => a[1] - b[1]);
+  GLOW.pool.forEach((l, i) => { const [p, d] = near[i]; l.position.copy(p); l.color.copy(p.col); l.intensity = 640 * clamp01((260 - d) / 120); });
+}
 function updateWorld(time) {
+  updateGlow();
   if (lionDance.mixer) { const dt = Math.min(0.05, time - (lionDance.t || time)); lionDance.t = time; lionDance.mixer.update(dt); }
   clips.forEach(c => { const near = c.g.position.distanceTo(camera.position) < 220; if (near && c.v.paused) c.v.play().catch(() => {}); else if (!near && !c.v.paused) c.v.pause(); });
 }
@@ -1202,6 +1217,9 @@ for (const r of ['btl', 'atl']) {
 const firstOf = (zone, r) => WORLD.find(w => w.zone === zone && (!r || w.r === r)).p;
 const GO = { reel: 0.48, cross: 0.57, btl: firstOf('asia'), atl: WORLD.find(w => w.r === 'atl').p, alley: firstOf('asia'), sport: firstOf('sport'), event: firstOf('event'), shops: firstOf('merch'), dixy: firstOf('dixy'), ai: firstOf('ai'), awards: 0.944, brief: 1 };
 const FORK = 0.592;
+// вступление до логотипа играет само (INTRO), скролл начинается с логотипа: доля прокрутки 0..1 ↔ сюжет P0..1
+const P0 = 0.355, INTRO = { t0: null, done: false };
+const toScroll = p => clamp01((p - P0) / (1 - P0)) * (document.documentElement.scrollHeight - innerHeight);
 let CAM = {}, ISK = [], route = null;
 // камера, написанная заново от логотипа: медленная архитектурная съёмка. правило одно на всё —
 // кейс-куб стоит в правой трети кадра, титр живёт слева; камера подъезжает, садится, чуть доезжает и уходит
@@ -1213,13 +1231,14 @@ function buildTimeline() {
     { p: 0.05, pos: V(0, 430, 330), look: V(0, 400, 200) },
     { p: 0.17, pos: V(30, 370, 250), look: V(0, 300, 80) },
     { p: 0.31, pos: V(0, s.y + 2, s.z + 62), look: s },                        // логотип в лоб: искра встаёт в слот
-    { p: 0.355, pos: V(0, s.y - 2, s.z + 84), look: V(0, s.y - 3, 0) },        // выдох: отъезд, логотип загорается
+    { p: 0.355, pos: V(-8, s.y - 16, s.z + 118), look: V(-22, s.y - 22, 0) },   // выдох: отъезд, логотип загорается в правом верхнем углу, слева — заголовок
     { p: 0.40, pos: V(-30, s.y - 24, s.z + 150), look: V(0, s.y - 34, 0) },     // отходим в сторону, чтобы увидеть монолит башни целиком
     { p: 0.445, pos: V(-14, 70, 130), look: V(0, 46, 0) },                      // спуск вдоль фасада
     { p: 0.475, pos: V(0, 30, 96), look: V(0, 30, 0) },                         // шоурил на башне в лоб
-    { p: 0.505, pos: V(0, 30, 90), look: V(0, 30, 0) },
-    { p: 0.545, pos: V(0, 16, 104), look: V(0, 18, 200) },                      // разворот на проспект
-    { p: 0.585, pos: V(0, 14, 122), look: V(0, 16, 200) },                      // развилка
+    { p: 0.518, pos: V(0, 30, 90), look: V(0, 30, 0) },
+    { p: 0.526, pos: V(-2, 24, 98), look: V(-120, 22, 96) },                     // резкий разворот головы через левое плечо
+    { p: 0.534, pos: V(0, 16, 108), look: V(0, 17, 210) },                      // уже смотрим вдоль проспекта
+    { p: 0.585, pos: V(0, 14, 120), look: V(0, 16, 210) },                      // развилка
   ];
   const tail = [
     { p: 0.94, pos: V(0, 12, TAIL.awards - 40), look: V(0, 22, TAIL.awards + 60) },
@@ -1256,10 +1275,10 @@ function buildTimeline() {
   ];
 }
 // положение на сплайне: номер отрезка + плавная доля внутри — камера мягко тормозит на каждом ключе
-function camU(k, p) { let i = 0; while (i < k.length - 2 && p > k[i + 1].p) i++; const f = clamp01((p - k[i].p) / (k[i + 1].p - k[i].p)); return (i + f * f * (3 - 2 * f)) / (k.length - 1); }
+function camU(k, p) { let i = 0; while (i < k.length - 2 && p > k[i + 1].p) i++; const f = clamp01((p - k[i].p) / (k[i + 1].p - k[i].p)); return (i + (p < P0 ? f : f * f * (3 - 2 * f))) / (k.length - 1); }
 function sample(keys, p, fn) {
   let i = 0; while (i < keys.length - 2 && p > keys[i + 1].p) i++;
-  const a = keys[i], b = keys[i + 1], t = smooth(clamp01((p - a.p) / (b.p - a.p || 1)));
+  const a = keys[i], b = keys[i + 1], f = clamp01((p - a.p) / (b.p - a.p || 1)), t = p < P0 ? f : smooth(f);
   return fn(a, b, t);
 }
 
@@ -1327,10 +1346,10 @@ const goTo = key => {
   else if (key === 'cross') route = null;
   else if (GO[key] > FORK && !route) route = 'btl';
   const max = document.documentElement.scrollHeight - innerHeight, target = GO[key];
-  if (Math.abs(target - pSm) < 0.12) return scrollTo({ top: target * max, behavior: 'smooth' });
+  if (Math.abs(target - pSm) < 0.12) return scrollTo({ top: toScroll(target), behavior: 'smooth' });
   // далеко: не тащим камеру через весь город, а закрываем шторкой и переставляем
   curtainWord.textContent = WORD[key] || key; curtain.className = 'in';
-  setTimeout(() => { scrollTo(0, target * max); pSm = target; curtain.className = 'out'; }, 380);
+  setTimeout(() => { scrollTo(0, toScroll(target)); pSm = Math.max(P0, target); curtain.className = 'out'; }, 380);
 };
 document.addEventListener('click', e => {
   const el = e.target.closest('[data-go],[data-case],[data-modal],[data-brief],[data-more],#caseOrbit,#openOrbit');
@@ -1338,7 +1357,7 @@ document.addEventListener('click', e => {
   e.preventDefault();
   if (el.id === 'openOrbit') return openOrbit();
   if (el.dataset.more) return openModal(MODALS.more(el.dataset.more));
-  if (el.id === 'caseOrbit') { closeModal(); route = 'btl'; scrollTo(0, GO.alley * (document.documentElement.scrollHeight - innerHeight)); pSm = GO.alley; openOrbit(); return; }
+  if (el.id === 'caseOrbit') { closeModal(); route = 'btl'; scrollTo(0, toScroll(GO.alley)); pSm = GO.alley; openOrbit(); return; }
   if (el.dataset.case) return openModal(renderCase(el.dataset.case));
   if (el.dataset.modal) return openModal(MODALS[el.dataset.modal]);
   if (el.dataset.brief) {   // бриф открывается с подставленным направлением или кейсом
@@ -1368,9 +1387,9 @@ const INDEX = [['{00}', 'вход', 0], ['{01}', 'искра', 0.1], ['{02}', '�
 const jumpTo = (p, r) => {
   closeModal(); if (orbitOn) closeOrbit(); if (r) route = r; else if (p > FORK && !route) route = 'btl';
   const max = document.documentElement.scrollHeight - innerHeight, t = p;
-  if (Math.abs(t - pSm) < 0.08) return scrollTo({ top: t * max, behavior: 'smooth' });
+  if (Math.abs(t - pSm) < 0.08) return scrollTo({ top: toScroll(t), behavior: 'smooth' });
   curtainWord.textContent = WORD_OF(p); curtain.className = 'in';
-  setTimeout(() => { scrollTo(0, t * max); pSm = t; curtain.className = 'out'; }, 380);
+  setTimeout(() => { scrollTo(0, toScroll(t)); pSm = Math.max(P0, t); curtain.className = 'out'; }, 380);
 };
 const WORD_OF = p => (INDEX.filter(s => Math.abs(s[2] - p) < 1e-6)[0] || [, ''])[1];
 micro?.addEventListener('click', e => { const d = e.target.closest('[data-j]'); if (!d) return; e.preventDefault(); jumpTo(+d.dataset.j, d.dataset.r || null); });
@@ -1431,10 +1450,16 @@ const clock = new THREE.Clock(), look = new THREE.Vector3();
 function frame() {
   const dt = Math.min(clock.getDelta(), 0.05), time = clock.elapsedTime;
   const max = document.documentElement.scrollHeight - innerHeight;
-  let p = max > 0 && unlocked ? clamp01(scrollY / max) : 0;   // до готовности город стоит на входе
+  let p = 0;   // до готовности город стоит на входе
+  if (INTRO.done) p = P0 + (max > 0 ? clamp01(scrollY / max) : 0) * (1 - P0);
+  else if (unlocked) {   // вступление само: искра висит, потом летит и встаёт в логотип; скролл открывается после посадки
+    INTRO.t0 ??= time; const e = time - INTRO.t0, k = clamp01((e - 1.4) / 5.2);
+    p = 0.05 * clamp01(e / 1.4) + (P0 - 0.05) * k * k * (3 - 2 * k);
+    if (k >= 1) { INTRO.done = true; scrollTo(0, 0); document.documentElement.classList.remove('lock'); }
+  }
   // развилка: пока направление не выбрано, дальше перекрёстка не листается
-  if (!route && !orbitOn && p > FORK) { scrollTo(0, FORK * max); p = FORK; const f = document.getElementById('fork'); if (!f.classList.contains('pulse')) { f.classList.add('pulse'); setTimeout(() => f.classList.remove('pulse'), 1100); } }
-  pSm += (p - pSm) * (1 - Math.exp(-dt * 2.6));   // инерция скролла
+  if (!route && !orbitOn && p > FORK) { scrollTo(0, toScroll(FORK)); p = FORK; const f = document.getElementById('fork'); if (!f.classList.contains('pulse')) { f.classList.add('pulse'); setTimeout(() => f.classList.remove('pulse'), 1100); } }
+  pSm = INTRO.done ? pSm + (p - pSm) * (1 - Math.exp(-dt * 2.6)) : p;   // инерция скролла; вступление идёт без задержки
 
   if (orbitOn) { orbit.update(); }
   else {
@@ -1466,7 +1491,7 @@ function frame() {
   logo.mat.emissiveIntensity = landed * 1.1;
   logo.mat.color.copy(LOGO_DARK).lerp(ISK_RED, landed);
   iskra.material.color.copy(ISK_RED).lerp(ISK_BLACK, landed);
-  logo.glow.intensity = 420;   // ровный тёплый свет на вывеску, без мигания
+  logo.glow.intensity = 0;   // без пятна света на подложке: логотип светится сам
   fans.air.pts.visible = false;   // поток воздуха нужен только у башни
 
   updateWebtoon(time);
@@ -1496,8 +1521,8 @@ built = true; frame();
 await new Promise(res => { const t0 = performance.now(); let calm = 0; const chk = () => { calm = LD.done >= LD.total ? calm + 1 : 0; if (calm > 4 || performance.now() - t0 > 30000) res(); else setTimeout(chk, 120); }; chk(); });
 await new Promise(r => setTimeout(r, 450));
 clearInterval(ldTick); ldPct.textContent = '100';
-window.__three = { renderer, scene, CAM, THREE, WORLD, BR, checkPath, go: (p, r) => { route = r; scrollTo(0, p * (document.documentElement.scrollHeight - innerHeight)); pSm = p; } };   // для отладки
-scrollTo(0, 0); unlocked = true; document.documentElement.classList.remove('lock');
+window.__three = { renderer, scene, CAM, THREE, WORLD, BR, checkPath, go: (p, r) => { INTRO.done = true; document.documentElement.classList.remove('lock'); route = r; scrollTo(0, toScroll(p)); pSm = p; } };   // для отладки
+scrollTo(0, 0); unlocked = true;   // скролл откроется после вступления (frame)
 document.getElementById('loader').classList.add('done');
 if (location.search.includes('dev')) checkPath();   // для отладки производительности
 // ?at=lion:-0.3 — сразу встать на остановку кейса (для скриншотов)
