@@ -12,6 +12,10 @@ import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 const gltfLoader = new GLTFLoader().setDRACOLoader(new DRACOLoader().setDecoderPath('https://cdn.jsdelivr.net/npm/three@0.169.0/examples/jsm/libs/draco/gltf/'));
 import { CASES, renderCase, MODALS } from './cases.js';
 
+// прелоадер: считаем загрузки моделей и текстур; скролл открывается, когда всё догрузилось
+const LOAD = { a: 0, b: 0, last: performance.now(), t0: performance.now() };
+THREE.DefaultLoadingManager.onProgress = (u, a, b) => { LOAD.a = a; LOAD.b = b; LOAD.last = performance.now(); const el = document.getElementById('loadPct'); if (el) el.textContent = String(Math.min(99, Math.round(a / b * 100))).padStart(2, '0') + '%'; };
+const settled = () => new Promise(res => { const tick = () => { const now = performance.now(); if ((LOAD.a >= LOAD.b && now - LOAD.last > 500 && now - LOAD.t0 > 2200) || now - LOAD.t0 > 20000) res(); else setTimeout(tick, 150); }; tick(); });
 const RED = 0xf40709, CREAM = 0xe1d9cf;
 const rand = mulberry(20_26);
 function mulberry(a) { return () => { a |= 0; a = a + 0x6d2b79f5 | 0; let t = Math.imul(a ^ a >>> 15, 1 | a); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
@@ -45,7 +49,7 @@ import('three/addons/environments/RoomEnvironment.js').then(({ RoomEnvironment }
   set(MAT.cream, 0.5); set(MAT.gloss, 0.6); set(MAT.glass, 0.8); set(MAT.glassO, 0.8);
   const later = () => { if (!logo.mat || !iskra) return setTimeout(later, 200); set(logo.mat, 0.45); set(iskra.material, 0.5); }; later();
 });
-scene.add(new THREE.HemisphereLight(0x8a5060, 0x1a0a0c, 0.95));
+const hemi = new THREE.HemisphereLight(0x8a5060, 0x1a0a0c, 0.95); scene.add(hemi);
 const moon = new THREE.DirectionalLight(0x8090c0, 0.7); moon.position.set(-200, 400, 300); scene.add(moon);
 
 function skyTexture() {
@@ -492,41 +496,45 @@ const clips = [], floaters = [];   // ролики на носителях: ка
 // в коридоры ничего не ставим — так камера не проходит сквозь объекты.
 const LANE = { btl: { x: 12, y: 11 }, atl: { x: 0 } };
 const STEP = 60, ZONE_GAP = 40, Z0 = 230, TAN = Math.tan(25 * Math.PI / 180);
+// кварталы — основа оформления: у каждого свой фон, силуэт застройки, свет и материал.
+// ствол (trunk) общий для обоих маршрутов, после развилки маршрут А (btl) идёт по оси x = 0, маршрут Б (atl) — по параллельному проспекту x = XB
+const XB = 380;
 const ZONES = {
-  asia: { t: 'азиатский квартал', more: 'asia' }, joint: { t: 'ozon селект' }, sport: { t: 'спорт', more: 'sport' },
-  event: { t: 'ивенты', more: 'event' }, merch: { t: 'квартал мерча', more: 'merch' },
-  asiaAir: { t: 'азия в эфире', more: 'asia', over: 'asia' }, dixy: { t: '«дикси»', more: 'dixy', over: 'asia' }, arena: { t: 'спорт в эфире', more: 'sport', over: 'sport' },
-  city: { t: 'города и бренды', over: 'event' }, ai: { t: 'ai-продакшн', more: 'ai', over: 'merch' },
+  city: { t: 'город', n: '01' }, event: { t: 'ивенты', n: '02', more: 'event' },
+  asia: { t: 'азиатский квартал', n: 'А1', more: 'asia' }, sport: { t: 'спорт', n: 'А2', more: 'sport' },
+  retail: { t: 'ритейл', n: 'Б1', more: 'dixy' }, ai: { t: 'ai-продакшн', n: 'Б2', more: 'ai' }, merch: { t: 'мерч', n: 'Б3', more: 'merch' },
 };
-// kind: station — подиум с героем и стенд за ним; vitrine — витрина мерча; screen — экран на фасаде; roof — стенд на крыше башни «дикси»
-// hero — габарит объекта кейса [ширина, глубина, высота]; s — сторона улицы у экранов atl (1 — x > 0, в кадре слева)
+const ROUTE_NAME = { btl: 'маршрут А', atl: 'маршрут Б' };
+// kind: station — подиум с героем и стенд за ним; vitrine — витрина мерча; screen — экран на фасаде; roof — стенд на крыше башни
+// hero — габарит объекта кейса [ширина, глубина, высота]; s — сторона улицы у экранов (1 — x > 0, в кадре слева)
 const WORLD = [
+  { id: 'selekt', r: 'trunk', zone: 'city', kind: 'station', hero: [14, 4, 10], imgs: ['ozon-select-1', 'ozon-select-0', 'ozon-select-2', 'ozon-select-3'], nav: 'ozon селект' },
+  { id: 'derbent', r: 'trunk', zone: 'city', kind: 'screen', s: 1, img: 'derbent-1', nav: 'дербент' },
+  { id: 'tevredens', r: 'trunk', zone: 'city', kind: 'screen', s: -1, img: 'tevredens-1', video: 'tevredens', nav: 'tevredens' },
+  { id: 'megafon', r: 'trunk', zone: 'event', kind: 'station', hero: [14, 14, 6], imgs: ['megafon-1', 'megafon-zone-1', 'megafon-zone-2', 'megafon-bullet-1'], nav: 'золотые ворота' },
+  { id: 'mice', r: 'trunk', zone: 'event', kind: 'station', hero: [8, 6, 6], imgs: ['mice-1', 'mice-details-1', 'mice-details-2', 'mice-out-1'], nav: 'белград' },
+  { id: 'megafonTravel', r: 'trunk', zone: 'event', kind: 'station', hero: [13, 5, 9], imgs: ['megafon-travel-1', 'megafon-route-1', 'megafon-route-2'], nav: 'связь есть везде' },
+  { id: 'baltikaPlant', r: 'trunk', zone: 'event', kind: 'station', hero: [7, 4, 8], imgs: ['baltika-plant-1', 'baltika-plant-mock-1', 'baltika-plant-mock-2', 'baltika-plant-ruby-1'], nav: 'гусь на заводе', moment: 'goose' },
   { id: 'fandom', r: 'btl', zone: 'asia', kind: 'station', hero: [26, 20, 12], imgs: ['ozon-fandom-kv-1', 'ozon-fandom-real-1', 'ozon-fandom-real-2', 'ozon-fandom-real-3'], nav: 'ozon corp', orbit: true, moment: 'fandom' },
   { id: 'tbank', r: 'btl', zone: 'asia', kind: 'station', hero: [16, 16, 10], imgs: ['tbank-zone-1', 'tbank-zone-top-1', 'tbank-road-1', 'tbank-cover-1'], nav: 'чёрный пояс по it', moment: 'tbank' },
-  { id: 'selekt', r: 'btl', zone: 'joint', kind: 'station', hero: [14, 4, 10], imgs: ['ozon-select-1', 'ozon-select-0', 'ozon-select-2', 'ozon-select-3'], nav: 'ozon селект' },
+  { id: 'izhora', r: 'btl', zone: 'asia', kind: 'screen', s: 1, webtoon: true, nav: 'хроники ижоры', also: ['sport'], moment: 'izhora' },
+  { id: 'treschnutye', r: 'btl', zone: 'asia', kind: 'roof', img: 'treschnutye-1', nav: 'треснутые', also: ['dixy'], moment: 'treschnutye' },
   { id: 'lion', r: 'btl', zone: 'sport', kind: 'station', hero: [14, 14, 16], imgs: ['../dp/lion-2', '../dp/lion-1', '../dp/lion-cover'], nav: 'синегривый лев', moment: 'lion' },
   { id: 'ironstar', r: 'btl', zone: 'sport', kind: 'station', hero: [12, 12, 4], imgs: ['gdrive-ironstar-1'], nav: 'ironstar', moment: 'ironstar' },
   { id: 'gdrive', r: 'btl', zone: 'sport', kind: 'station', hero: [30, 8, 4], imgs: ['gdrive-silk-1', 'gdrive-silk-road-1', 'gdrive-silk-road-2', 'gdrive-finish-1'], nav: 'шёлковый путь' },
   { id: 'baltika7', r: 'btl', zone: 'sport', kind: 'station', hero: [12, 10, 5], imgs: ['baltika7-1', 'baltika7-zone-1', 'baltika7-zone-2', 'baltika7-prizes-1'], nav: 'балтика 7' },
-  { id: 'baltikaPlant', r: 'btl', zone: 'event', kind: 'station', hero: [7, 4, 8], imgs: ['baltika-plant-1', 'baltika-plant-mock-1', 'baltika-plant-mock-2', 'baltika-plant-ruby-1'], nav: 'гусь на заводе', moment: 'goose' },
-  { id: 'megafon', r: 'btl', zone: 'event', kind: 'station', hero: [14, 14, 6], imgs: ['megafon-1', 'megafon-zone-1', 'megafon-zone-2', 'megafon-bullet-1'], nav: 'золотые ворота' },
-  { id: 'mice', r: 'btl', zone: 'event', kind: 'station', hero: [8, 6, 6], imgs: ['mice-1', 'mice-details-1', 'mice-details-2', 'mice-out-1'], nav: 'белград' },
-  { id: 'megafonTravel', r: 'btl', zone: 'event', kind: 'station', hero: [13, 5, 9], imgs: ['megafon-travel-1', 'megafon-route-1', 'megafon-route-2'], nav: 'связь есть везде' },
-  { id: 'gdriveMerch', r: 'btl', zone: 'merch', kind: 'vitrine', imgs: ['gdrive-capsule-1'], nav: 'мерч g-drive' },
-  { id: 'oxygenSet', r: 'btl', zone: 'merch', kind: 'vitrine', imgs: ['oxygen-set-1'], nav: 'набор креатора' },
-  { id: 'lionMerch', r: 'btl', zone: 'merch', kind: 'vitrine', imgs: ['../dp/lion-cover'], nav: 'мерч льва' },
-  { id: 'izhora', r: 'atl', zone: 'asiaAir', kind: 'screen', s: 1, webtoon: true, nav: 'хроники ижоры', also: ['sport'], moment: 'izhora' },
-  { id: 'treschnutye', r: 'atl', zone: 'dixy', kind: 'roof', img: 'treschnutye-1', nav: 'треснутые', also: ['asia'], moment: 'treschnutye' },
-  { id: 'zaklinateli', r: 'atl', zone: 'dixy', kind: 'roof', img: 'zaklinateli-kv-1', video: 'zaklinateli', nav: 'заклинатели' },
-  { id: 'dino', r: 'atl', zone: 'dixy', kind: 'roof', img: 'dino-1', nav: 'дино' },
-  { id: 'avangard', r: 'atl', zone: 'arena', kind: 'screen', s: -1, img: 'avangard-1', nav: 'время авангарда' },
-  { id: 'derbent', r: 'atl', zone: 'city', kind: 'screen', s: 1, img: 'derbent-1', nav: 'дербент' },
-  { id: 'tevredens', r: 'atl', zone: 'city', kind: 'screen', s: -1, img: 'tevredens-1', video: 'tevredens', nav: 'tevredens' },
+  { id: 'avangard', r: 'btl', zone: 'sport', kind: 'screen', s: -1, img: 'avangard-1', nav: 'время авангарда' },
+  { id: 'zaklinateli', r: 'atl', zone: 'retail', kind: 'roof', img: 'zaklinateli-kv-1', video: 'zaklinateli', nav: 'заклинатели' },
+  { id: 'dino', r: 'atl', zone: 'retail', kind: 'roof', img: 'dino-1', nav: 'дино' },
   { id: 'aiFonbet', r: 'atl', zone: 'ai', kind: 'screen', s: 1, img: 'ai-fonbet', video: 'ai-fonbet', nav: 'ai · fonbet' },
   { id: 'aiMango', r: 'atl', zone: 'ai', kind: 'screen', s: -1, img: 'ai-mango', video: 'ai-mango', nav: 'ai · mango' },
   { id: 'aiLavka', r: 'atl', zone: 'ai', kind: 'screen', s: 1, img: 'ai-lavka', video: 'ai-lavka', nav: 'ai · лавка' },
   { id: 'aiAlfa', r: 'atl', zone: 'ai', kind: 'screen', s: -1, img: 'ai-alfa', video: 'ai-alfa', nav: 'ai · альфа' },
+  { id: 'gdriveMerch', r: 'atl', zone: 'merch', kind: 'vitrine', imgs: ['gdrive-capsule-1'], nav: 'мерч g-drive' },
+  { id: 'oxygenSet', r: 'atl', zone: 'merch', kind: 'vitrine', imgs: ['oxygen-set-1'], nav: 'набор креатора' },
+  { id: 'lionMerch', r: 'atl', zone: 'merch', kind: 'vitrine', imgs: ['../dp/lion-cover'], nav: 'мерч льва' },
 ];
+const onRoute = (w, r) => w.r === 'trunk' || w.r === r;
 const ZR = {}, TAIL = {};
 const MOMENTS = {};   // кейсы-моменты: свой герой, своя камера, свет в бит; см. раздел «моменты»   // z-диапазоны кварталов; z наград и брифа
 const DIXY_TOWER = { x: -62, w: 38, d: 40, h: 58 }, BANNER = { h: 30, w: 30 * 9 / 16 };
@@ -803,7 +811,7 @@ function buildAsia() {
   const outline = (t, y0 = 0) => { for (let i = 0; i < ep.length; i += 3) pts.push(t.x + ep[i] * t.w, y0 + ep[i + 1] * t.h, t.z + ep[i + 2] * t.d); };
   towers.forEach(t => outline(t)); WORLD.filter(t => t.tower?.lined).forEach(w => outline(w.tower));
   // пагода: девять ярусов, каждый с выносом кровли
-  const pg = { x: -96, z: 262 };
+  const pg = { x: -96, z: (ASIA.z0 + ASIA.z1) / 2 };
   for (let i = 0, y = 0; i < 9; i++) { const s = 26 - i * 2.1, h = 13 - i * 0.6;
     outline({ x: pg.x, z: pg.z, w: s, d: s, h }, y); outline({ x: pg.x, z: pg.z, w: s + 7, d: s + 7, h: 0.8 }, y + h);   // ярус и вынос кровли
     y += h + 0.8; }
@@ -822,7 +830,7 @@ function buildAsia() {
   scene.add(ASIA_FX.strips);
   // тории из светящейся трубки поперёк улицы: столбы за коридором камеры, кровля с загнутыми концами
   const tor = glow(RED, 1.5); ASIA_FX.tor = tor;
-  [184, 262, 322].forEach(z => {
+  [ASIA.z0 + 16, (ASIA.z0 + ASIA.z1) / 2, ASIA.z1 - 42].forEach(z => {
     const g = new THREE.Group(); g.position.set(-1, 0, z); scene.add(g);
     [-25, 23].forEach(x => { const p = new THREE.Mesh(new THREE.CylinderGeometry(0.45, 0.6, 27, 12), tor); p.position.set(x, 13.5, 0); g.add(p); });
     const cv = new THREE.CatmullRomCurve3([V(-31, 30, 0), V(-20, 28, 0), V(0, 27.4, 0), V(20, 28, 0), V(29, 30, 0)]);
@@ -965,8 +973,8 @@ MOMENTS.izhora = {
   layout(w) {
     const Z = w.z, X = w.tower.x - Math.sign(w.tower.x) * (w.tower.w / 2 + 0.3); w.face = X;
     w.keys = [
-      [-0.46, V(-14, 50, Z - 80), V(X, 62, Z)],
-      [-0.1, V(-28, 62, Z - 46), V(X, 66, Z)],
+      [-0.46, V(-6, 34, Z - 40), V(X, 58, Z)],   // на маршруте а приходим с земли после т-банка
+      [-0.1, V(-24, 58, Z - 30), V(X, 66, Z)],
       [0.2, V(-30, 70, Z - 20), V(X, 66, Z)],
       [0.44, V(-16, 88, Z + 14), V(X, 60, Z)],
     ];
@@ -992,7 +1000,7 @@ MOMENTS.treschnutye = {
   layout(w) {
     const Z = w.z, T = w.tower;
     w.keys = [
-      [-0.46, V(-10, 66, Z - 60), V(T.x + 8, T.h + 12, Z)],
+      [-0.46, V(-10, 70, Z - 36), V(T.x + 8, T.h + 12, Z)],
       [-0.1, V(-14, 74, Z - 30), V(T.x + 6, T.h + 13, Z)],
       [0.2, V(-12, 86, Z - 8), V(T.x + 4, T.h + 10, Z)],
       [0.44, V(-6, 96, Z + 20), V(T.x, T.h + 6, Z)],
@@ -1025,39 +1033,44 @@ MOMENTS.treschnutye = {
   },
 };
 
+const ZX = {}, SPLIT = {};   // ZX — ось проспекта квартала; SPLIT.z — поперечная улица развилки, SPLIT.back — улица, где маршрут Б возвращается к наградам
 function layoutWorld() {
-  let z = Z0 - STEP, prev = null;
-  for (const w of WORLD.filter(w => w.r === 'btl')) { z += STEP + (prev && prev !== w.zone ? ZONE_GAP : 0); prev = w.zone; w.z = z; (ZR[w.zone] ||= [z, z])[1] = z; }
-  z = -1e9; prev = null;
-  for (const w of WORLD.filter(w => w.r === 'atl')) { z = prev === w.zone ? z + STEP : Math.max(ZR[ZONES[w.zone].over][0], z + STEP + ZONE_GAP); prev = w.zone; w.z = z; (ZR[w.zone] ||= [z, z])[1] = z; }
-  const last = Math.max(...WORLD.map(w => w.z)); TAIL.awards = last + 120; TAIL.brief = last + 260;
+  const seq = (list, z, prev) => { for (const w of list) { z += STEP + (prev && prev !== w.zone ? ZONE_GAP : 0); prev = w.zone; w.z = z; (ZR[w.zone] ||= [z, z])[1] = z; } return z; };
+  const zt = seq(WORLD.filter(w => w.r === 'trunk'), Z0 - STEP, null);
+  SPLIT.z = zt + 100; const z0 = SPLIT.z + 80 - STEP;   // перед развилкой — шлюз и поперечная улица
+  const zA = seq(WORLD.filter(w => w.r === 'btl'), z0, null), zB = seq(WORLD.filter(w => w.r === 'atl'), z0, null);
+  const last = Math.max(zA, zB); SPLIT.back = last + 90; TAIL.awards = last + 170; TAIL.brief = last + 310;
+  for (const w of WORLD) { w.ox = w.r === 'atl' ? XB : 0; ZX[w.zone] = w.ox; }
   for (const w of WORLD) {
+    const ox = w.ox;
     // F — центр носителя, H — высота, которую он должен занять в кадре вместе с героем, frac — доля высоты кадра
     if (w.kind === 'station') {
       const [hw, hd, hh] = w.hero;
-      w.heroPos = new THREE.Vector3(Math.min(-5, -hw / 2 - 2), 0, w.z - 4);
-      w.standPos = new THREE.Vector3(-17, 0, w.z + hd / 2 + 2);
+      w.heroPos = new THREE.Vector3(ox + Math.min(-5, -hw / 2 - 2), 0, w.z - 4);
+      w.standPos = new THREE.Vector3(ox - 17, 0, w.z + hd / 2 + 2);
       w.F = new THREE.Vector3((w.heroPos.x + w.standPos.x) / 2, 7, (w.heroPos.z + w.standPos.z) / 2); w.H = Math.max(18, hh + 4); w.frac = 0.42;
-    } else if (w.kind === 'vitrine') { w.F = new THREE.Vector3(-14, 8, w.z); w.H = 17; w.frac = 0.46; }
+    } else if (w.kind === 'vitrine') { w.F = new THREE.Vector3(ox - 14, 8, w.z); w.H = 17; w.frac = 0.46; }
     else if (w.kind === 'roof') {
-      w.tower = { x: DIXY_TOWER.x, z: w.z, w: DIXY_TOWER.w, d: DIXY_TOWER.d, h: DIXY_TOWER.h };
-      w.F = new THREE.Vector3(DIXY_TOWER.x + 12, DIXY_TOWER.h + BANNER.h / 2 + 1.2, w.z); w.H = BANNER.h + 4; w.frac = 0.5;
+      w.tower = { x: ox + DIXY_TOWER.x, z: w.z, w: DIXY_TOWER.w, d: DIXY_TOWER.d, h: DIXY_TOWER.h };
+      w.F = new THREE.Vector3(ox + DIXY_TOWER.x + 12, DIXY_TOWER.h + BANNER.h / 2 + 1.2, w.z); w.H = BANNER.h + 4; w.frac = 0.5;
     } else {
-      w.tower = { x: w.s * ATL_TOWER.x, z: w.z, w: ATL_TOWER.w, d: ATL_TOWER.d, h: ATL_TOWER.h };
+      w.tower = { x: ox + w.s * ATL_TOWER.x, z: w.z, w: ATL_TOWER.w, d: ATL_TOWER.d, h: ATL_TOWER.h };
       w.size = w.webtoon ? [14, 24.2] : [28, 15.75];
-      w.F = new THREE.Vector3(w.s * 24, SCREEN_Y, w.z); w.H = w.size[1] + 4; w.frac = w.webtoon ? 0.56 : 0.44;
+      w.F = new THREE.Vector3(ox + w.s * 24, SCREEN_Y, w.z); w.H = w.size[1] + 4; w.frac = w.webtoon ? 0.56 : 0.44;
     }
-    // камера в коридоре своего маршрута, на расстоянии, при котором носитель занимает frac кадра
-    const dist = w.H / (2 * TAN * w.frac), C = new THREE.Vector3(LANE[w.r].x, w.r === 'btl' ? LANE.btl.y : w.F.y + 4, 0);
+    // камера: у подиумов и витрин — по земле в коридоре x = 12, у экранов и крыш — в воздухе по оси проспекта
+    const ground = w.kind === 'station' || w.kind === 'vitrine';
+    const dist = w.H / (2 * TAN * w.frac), C = new THREE.Vector3(ox + (ground ? LANE.btl.x : LANE.atl.x), ground ? LANE.btl.y : w.F.y + 4, 0);
     const dx = C.x - w.F.x, dy = C.y - w.F.y; C.z = w.F.z - Math.sqrt(Math.max(dist * dist - dx * dx - dy * dy, 144));
     // носитель — на своей стороне кадра, рассказ — на другой: смещаем точку взгляда в сторону рассказа
     const caseRight = w.F.x < C.x, fwd = w.F.clone().sub(C).normalize(), right = fwd.clone().cross(new THREE.Vector3(0, 1, 0)).normalize();
     w.cam = C; w.look = w.F.clone().addScaledVector(right, (caseRight ? -1 : 1) * 0.22 * dist); w.story = caseRight ? 'left' : 'right';
     if (w.moment) MOMENTS[w.moment].layout(w);
   }
+  ASIA.z0 = ZR.asia[0] - 50; ASIA.z1 = ZR.asia[1] + 50;
 }
 layoutWorld();
-const reservedByWorld = (x, z) => inAsia(x, z) || (Math.abs(x) < 44 && z > 165 && z < TAIL.brief - 10) || WORLD.some(w => w.tower && Math.abs(x - w.tower.x) < w.tower.w / 2 + 16 && Math.abs(z - w.tower.z) < w.tower.d / 2 + 16);
+const reservedByWorld = (x, z) => z > 170 || inAsia(x, z) || WORLD.some(w => w.tower && Math.abs(x - w.tower.x) < w.tower.w / 2 + 16 && Math.abs(z - w.tower.z) < w.tower.d / 2 + 16);
 
 const SOLIDS = [];   // коробки всего, что стоит у маршрута, — для проверки камеры на столкновения
 const solid = o => { o.updateMatrixWorld(true); SOLIDS.push({ box: new THREE.Box3().setFromObject(o), name: o.userData.case || o.name || '' }); return o; };
@@ -1109,7 +1122,8 @@ function videoOn(m, name) {
   v.addEventListener('playing', () => { if (m.material.map?.isVideoTexture) return; const t = new THREE.VideoTexture(v); t.colorSpace = THREE.SRGBColorSpace; m.material.map = t; m.material.needsUpdate = true; }, { once: true });
   return v;
 }
-function towerBox(t, mat) { const m = new THREE.Mesh(new THREE.BoxGeometry(t.w, t.h, t.d), mat); m.position.set(t.x, t.h / 2, t.z); scene.add(m); return solid(m); }
+const TOWER_MESHES = [];   // башни носителей: в кварталах перекрашиваются в материал квартала
+function towerBox(t, mat) { const m = new THREE.Mesh(new THREE.BoxGeometry(t.w, t.h, t.d), mat); m.position.set(t.x, t.h / 2, t.z); scene.add(m); TOWER_MESHES.push(m); return solid(m); }
 function screen(w) {
   towerBox(w.tower, w.zone === 'ai' ? MAT.matte : towerMat);
   const [sw, sh] = w.size, c = CASES[w.id];
@@ -1117,7 +1131,7 @@ function screen(w) {
   const { g, m } = screenAt(tex, sw, sh, w.F, w.cam, w.id);
   if (w.webtoon) webtoonInto(m.material, sw / sh);
   if (w.video) clips.push({ g, v: videoOn(m, w.video) });
-  [w.F.y + sh / 2 - 2, w.F.y - sh / 2 + 2].forEach(y => { const arm = new THREE.Mesh(new THREE.BoxGeometry(Math.abs(w.tower.x) - w.tower.w / 2 - Math.abs(w.F.x) + 2, 0.9, 0.9), MAT.graphite); arm.position.set(w.s * (Math.abs(w.F.x) + Math.abs(w.tower.x) - w.tower.w / 2) / 2, y, w.z); scene.add(arm); });
+  const tx = Math.abs(w.tower.x - w.ox), fxx = Math.abs(w.F.x - w.ox); [w.F.y + sh / 2 - 2, w.F.y - sh / 2 + 2].forEach(y => { const arm = new THREE.Mesh(new THREE.BoxGeometry(tx - w.tower.w / 2 - fxx + 2, 0.9, 0.9), MAT.graphite); arm.position.set(w.ox + w.s * (fxx + tx - w.tower.w / 2) / 2, y, w.z); scene.add(arm); });
   tagAt(c.title, c.pass.клиент, V(w.F.x, w.F.y + sh / 2 + 3.4, w.F.z), w.cam, 20);
   solid(g);
 }
@@ -1129,18 +1143,175 @@ function roof(w) {
   const c = CASES[w.id]; tagAt(c.title, c.pass.клиент, V(w.F.x, w.F.y + BANNER.h / 2 + 3, w.F.z), w.cam, 18);
   solid(g);
 }
+// ---------- кварталы: фон, силуэт застройки, свет ----------
+// палитры собраны от брендбука: чёрный, #111111, кремовый #E1D9CF и красный #F40709 — кварталы различаются температурой и силой света,
+// а не новыми цветами. sky — [зенит, середина, горизонт]; wall — передний ряд улицы; back — дальний ряд; key — цвет и сила ключевого света
+const QS = [
+  { k: 'city', style: 'slab', sky: ['#2a2622', '#6e675f', '#c8bfb3'], wall: 0x6a645c, back: 0x8a8379, ground: 0x1b1916, key: [0xe1d9cf, 3.6], hemi: [0xa29a90, 0x2a2622, 1.1], dir: [-1, 0.55, -0.35], bloom: 1, line: 'бетон, кремовый свет сбоку' },
+  { k: 'event', style: 'truss', sky: ['#1e0304', '#c0100f', '#f0cdb0'], wall: 0x3a2522, back: 0x5a2c28, ground: 0x150c0b, key: [0xffcfa0, 3.2], hemi: [0xd0605a, 0x2a0a0a, 1.1], dir: [1, 0.3, 0.6], bloom: 1, line: 'вертикальный градиент брендбука: кремовый → красный → чёрный' },
+  { k: 'asia', style: 'asia', sky: ['#030102', '#2a0507', '#6e0d0f'], wall: 0x0b0b0d, back: 0x150a0b, ground: 0x0b0708, key: [0xff3a2a, 1.3], hemi: [0x8a3038, 0x0a0405, 0.7], dir: [0.4, 0.8, 0.5], bloom: 1, line: 'чёрный объём и красная линия' },
+  { k: 'sport', style: 'stadium', sky: ['#0a0b0d', '#2e3236', '#e8eaec'], wall: 0x4a4d52, back: 0x6a6e73, ground: 0x131416, key: [0xf2efe9, 4.0], hemi: [0xa8abb0, 0x202226, 1.2], dir: [0.2, 1, 0.15], bloom: 0.9, line: 'холодный белый, прожекторы стадиона' },
+  { k: 'retail', style: 'box', sky: ['#1a0905', '#8a2e08', '#ff7a1a'], wall: 0x4a3022, back: 0x6a3a22, ground: 0x180e0a, key: [0xff7a1a, 3.6], hemi: [0xc0682a, 0x2a1008, 1.1], dir: [-0.8, 0.4, 0.5], bloom: 1, line: 'тёплый янтарь, вечерние фуры и склады' },
+  { k: 'ai', style: 'monolith', sky: ['#000000', '#050505', '#151515'], wall: 0x161616, back: 0x1d1d1d, ground: 0x070707, key: [0xe1d9cf, 1.1], hemi: [0x5c5c5c, 0x050505, 0.45], dir: [0, 1, -0.2], bloom: 1, line: 'пустота, кремовая сетка и монолиты' },
+  { k: 'merch', style: 'gallery', sky: ['#bdb5ab', '#ddd5cb', '#f2efe9'], wall: 0xcdc5ba, back: 0xb7afa4, ground: 0x8f8880, key: [0xfff4e8, 2.6], hemi: [0xf2efe9, 0x8a847c, 1.3], dir: [-0.5, 0.9, -0.6], bloom: 0.45, line: 'светлая галерея: кремовые стены, чёрные предметы' },
+];
+const QX = { cur: null, w: [] };
+const HALF = 150;   // полуширина квартала от оси проспекта: передний ряд, задний ряд, кулисы
+function quarterRects() {
+  const mid = (a, b) => (ZR[a][1] + ZR[b][0]) / 2;
+  const R = { city: [172, mid('city', 'event')], event: [mid('city', 'event'), SPLIT.z - 32] };
+  for (const r of ['btl', 'atl']) {
+    const ks = [...new Set(WORLD.filter(w => w.r === r).map(w => w.zone))];
+    ks.forEach((k, i) => { R[k] = [i ? mid(ks[i - 1], k) : SPLIT.z + 32, i < ks.length - 1 ? mid(k, ks[i + 1]) : SPLIT.back - 32]; });
+  }
+  QS.forEach(q => { q.x = ZX[q.k]; [q.z0, q.z1] = R[q.k]; q.t = ZONES[q.k].t; q.n = ZONES[q.k].n; });
+}
+function buildQuarters() {
+  quarterRects();
+  const r = mulberry(4242), box = new THREE.BoxGeometry(1, 1, 1).translate(0, 0.5, 0), dm = new THREE.Object3D();
+  const towerBusy = (x, z, w, d) => WORLD.some(t => t.tower && Math.abs(x - t.tower.x) < (w + t.tower.w) / 2 + 4 && Math.abs(z - t.tower.z) < (d + t.tower.d) / 2 + 4);
+  for (const q of QS) {
+    const g = new THREE.Group(); scene.add(g); q.g = g;
+    const C = c => new THREE.Color(c), hz = C(q.sky[2]);
+    const mat = (c, k = 0.9) => new THREE.MeshStandardMaterial({ color: c, roughness: k, metalness: 0.02 });
+    const wallM = mat(q.wall), backM = mat(C(q.back).lerp(hz, 0.25)), farC = C(q.back).lerp(hz, 0.6);
+    const blocks = { w: [], b: [] };   // [x, z, w(по x), d(по z), h, y0]
+    const put = (list, x, z, w, d, h, y0 = 0) => list.push([x, z, w, d, h, y0]);
+    // передний ряд: стена каньона по обе стороны проспекта, без просветов — взгляд идёт только вдоль улицы
+    const row = (dx0, depth, len, hgt, list, gap = 0) => { for (const s of [-1, 1]) for (let z = q.z0 + 6; z < q.z1 - 6;) {
+      const L = Math.min(len[0] + r() * (len[1] - len[0]), q.z1 - 6 - z); const D = depth[0] + r() * (depth[1] - depth[0]), X = q.x + s * (dx0 + D / 2);
+      if (L > 4 && !towerBusy(X, z + L / 2, D, L)) put(list, X, z + L / 2, D, L, hgt[0] + r() * (hgt[1] - hgt[0]));
+      z += L + gap; } };
+    const S = q.style;
+    if (S === 'slab') {
+      row(44, [24, 34], [26, 48], [30, 64], blocks.w);
+      row(92, [30, 50], [40, 70], [70, 150], blocks.b, 10);
+      // брутальные консоли: горизонтальные плиты выступают из фасада к улице, дают глубокие тени
+      blocks.w.slice().forEach(([x, z, w, d, h]) => { if (r() < 0.55) for (let y = 12; y < h - 4; y += 10 + r() * 6) put(blocks.w, x - Math.sign(x - q.x) * (w / 2 + 2), z, 4, d * (0.5 + r() * 0.4), 1.6, y); });
+    } else if (S === 'truss') {
+      row(44, [10, 18], [30, 60], [8, 16], blocks.w);   // низкие трибуны: открытое небо фестиваля
+      row(70, [20, 30], [40, 80], [18, 30], blocks.b, 24);
+      for (const s of [-1, 1]) for (let z = q.z0 + 30; z < q.z1 - 20; z += 46 + r() * 20) {   // мачты фермы: два столба и перемычки
+        const x = q.x + s * (64 + r() * 40), h = 46 + r() * 34;
+        [-3, 3].forEach(o => put(blocks.b, x + o, z, 1.6, 1.6, h)); for (let y = 10; y < h; y += 9) put(blocks.b, x, z, 7.6, 1.2, 0.8, y);
+      }
+    } else if (S === 'stadium') {
+      row(44, [20, 30], [40, 70], [16, 26], blocks.w);   // трибуны вдоль улицы
+      for (const s of [-1, 1]) for (let z = q.z0 + 24; z < q.z1; z += 70) {   // мачты прожекторов
+        const x = q.x + s * 84; put(blocks.b, x, z, 2.6, 2.6, 92); put(blocks.b, x - s * 2, z, 4, 16, 9, 88);
+        const lamp = new THREE.Mesh(new THREE.PlaneGeometry(15, 8), new THREE.MeshBasicMaterial({ color: C(0xffffff).multiplyScalar(1.6), toneMapped: false }));
+        lamp.position.set(x - s * 4.1, 92.5, z); lamp.rotation.y = -s * Math.PI / 2; lamp.rotateX(-0.35); g.add(lamp);
+      }
+      for (const s of [-1, 1]) {   // чаша стадиона за трибунами: вытянутое кольцо
+        const bowl = new THREE.Mesh(new THREE.TorusGeometry(1, 0.09, 10, 96), backM); bowl.rotation.x = Math.PI / 2;
+        bowl.scale.set(80, (q.z1 - q.z0) * 0.45, 260); bowl.position.set(q.x + s * 150, 46, (q.z0 + q.z1) / 2); g.add(bowl);
+        const tier = new THREE.Mesh(new THREE.CylinderGeometry(1, 1.25, 1, 64, 1, true), new THREE.MeshStandardMaterial({ color: C(q.back).lerp(hz, 0.15), roughness: 0.9, side: THREE.DoubleSide }));
+        tier.scale.set(80, 46, (q.z1 - q.z0) * 0.45); tier.position.set(q.x + s * 150, 23, (q.z0 + q.z1) / 2); g.add(tier);
+      }
+    } else if (S === 'box') {
+      row(44, [36, 48], [60, 110], [18, 30], blocks.w);   // склады и торговые коробки
+      row(100, [50, 60], [50, 80], [30, 44], blocks.b, 14);
+      blocks.b.slice().forEach(([x, z, w, d, h]) => { for (let y = 7; y < h; y += 8) put(blocks.w, x - Math.sign(x - q.x) * (w / 2 + 0.5), z, 1, d * 0.96, 2.2, y); });   // щели паркингов
+      blocks.w.slice(0, 40).forEach(([x, z, w, d, h], i) => { if (i % 3) return; const fx = x - Math.sign(x - q.x) * (w / 2 - 4); put(blocks.b, fx, z, 1, d * 0.5, 0.8, h + 10); [-1, 1].forEach(o => put(blocks.b, fx, z + o * d * 0.25, 0.8, 0.8, 10, h)); });   // пустые рамы вывесок
+    } else if (S === 'monolith') {
+      for (const s of [-1, 1]) for (let z = q.z0 + 8; z < q.z1 - 8; z += 9 + r() * 10) { const d = 3 + r() * 6, X = q.x + s * (48 + r() * 8); if (!towerBusy(X, z, 8, d)) put(blocks.w, X, z, 6 + r() * 5, d, 40 + r() * 90); }
+      for (let i = 0; i < 26; i++) { const s = i % 2 ? 1 : -1; put(blocks.b, q.x + s * (90 + r() * 70), q.z0 + r() * (q.z1 - q.z0), 6 + r() * 6, 6 + r() * 6, 120 + r() * 130); }
+      // пол — кремовая сетка: единственный свет квартала, кроме экранов
+      const pts = []; for (let x = -HALF; x <= HALF; x += 12) pts.push(q.x + x, 0.06, q.z0, q.x + x, 0.06, q.z1); for (let z = q.z0; z <= q.z1; z += 12) pts.push(q.x - HALF, 0.06, z, q.x + HALF, 0.06, z);
+      const lg = new THREE.BufferGeometry(); lg.setAttribute('position', new THREE.Float32BufferAttribute(pts, 3));
+      g.add(new THREE.LineSegments(lg, new THREE.LineBasicMaterial({ color: C(CREAM).multiplyScalar(0.35), transparent: true, opacity: 0.6 })));
+    } else if (S === 'gallery') {
+      for (const s of [-1, 1]) {   // колоннада: колонны, кровля, глухая стена за ними
+        for (let z = q.z0 + 6; z < q.z1 - 6; z += 9) put(blocks.w, q.x + s * 46, z, 2.2, 2.2, 22);
+        put(blocks.w, q.x + s * 52, (q.z0 + q.z1) / 2, 16, q.z1 - q.z0 - 8, 2.4, 22);
+        put(blocks.w, q.x + s * 64, (q.z0 + q.z1) / 2, 6, q.z1 - q.z0 - 8, 34);
+      }
+      for (let i = 0; i < 16; i++) { const s = i % 2 ? 1 : -1, a = 26 + r() * 46; put(i % 4 === 1 ? blocks.b : blocks.w, q.x + s * (100 + r() * 60), q.z0 + 20 + r() * (q.z1 - q.z0 - 40), a, a, a); }   // огромные коробки-упаковки
+    } else if (S === 'asia') {
+      for (const s of [-1, 1]) for (let z = q.z0; z < q.z1; z += 22 + r() * 14) put(blocks.b, q.x + s * (150 + r() * 50), z, 16 + r() * 12, 16 + r() * 10, 120 + r() * 160);
+    }
+    const inst = (list, m) => { if (!list.length) return; const im = new THREE.InstancedMesh(box, m, list.length); list.forEach(([x, z, w, d, h, y0], i) => { dm.position.set(x, y0, z); dm.scale.set(w, h, d); dm.updateMatrix(); im.setMatrixAt(i, dm.matrix); }); g.add(im); };
+    const blackM = S === 'gallery' ? mat(0x111111, 0.6) : null;
+    if (blackM) { const bl = blocks.b; inst(bl, blackM); blocks.b = []; }
+    inst(blocks.w, wallM); inst(blocks.b, backM);
+    q.cells = blocks.w; q.cells.forEach(c => QX.w.push(c));   // передний ряд — в проверку камеры
+    // земля квартала
+    const gr = new THREE.Mesh(new THREE.PlaneGeometry(HALF * 2 + 60, q.z1 - q.z0), new THREE.MeshStandardMaterial({ color: q.ground, roughness: q.k === 'merch' ? 0.6 : 0.85, metalness: 0.05 }));
+    gr.rotation.x = -Math.PI / 2; gr.position.set(q.x, 0.02, (q.z0 + q.z1) / 2); g.add(gr);
+    // кулисы: дальний силуэт, плоская карточка в цвете неба — даёт глубину без тумана и без дальней геометрии
+    const card = canvasTex(1024, 256, (c, W, H) => { const rr = mulberry(q.k.length * 97); c.fillStyle = '#fff';
+      for (let x = 0; x < W;) { const w = 18 + rr() * 70, h = H * (S === 'truss' || S === 'box' ? 0.15 + rr() * 0.3 : S === 'stadium' ? 0.25 + rr() * 0.2 : 0.3 + rr() * 0.65); c.fillRect(x, H - h, w, h); if (S === 'asia' && rr() < 0.25) c.fillRect(x + w / 2 - 2, H - h - 30, 4, 30); x += w + (S === 'monolith' ? 20 + rr() * 50 : rr() * 6); }
+      if (S === 'stadium') { c.lineWidth = 14; c.strokeStyle = '#fff'; c.beginPath(); c.ellipse(W / 2, H * 0.72, W * 0.42, H * 0.3, 0, Math.PI, 0); c.stroke(); } });
+    for (const s of [-1, 1]) {
+      const m = new THREE.Mesh(new THREE.PlaneGeometry(q.z1 - q.z0 + 120, 300), new THREE.MeshBasicMaterial({ map: card, color: farC, transparent: true, alphaTest: 0.5, depthWrite: true, fog: false }));
+      m.position.set(q.x + s * 330, 150, (q.z0 + q.z1) / 2); m.rotation.y = -s * Math.PI / 2; g.add(m);
+    }
+    // шлюз на входе в квартал: портал поперёк проспекта, узкий проём закрывает перспективу следующего квартала
+    gate(q, g, wallM, C);
+    if (S !== 'asia') TOWER_MESHES.forEach(m => { if (Math.abs(m.position.x - q.x) < HALF && m.position.z > q.z0 && m.position.z < q.z1) m.material = wallM; });
+  }
+  // стены вдоль поперечных улиц: развилка и возврат маршрута Б к наградам
+  const capM = new THREE.MeshStandardMaterial({ color: 0x1a1918, roughness: 0.9 });
+  [[SPLIT.z - 36, -1], [SPLIT.back + 36, 1]].forEach(([z, s]) => { const x0 = 44, x1 = XB + HALF, m = new THREE.Mesh(box, capM); m.scale.set(x1 - x0, 70, 10); m.position.set((x0 + x1) / 2, 0, z + s * 5); scene.add(m); solid(m); });
+  // перемычка между проспектами: глухой массив, чтобы из одного маршрута не было видно другой
+  const spine = new THREE.Mesh(box, capM); spine.scale.set(XB - 2 * HALF - 20, 110, SPLIT.back - SPLIT.z - 80); spine.position.set(XB / 2, 0, (SPLIT.z + SPLIT.back) / 2); scene.add(spine); solid(spine);
+  // небо: сфера вокруг камеры, градиент кварталов смешивается по положению камеры
+  QX.sky = new THREE.Mesh(new THREE.SphereGeometry(1400, 48, 24), new THREE.ShaderMaterial({
+    side: THREE.BackSide, depthWrite: false, depthTest: true, transparent: true, fog: false,
+    uniforms: { uTop: { value: new THREE.Color() }, uMid: { value: new THREE.Color() }, uBot: { value: new THREE.Color() }, uA: { value: 0 } },
+    vertexShader: 'varying vec3 vD; void main(){ vD = normalize(position); gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
+    fragmentShader: `uniform vec3 uTop, uMid, uBot; uniform float uA; varying vec3 vD;
+      float h(vec2 p){ return fract(sin(dot(p, vec2(12.9898, 78.233))) * 43758.5453); }
+      void main(){ float y = vD.y; vec3 c = mix(uBot, uMid, smoothstep(0.0, 0.22, y)); c = mix(c, uTop, smoothstep(0.18, 0.75, y)); c += (h(gl_FragCoord.xy) - 0.5) / 255.0; gl_FragColor = vec4(c, uA); }`,
+  }));
+  QX.sky.renderOrder = -10; QX.sky.frustumCulled = false; scene.add(QX.sky);
+  QX.sun = new THREE.DirectionalLight(0xffffff, 0); scene.add(QX.sun, QX.sun.target);
+}
+function gate(q, g, wallM, C) {
+  const z = q.z0, x = q.x, y1 = 118, th = 12, acc = new THREE.MeshBasicMaterial({ color: C(q.key[0]).multiplyScalar(1.4), toneMapped: false });
+  const add = (w, h, d, px, py, pz, m = wallM) => { const o = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), m); o.position.set(px, py, pz); g.add(o); o.name = 'шлюз ' + q.t; return solid(o); };
+  if (q.style === 'asia') { add(10, y1, 12, x - 52, y1 / 2, z); add(10, y1, 12, x + 52, y1 / 2, z); add(124, th, 14, x, y1 + th / 2, z); add(104, 0.5, 0.5, x, y1 - 0.4, z - 7.2, acc); }
+  else if (q.style === 'truss') { const tor = new THREE.Mesh(new THREE.TorusGeometry(56, 1.6, 8, 64, Math.PI), wallM); tor.position.set(x, 0, z); g.add(tor); tor.name = 'шлюз ' + q.t; solid(tor);
+    const t2 = new THREE.Mesh(new THREE.TorusGeometry(52, 0.35, 6, 64, Math.PI), acc); t2.position.set(x, 0, z - 1.5); g.add(t2); }
+  else if (q.style === 'gallery') { add(12, y1 * 0.6, 14, x - 54, y1 * 0.3, z); add(12, y1 * 0.6, 14, x + 54, y1 * 0.3, z); add(124, 10, 16, x, y1 * 0.6 + 5, z); add(96, 0.4, 0.4, x, y1 * 0.6 - 0.3, z - 8.2, new THREE.MeshBasicMaterial({ color: RED, toneMapped: false })); }
+  else if (q.style === 'monolith') { add(5, 160, 14, x - 50, 80, z); add(5, 160, 14, x + 50, 80, z); add(0.4, 150, 0.4, x - 47.2, 75, z - 7.3, acc); add(0.4, 150, 0.4, x + 47.2, 75, z - 7.3, acc); }
+  else { const k = q.style === 'stadium' ? 1.15 : 1; add(14, y1 * k, 16, x - 56, y1 * k / 2, z); add(14, y1 * k, 16, x + 56, y1 * k / 2, z); add(132, th + 4, 18, x, y1 * k + (th + 4) / 2, z); add(98, 0.5, 0.5, x, y1 * k - 0.4, z - 9.2, acc); }
+  q.gateZ = z;
+}
+const qMix = { top: new THREE.Color(), mid: new THREE.Color(), bot: new THREE.Color(), key: new THREE.Color(), hs: new THREE.Color(), hg: new THREE.Color(), dir: new THREE.Vector3(), c: new THREE.Color() };
+function updateQuarters() {
+  if (!QX.sky) return;
+  QX.base ||= { hemiS: hemi.color.clone(), hemiG: hemi.groundColor.clone(), hemiI: hemi.intensity, moonI: moon.intensity, fog: scene.fog.density };
+  const cx = camera.position.x, cz = camera.position.z, A = clamp01((pSm - 0.565) / 0.03);   // до площади — прежний вечерний город, дальше кварталы
+  let sum = 0; const ws = QS.map(q => { const dx = Math.max(0, Math.abs(cx - q.x) - HALF), dz = Math.max(0, q.z0 - cz, cz - q.z1), d = Math.hypot(dx, dz), w = Math.exp(-((d / 22) ** 2)) + 1e-6; sum += w; return w; });
+  ['top', 'mid', 'bot', 'key', 'hs', 'hg'].forEach(k => qMix[k].setRGB(0, 0, 0)); qMix.dir.set(0, 0, 0);
+  let keyI = 0, hemiI = 0, bl = 0, best = 0;
+  QS.forEach((q, i) => { const w = ws[i] / sum; if (w > ws[best] / sum) best = i;
+    qMix.top.add(qMix.c.set(q.sky[0]).multiplyScalar(w)); qMix.mid.add(qMix.c.set(q.sky[1]).multiplyScalar(w)); qMix.bot.add(qMix.c.set(q.sky[2]).multiplyScalar(w));
+    qMix.key.add(qMix.c.set(q.key[0]).multiplyScalar(w)); qMix.hs.add(qMix.c.set(q.hemi[0]).multiplyScalar(w)); qMix.hg.add(qMix.c.set(q.hemi[1]).multiplyScalar(w));
+    keyI += q.key[1] * w; hemiI += q.hemi[2] * w; bl += q.bloom * w; qMix.dir.add(new THREE.Vector3(...q.dir).multiplyScalar(w));
+    // отсечение по зонам: рисуем только квартал камеры и соседей в пределах 420 м
+    const dx = Math.max(0, Math.abs(cx - q.x) - HALF), dz = Math.max(0, q.z0 - cz, cz - q.z1); q.g.visible = Math.hypot(dx, dz) < 420; });
+  QX.cur = A > 0.5 ? QS[best] : null;
+  const u = QX.sky.material.uniforms; u.uTop.value.copy(qMix.top); u.uMid.value.copy(qMix.mid); u.uBot.value.copy(qMix.bot); u.uA.value = A; QX.sky.position.copy(camera.position);
+  hemi.color.copy(QX.base.hemiS).lerp(qMix.hs, A); hemi.groundColor.copy(QX.base.hemiG).lerp(qMix.hg, A); hemi.intensity = QX.base.hemiI + (hemiI - QX.base.hemiI) * A;
+  moon.intensity = QX.base.moonI * (1 - A); scene.fog.density = QX.base.fog * (1 - A);
+  QX.sun.color.copy(qMix.key); QX.sun.intensity = keyI * A; QX.sun.position.copy(camera.position).addScaledVector(qMix.dir.normalize(), 300); QX.sun.target.position.copy(camera.position);
+  bloom.strength *= 1 + (bl - 1) * A;
+}
 function buildWorld() {
   for (const w of WORLD) w.moment ? MOMENTS[w.moment].build(w) : ({ station, vitrine, screen, roof })[w.kind](w);
-  buildAsia();
+  buildAsia(); buildQuarters();
 }
 function updateWorld(time) {
-  updateMoments(time); updateAsia(time);
+  updateMoments(time); updateAsia(time); updateQuarters();
   if (lionDance.mixer) { const dt = Math.min(0.05, time - (lionDance.t || time)); lionDance.t = time; lionDance.mixer.update(dt); }
   clips.forEach(c => { const near = c.g.position.distanceTo(camera.position) < 220; if (near && c.v.paused) c.v.play().catch(() => {}); else if (!near && !c.v.paused) c.v.pause(); });
 }
 // проверка: камера обоих маршрутов не должна заходить ни в один объект (в консоли при ?dev)
 function checkPath() {
-  const boxes = [...SOLIDS, ...CITY.cells.map(c => ({ box: new THREE.Box3(new THREE.Vector3(c.x - c.w / 2, 0, c.z - c.d / 2), new THREE.Vector3(c.x + c.w / 2, c.h, c.z + c.d / 2)), name: 'дом' }))];
+  const boxes = [...SOLIDS, ...CITY.cells.map(c => ({ box: new THREE.Box3(new THREE.Vector3(c.x - c.w / 2, 0, c.z - c.d / 2), new THREE.Vector3(c.x + c.w / 2, c.h, c.z + c.d / 2)), name: 'дом' })),
+    ...QX.w.map(([x, z, w, d, h, y0]) => ({ box: new THREE.Box3(new THREE.Vector3(x - w / 2, y0, z - d / 2), new THREE.Vector3(x + w / 2, y0 + h, z + d / 2)), name: 'квартал' }))];
   const hits = [], s = new THREE.Sphere(new THREE.Vector3(), 2.5), q = new THREE.Vector3();
   for (const r of ['btl', 'atl']) {
     const k = CAM[r];
@@ -1242,6 +1413,7 @@ function buildAtmosphere() {
 
   // реф 6 и 13: мокрый асфальт — гладкий металлизированный слой отражает красно-белую комнату, без второго рендера сцены
   CITY.ground.material = new THREE.MeshStandardMaterial({ color: 0x0b0a0d, roughness: 0.16, metalness: 0.85, envMap: chromeEnv, envMapIntensity: 0.45 });
+  return;   // форк «кварталы»: дождь, неон, эстакады, разметка и хром y2k убраны — атмосферу задают кварталы
 
   // реф 6, 7: дождь вокруг камеры
   const N = 1600, rp = new Float32Array(N * 6);
@@ -1361,13 +1533,15 @@ function updateAtmosphere(time, dt) {
 // p — доля прокрутки 0..1. Между ключами — плавная интерполяция, поэтому на каждом ключе камера как бы «присаживается»
 // у каждой остановки равный отрезок скролла между развилкой и наградами: p — середина, a…b — окно рассказа
 const P_START = 0.6, P_END = 0.925;
-for (const r of ['btl', 'atl']) {
-  const list = WORLD.filter(w => w.r === r), span = (P_END - P_START) / list.length;
-  list.forEach((w, i) => { w.p = P_START + span * (i + 0.5); w.a = w.p - span * 0.5; w.b = w.p + span * 0.5; w.span = span; });
-}
-const firstOf = (zone, r) => WORLD.find(w => w.zone === zone && (!r || w.r === r)).p;
-const GO = { reel: 0.48, cross: 0.57, btl: firstOf('asia'), atl: WORLD.find(w => w.r === 'atl').p, alley: firstOf('asia'), sport: firstOf('sport'), event: firstOf('event'), shops: firstOf('merch'), dixy: firstOf('dixy'), ai: firstOf('ai'), awards: 0.944, brief: 1 };
-const FORK = 0.592;
+// равные отрезки скролла: ствол (общий для обоих маршрутов) → развилка (один отрезок) → свой маршрут
+const TRUNK = WORLD.filter(w => w.r === 'trunk'), NROUTE = Math.max(...['btl', 'atl'].map(r => WORLD.filter(w => w.r === r).length));
+const SPAN = (P_END - P_START) / (TRUNK.length + 1 + NROUTE);
+TRUNK.forEach((w, i) => { w.p = P_START + SPAN * (i + 0.5); });
+const FORK = P_START + SPAN * (TRUNK.length + 0.5);
+for (const r of ['btl', 'atl']) WORLD.filter(w => w.r === r).forEach((w, i) => { w.p = FORK + SPAN * (i + 1); });
+WORLD.forEach(w => { w.span = SPAN; w.a = w.p - SPAN * 0.5; w.b = w.p + SPAN * 0.5; });
+const firstOf = zone => WORLD.find(w => w.zone === zone).p;
+const GO = { reel: 0.48, cross: FORK, city: firstOf('city'), btl: firstOf('asia'), atl: firstOf('retail'), alley: firstOf('asia'), sport: firstOf('sport'), event: firstOf('event'), shops: firstOf('merch'), dixy: firstOf('retail'), retail: firstOf('retail'), ai: firstOf('ai'), awards: 0.944, brief: 1 };
 let CAM = {}, ISK = [], route = null;
 function buildTimeline() {
   const s = slotWorld;
@@ -1392,9 +1566,17 @@ function buildTimeline() {
     { p: 1.00, pos: V(0, 14, TAIL.brief - 52), look: V(0, 20, TAIL.brief) },
   ];
   // на остановке камера присаживается и чуть подаётся вперёд, между остановками летит по коридору маршрута
-  const stops = r => WORLD.filter(w => w.r === r).flatMap(w => w.keys ? w.keys.map(([t, pos, look]) => ({ p: w.p + t * w.span, pos, look })) : [{ p: w.p - w.span * 0.2, pos: w.cam, look: w.look }, { p: w.p + w.span * 0.22, pos: w.cam.clone().add(V(0, 0, 3)), look: w.look }]);
-  CAM.btl = [...head, { p: 0.596, pos: V(10, 13, 150), look: V(-4, 9, 230) }, ...stops('btl'), ...tail];
-  CAM.atl = [...head, { p: 0.596, pos: V(0, 42, 150), look: V(-30, 66, 240) }, ...stops('atl'), { p: 0.93, pos: V(0, 40, TAIL.awards - 80), look: V(19, 16, TAIL.awards) }, ...tail];
+  const stops = list => list.flatMap(w => w.keys ? w.keys.map(([t, pos, look]) => ({ p: w.p + t * w.span, pos, look })) : [{ p: w.p - w.span * 0.2, pos: w.cam, look: w.look }, { p: w.p + w.span * 0.22, pos: w.cam.clone().add(V(0, 0, 3)), look: w.look }]);
+  const exit = { p: 0.596, pos: V(10, 13, 150), look: V(-4, 9, 230) }, trunk = stops(TRUNK), S = SPLIT.z;
+  // развилка: камера выходит из ствола на поперечную улицу и останавливается перед двумя шлюзами
+  const fork = [{ p: FORK - SPAN * 0.18, pos: V(8, 16, S - 46), look: V(60, 22, S + 40) }, { p: FORK + SPAN * 0.1, pos: V(10, 18, S - 40), look: V(70, 24, S + 30) }];
+  CAM.btl = [...head, exit, ...trunk, ...fork, { p: FORK + SPAN * 0.42, pos: V(10, 14, S), look: V(-2, 12, S + 80) }, ...stops(WORLD.filter(w => w.r === 'btl')), ...tail];
+  CAM.atl = [...head, exit, ...trunk, ...fork,
+    { p: FORK + SPAN * 0.3, pos: V(XB * 0.45, 26, S), look: V(XB, 20, S + 10) },
+    { p: FORK + SPAN * 0.5, pos: V(XB + 10, 16, S + 4), look: V(XB, 14, S + 90) },
+    ...stops(WORLD.filter(w => w.r === 'atl')),
+    { p: 0.926, pos: V(XB + 6, 20, SPLIT.back), look: V(XB - 80, 18, SPLIT.back + 10) },
+    { p: 0.933, pos: V(XB * 0.4, 22, SPLIT.back), look: V(0, 14, SPLIT.back + 50) }, ...tail];
   // камера летит по сплайну через ключи: без остановки на каждом, тормозит только там, где ключи стоят рядом
   for (const r of ['btl', 'atl']) {
     const k = CAM[r];
@@ -1421,7 +1603,7 @@ function sample(keys, p, fn) {
 // ---------- рассказ о кейсе на каждой остановке ----------
 // вместо навигации по кварталам: что за задача, что придумали, что получилось. «другие кейсы квартала» — в навигации
 const MORE = {
-  asia: { t: 'азиатские кейсы', ids: ['fandom', 'tbank', 'treschnutye', 'izhora'] },
+  asia: { t: 'азиатские кейсы', ids: ['fandom', 'tbank', 'izhora', 'treschnutye'] },
   sport: { t: 'спортивные кейсы', ids: ['izhora', 'lion', 'ironstar', 'gdrive', 'baltika7', 'avangard'] },
   event: { t: 'другие ивент-кейсы', ids: ['baltikaPlant', 'megafon', 'mice', 'megafonTravel'] },
   merch: { t: 'другие кейсы с мерчем', ids: ['gdriveMerch', 'oxygenSet', 'lionMerch'] },
@@ -1435,14 +1617,14 @@ STORIES.forEach(([id, a, b, r, side, more, orbitBtn]) => {
   if (w.moment) {
     // у момента вместо окна — титр: заходит после пролёта камеры, всё остальное в «кейс целиком»
     const res = c.result.filter(x => x[0] !== '—')[0];
-    el.className = 'ov left flex'; el.dataset.a = w.p - w.span * 0.12; el.dataset.b = b; el.dataset.f = 0.004; el.dataset.route = r;
-    el.innerHTML = `<span class="t">${r === 'btl' ? '{04} btl' : '{05} atl'} · ${c.pass.клиент}</span><h2>${c.title}</h2><p class="idea">${c.idea}</p>
+    el.className = 'ov left flex'; el.dataset.a = w.p - w.span * 0.12; el.dataset.b = b; el.dataset.f = 0.004; el.dataset.route = r === 'trunk' ? '' : r;
+    el.innerHTML = `<span class="t">{${ZONES[w.zone].n}} ${ZONES[w.zone].t} · ${c.pass.клиент}</span><h2>${c.title}</h2><p class="idea">${c.idea}</p>
       ${res ? `<div class="hit"><b>${res[0]}</b><span class="t">${res[1]}</span></div>` : ''}<button class="btn" data-case="${id}">кейс целиком</button>`;
     return document.body.insertBefore(el, document.getElementById('orbitUi'));
   }
-  el.className = `ov ${side} panel`; el.dataset.a = a; el.dataset.b = b; el.dataset.f = 0.005; el.dataset.route = r; el.style.maxWidth = '460px';
+  el.className = `ov ${side} panel`; el.dataset.a = a; el.dataset.b = b; el.dataset.f = 0.005; el.dataset.route = r === 'trunk' ? '' : r; el.style.maxWidth = '460px';
   const res = c.result.filter(x => x[0] !== '—').slice(0, 3);
-  el.innerHTML = `<span class="t">${r === 'btl' ? '{04} btl' : '{05} atl'} · ${c.pass.клиент} · ${c.pass.год}${c.awards[0] ? ' · ' + c.awards[0] : ''}</span>
+  el.innerHTML = `<span class="t">{${ZONES[w.zone].n}} ${ZONES[w.zone].t} · ${c.pass.клиент} · ${c.pass.год}${c.awards[0] ? ' · ' + c.awards[0] : ''}</span>
     <h2 style="font-size:40px;margin:8px 0 12px">${c.title}</h2>
     <p style="font-size:16px"><span class="t">задача</span> ${c.task}</p>
     <p style="font-size:16px;margin-top:6px"><span class="t">идея</span> ${c.idea}</p>
@@ -1456,9 +1638,10 @@ STORIES.forEach(([id, a, b, r, side, more, orbitBtn]) => {
 MODALS.more = key => `<span class="t">{кейсы}</span><h1>${MORE[key].t.replace('другие ', '')}</h1><div class="list" style="max-width:720px">${MORE[key].ids.map(id => `<button data-case="${id}"><span>${CASES[id].title} · ${CASES[id].pass.клиент}</span><span class="t">${CASES[id].dir} · ${CASES[id].pass.год}</span></button>`).join('')}</div>`;
 
 // ---------- HTML-слой ----------
+{ const f = document.getElementById('fork'); f.dataset.a = FORK - SPAN * 0.42; f.dataset.b = FORK + SPAN * 0.5; f.dataset.f = 0.004; }
 const ovs = [...document.querySelectorAll('.ov')].map(el => ({ el, a: +el.dataset.a, b: +el.dataset.b, r: el.dataset.route, f: +el.dataset.f || 0.012 }));
-const STAGES = [[0, '{00} вход'], [0.1, '{01} искра'], [0.35, '{01} кислород'], [0.45, '{02} шоурил'], [0.53, '{03} перекрёсток'],
-  ...Object.keys(ZONES).map(k => { const w = WORLD.find(w => w.zone === k); return [w.a, `${w.r === 'btl' ? '{04} btl' : '{05} atl'} · ${ZONES[k].t}`, w.r]; }), [0.93, '{06} награды'], [0.975, '{07} бриф']].sort((a, b) => a[0] - b[0]);
+const STAGES = [[0, '{00} вход'], [0.1, '{01} искра'], [0.35, '{01} кислород'], [0.45, '{02} шоурил'], [FORK - SPAN * 0.5, '{··} развилка'],
+  ...Object.keys(ZONES).map(k => { const w = WORLD.find(w => w.zone === k); return [w.a, `{${ZONES[k].n}} ${ZONES[k].t}`, w.r === 'trunk' ? undefined : w.r]; }), [0.93, '{06} награды'], [0.975, '{07} бриф']].sort((a, b) => a[0] - b[0]);
 const hudPct = document.getElementById('hudPct'), hudStage = document.getElementById('hudStage');
 function updateOverlay(p) {
   ovs.forEach(o => {
@@ -1468,7 +1651,7 @@ function updateOverlay(p) {
   });
   hudPct.textContent = String(Math.round(p * 100)).padStart(3, '0');
   hudStage.textContent = STAGES.filter(s => p >= s[0] && (!s[2] || s[2] === route)).pop()[1];
-  routeBtn.style.display = route ? '' : 'none'; routeBtn.textContent = `маршрут: ${route} · сменить ↺`;
+  routeBtn.style.display = route ? '' : 'none'; routeBtn.textContent = `${ROUTE_NAME[route]} · сменить ↺`;
   micro.classList.toggle('dim', ovs.some(o => o.el.classList.contains('right') && o.el.classList.contains('panel') && o.el.classList.contains('on')));
 }
 const modal = document.getElementById('modal'), modalBody = document.getElementById('modalBody');
@@ -1476,13 +1659,13 @@ const openModal = html => { modalBody.innerHTML = html; modal.classList.add('on'
 const closeModal = () => modal.classList.remove('on');
 document.getElementById('modalClose').addEventListener('click', closeModal);
 const routeBtn = document.getElementById('routeBtn');
-const WORD = { reel: 'фильм', cross: 'развилка', btl: 'btl', alley: 'азиатский квартал', sport: 'спорт', event: 'ивент', shops: 'мерч', dixy: 'дикси', ai: 'ai-продакшн', atl: 'atl', awards: 'награды', about: 'о нас', brief: 'бриф' };
+const WORD = { reel: 'фильм', cross: 'развилка', city: 'город', retail: 'ритейл', btl: 'btl', alley: 'азиатский квартал', sport: 'спорт', event: 'ивент', shops: 'мерч', dixy: 'дикси', ai: 'ai-продакшн', atl: 'atl', awards: 'награды', about: 'о нас', brief: 'бриф' };
 const curtain = document.getElementById('curtain'), curtainWord = document.getElementById('curtainWord');
 const goTo = key => {
   closeModal(); if (orbitOn) closeOrbit();
   if (key === 'btl' || key === 'atl') route = key;
   else if (key === 'cross') route = null;
-  else if (GO[key] > FORK && !route) route = 'btl';
+  else if (GO[key] > FORK && !route) route = ['atl', 'retail', 'dixy', 'ai', 'shops'].includes(key) ? 'atl' : 'btl';
   const max = document.documentElement.scrollHeight - innerHeight, target = GO[key];
   if (Math.abs(target - pSm) < 0.12) return scrollTo({ top: target * max, behavior: 'smooth' });
   // далеко: не тащим камеру через весь город, а закрываем шторкой и переставляем
@@ -1520,8 +1703,9 @@ canvas.addEventListener('pointermove', e => { if (!orbitOn) canvas.style.cursor 
 // ---------- 2D-слой: микротекст, простые формы по сетке, вайп заголовка ----------
 const micro = document.getElementById('micro'), microL = document.getElementById('microL'), wipe = document.getElementById('wipe');
 const sqs = [...document.querySelectorAll('.sq')];
-const INDEX = [['{00}', 'вход', 0], ['{01}', 'искра', 0.1], ['{02}', 'фильм', 0.45], ['{03}', 'развилка', 0.53],
-  ...WORLD.map(w => [w.r === 'btl' ? '{04}' : '{05}', w.nav, w.p, w.r]), ['{06}', 'награды', 0.93], ['{07}', 'бриф', 0.975]];
+const INDEX = [['{00}', 'вход', 0], ['{01}', 'искра', 0.1], ['{02}', 'фильм', 0.45], 
+  ...WORLD.filter(w => w.r === 'trunk').map(w => [`{${ZONES[w.zone].n}}`, w.nav, w.p]), ['{··}', 'развилка', FORK],
+  ...WORLD.filter(w => w.r !== 'trunk').map(w => [`{${ZONES[w.zone].n}}`, w.nav, w.p, w.r]), ['{06}', 'награды', 0.93], ['{07}', 'бриф', 0.975]];
 // пункт навигации кликабелен: прыжок к остановке, маршрут подставляется сам
 const jumpTo = (p, r) => {
   closeModal(); if (orbitOn) closeOrbit(); if (r) route = r; else if (p > FORK && !route) route = 'btl';
@@ -1536,10 +1720,10 @@ let lastStage = '', sqT = 0, frameN = 0;
 function hud2d(p, time) {
   frameN++;
   const cur = INDEX.filter(s => p >= s[2] && (!s[3] || s[3] === route)).pop();
-  const stop = route && p > FORK && p < 0.93 ? WORLD.filter(w => w.r === route && p >= w.a).pop() : null, moreKey = stop && ZONES[stop.zone].more;
+  const stop = p > P_START && p < 0.93 ? WORLD.filter(w => onRoute(w, route) && p >= w.a).pop() : null, moreKey = stop && ZONES[stop.zone].more;
   const html = INDEX.filter(s => !s[3] || !route || s[3] === route).map(s => `<div class="${s === cur ? 'on' : ''}" data-j="${s[2]}"${s[3] ? ` data-r="${s[3]}"` : ''}>${s[0]} ${s[1]}${s === cur ? ' ←' : ''}</div>`).join('') + (moreKey ? `<div style="margin-top:8px;pointer-events:auto"><a href="#" data-more="${moreKey}" style="color:var(--cream)">${MORE[moreKey].t} →</a></div>` : '');
   if (html !== micro._h) { micro.innerHTML = html; micro._h = html; }
-  if (frameN % 6 === 0) microL.innerHTML = `cam ${camera.position.x.toFixed(1)} · ${camera.position.y.toFixed(1)} · ${camera.position.z.toFixed(1)}<br>fov ${camera.fov} · f ${String(frameN).padStart(6, '0')}<br>маршрут ${route || '—'} · p ${p.toFixed(3)}`;
+  if (frameN % 6 === 0) microL.innerHTML = `${QX.cur ? 'квартал ' + QX.cur.t + '<br>' : ''}cam ${camera.position.x.toFixed(1)} · ${camera.position.y.toFixed(1)} · ${camera.position.z.toFixed(1)}<br>fov ${camera.fov} · f ${String(frameN).padStart(6, '0')}<br>маршрут ${route || '—'} · p ${p.toFixed(3)}`;
   if (time - sqT > 1.1) {   // квадраты перескакивают по узлам сетки
     sqT = time; const cell = innerWidth / 12;
     sqs.forEach((q, i) => { q.style.left = (Math.round(Math.random() * 12) * cell - 3) + 'px'; q.style.top = (Math.round(Math.random() * innerHeight / cell) * cell - 3) + 'px'; });
@@ -1566,8 +1750,8 @@ function closeOrbit() {
 document.getElementById('closeOrbit').addEventListener('click', closeOrbit);
 
 // ---------- временные обзорные виды на кварталы: камера отдельно от скролла, крутится мышью ----------
-const VIEWS = Object.fromEntries(Object.keys(ZONES).map(k => { const [z0, z1] = ZR[k], air = !!ZONES[k].over;
-  return [k, { t: V(air ? -10 : -8, air ? 62 : 8, (z0 + z1) / 2), p: V(30, air ? 140 : 70, z0 - 110) }]; }));
+const VIEWS = Object.fromEntries(Object.keys(ZONES).map(k => { const [z0, z1] = ZR[k], x = ZX[k];
+  return [k, { t: V(x - 8, 20, (z0 + z1) / 2), p: V(x + 60, 150, z0 - 140) }]; }));
 let viewKey = null; const viewInfo = document.getElementById('viewInfo');
 function openView(key) {
   if (orbitOn && !viewKey) closeOrbit();
@@ -1658,5 +1842,56 @@ if (location.search.includes('dev')) checkPath();   // для отладки п�
 // ?at=lion:-0.3 — сразу встать на остановку кейса (для скриншотов)
 const AT = new URLSearchParams(location.search).get('at');
 if (AT) { const [id, t] = AT.split(':'), w = WORLD.find(w => w.id === id); window.__three.go(w.p + w.span * (+t || 0), w.r); }
-document.getElementById('loader').classList.add('done');
+
+// ?map — схема зонирования из тех же данных, что и мир: кварталы, шлюзы, маршруты камеры, остановки
+function drawMap() {
+  const W = innerWidth, H = innerHeight, cv = Object.assign(document.createElement('canvas'), { width: W * 2, height: H * 2 }), g = cv.getContext('2d');
+  cv.style.cssText = 'position:fixed;inset:0;width:100vw;height:100vh;z-index:100;background:#111111'; document.body.appendChild(cv); g.scale(2, 2);
+  const z0 = 120, z1 = TAIL.brief + 40, x0 = -190, x1 = XB + 190, padL = 70, padT = 150, padB = 40, k = Math.min((W - padL - 40) / (z1 - z0), (H - padT - padB) / (x1 - x0));
+  const P = (x, z) => [padL + (z - z0) * k, padT + (x - x0) * k];   // z — слева направо, x — сверху вниз
+  g.fillStyle = '#E1D9CF'; g.font = '520 34px TT'; g.fillText('зонирование · два маршрута через кварталы', padL, 54);
+  g.font = '400 13px AP'; g.fillStyle = 'rgba(225,217,207,.6)'; g.fillText('ствол общий → развилка → маршрут а: азия, спорт · маршрут б: ритейл, ai-продакшн, мерч → общий финал: награды и бриф', padL, 80);
+  g.fillText('вид сверху, движение слева направо · полоса цвета — небо квартала от горизонта к зениту · квадраты — стена, ключевой свет', padL, 98);
+  // поперечные улицы и перемычка
+  const rect = (xa, za, xb, zb, fill) => { const [a, b] = P(xa, za), [c, d] = P(xb, zb); g.fillStyle = fill; g.fillRect(a, b, c - a, d - b); };
+  rect(x0, 120, x1, 172, '#191919'); rect(-30, SPLIT.z - 30, XB + 30, SPLIT.z + 30, '#1d1d1d'); rect(-30, SPLIT.back - 30, XB + 30, SPLIT.back + 30, '#1d1d1d');
+  rect(HALF + 10, SPLIT.z + 40, XB - HALF - 10, SPLIT.back - 40, '#0a0a0a');
+  for (const q of QS) {
+    const [a, b] = P(q.x - HALF, q.z0), [c, d] = P(q.x + HALF, q.z1), gr = g.createLinearGradient(0, b, 0, d);
+    gr.addColorStop(0, q.sky[2]); gr.addColorStop(0.5, q.sky[1]); gr.addColorStop(1, q.sky[0]);
+    g.fillStyle = gr; g.globalAlpha = 0.85; g.fillRect(a, b, c - a, d - b); g.globalAlpha = 1;
+    g.strokeStyle = 'rgba(225,217,207,.35)'; g.lineWidth = 1; g.strokeRect(a, b, c - a, d - b);
+    // улица
+    const [, s1] = P(q.x - 44, 0), [, s2] = P(q.x + 44, 0); g.fillStyle = 'rgba(17,17,17,.55)'; g.fillRect(a, s1, c - a, s2 - s1);
+    g.fillStyle = '#E1D9CF'; g.fillRect(a - 2, b - 6, 4, d - b + 12);   // шлюз
+    const light = ['merch'].includes(q.k), ink = light ? '#111111' : '#E1D9CF';
+    g.fillStyle = ink; g.font = '400 12px AP'; g.fillText(`{${q.n}}`, a + 8, b + 18); g.font = '520 20px TT'; g.fillText(q.t, a + 8, b + 40);
+    g.font = '400 10px AP'; g.globalAlpha = 0.8; const words = q.line.split(' '); let line = '', y = b + 56; for (const w of words) { if (g.measureText(line + w).width > c - a - 16) { g.fillText(line, a + 8, y); line = ''; y += 12; } line += w + ' '; } g.fillText(line, a + 8, y); g.globalAlpha = 1;
+    [q.wall, q.key[0]].forEach((c2, i) => { g.fillStyle = '#' + new THREE.Color(c2).getHexString(); g.fillRect(a + 8 + i * 22, d - 26, 18, 18); g.strokeStyle = 'rgba(128,128,128,.6)'; g.strokeRect(a + 8 + i * 22, d - 26, 18, 18); });
+  }
+  // маршруты камеры
+  const path = (r, col, dash) => { const kk = CAM[r]; g.strokeStyle = col; g.lineWidth = 2.5; g.setLineDash(dash); g.beginPath(); const q = new THREE.Vector3();
+    for (let n = 0; n <= 600; n++) { const p = 0.59 + 0.41 * n / 600; let i = 0; while (i < kk.length - 2 && p > kk[i + 1].p) i++; kk.pos.getPoint((i + clamp01((p - kk[i].p) / (kk[i + 1].p - kk[i].p))) / (kk.length - 1), q); const [X, Y] = P(q.x, q.z); n ? g.lineTo(X, Y) : g.moveTo(X, Y); } g.stroke(); g.setLineDash([]); };
+  path('atl', '#E1D9CF', [7, 5]); path('btl', '#F40709', []);
+  // остановки кейсов
+  g.font = '400 10px AP';
+  WORLD.forEach(w => { const [X, Y] = P(w.F.x, w.z); g.fillStyle = w.r === 'btl' ? '#F40709' : '#E1D9CF'; g.beginPath(); g.arc(X, Y, 4, 0, 7); g.fill();
+    g.save(); g.translate(X, Y + 9); g.rotate(Math.PI / 2.6); g.fillStyle = QS.find(q => q.k === w.zone).k === 'merch' ? '#111' : '#E1D9CF'; g.fillText(w.nav, 0, 0); g.restore(); });
+  const lbl = (t, x, z) => { const [X, Y] = P(x, z); g.fillStyle = '#E1D9CF'; g.font = '400 11px AP'; g.fillText(t, X, Y); };
+  lbl('← башня, искра, шоурил', -170, 124); lbl('развилка', 150, SPLIT.z - 8); lbl('возврат б', 150, SPLIT.back - 8);
+  const [ax] = P(0, TAIL.awards), [bx] = P(0, TAIL.brief); g.fillStyle = '#F40709'; g.fillRect(ax - 3, P(0, 0)[1] - 3, 6, 6); g.fillRect(bx - 3, P(0, 0)[1] - 3, 6, 6); lbl('награды', 26, TAIL.awards - 10); lbl('бриф', 26, TAIL.brief - 10);
+  // легенда
+  const [lx, ly] = [W - 330, 40]; g.font = '400 11px AP'; g.fillStyle = '#F40709'; g.fillRect(lx, ly + 2, 26, 3); g.fillStyle = '#E1D9CF'; g.fillText('маршрут а (азия · спорт)', lx + 34, ly + 7);
+  g.setLineDash([7, 5]); g.strokeStyle = '#E1D9CF'; g.beginPath(); g.moveTo(lx, ly + 24); g.lineTo(lx + 26, ly + 24); g.stroke(); g.setLineDash([]); g.fillText('маршрут б (ритейл · ai · мерч)', lx + 34, ly + 28);
+  g.fillRect(lx + 11, ly + 38, 4, 14); g.fillText('шлюз — портал на входе в квартал', lx + 34, ly + 49);
+}
+if (location.search.includes('map')) drawMap();
 frame();
+{ // искра прелоадера встаёт туда, где в кадре стоит 3D-искра, и передаёт ей кадр; только после этого открывается скролл
+  const L = document.getElementById('loader'), open = () => { L.classList.add('done'); document.documentElement.classList.remove('lock'); };
+  if (AT || location.search.includes('map')) open();
+  else { await settled(); document.getElementById('loadPct').textContent = '100%';
+    iskra.updateMatrixWorld(true); const bb = new THREE.Box3().setFromObject(iskra), c = bb.getCenter(new THREE.Vector3()).project(camera), e = bb.max.clone().project(camera), f = bb.min.clone().project(camera);
+    L.style.setProperty('--tx', `${(c.x + 1) / 2 * innerWidth}px`); L.style.setProperty('--ty', `${(1 - c.y) / 2 * innerHeight}px`); L.style.setProperty('--tw', `${Math.abs(e.x - f.x) / 2 * innerWidth}px`);
+    L.classList.add('ready'); setTimeout(open, 1250); }
+}
