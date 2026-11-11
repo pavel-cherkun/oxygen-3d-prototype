@@ -167,7 +167,7 @@ function lift(q, h) { q.g.position.y += h; for (const r of ['btl', 'atl']) q.pat
 // {00} старт — закрытый барабан из тонких бетонных рёбер на крыше. сквозь щели между рёбрами солнце кладёт на пол веер полос.
 // выходы не дыры: btl — щель в рёбрах с красными кромками и светящаяся дорожка, atl — световое кольцо в окулюсе, сквозь которое камера поднимается
 function rotunda() {
-  const R = 40, q = zone('fork', { grade: { sat: 0.85, con: 0.2, tint: [0.98, 0.99, 1.02] },  hdr: 1, fog: 0.0009, n: '00', t: 'старт', line: 'барабан из рёбер: btl — в щель, atl — сквозь световое кольцо', exp: 1.05, sky: ['#121212', '#333333', '#707070'], hemi: [0x8a8a8a, 0x161616, 0.3], key: [0xf2f2f2, 4.6, V(-0.8, 0.38, 0.3)], bloom: 1, spark: 12 });
+  const R = 40, q = zone('fork', { grade: { sat: 0.85, con: 0.2, tint: [0.98, 0.99, 1.02] },  hdr: 1, fog: 0.0007, n: '00', t: 'старт', line: 'барабан из рёбер: btl — в щель, atl — сквозь световое кольцо', exp: 1.05, sky: ['#121212', '#333333', '#707070'], hemi: [0x8a8a8a, 0x161616, 0.3], key: [0xf2f2f2, 4.6, V(-0.8, 0.38, 0.3)], bloom: 1, spark: 12 });
   const k = q.kit, W = pbr('wall', 0x9a9a9a), Wd = pbr('wall', 0x6a6a6a, 1, THREE.DoubleSide), floor = pbr('floor', 0x3a3a3a, 0.9), red = glow(RED, 1.4), cr = glow(CREAM, 0.6);
   q.rects.push([-56, 56, -56, R + 4]);
   k.box(pbr('floor', 0x5a5a5a), 440, 2, 2 * R + 16, 0, -2, 0);   // поверхность вокруг барабана
@@ -400,7 +400,8 @@ if (HQ) {
           #include <colorspace_fragment>
         }` };
     const m = new Reflector(new THREE.PlaneGeometry(w, d), { textureWidth: innerWidth * 0.6, textureHeight: innerHeight * 0.6, shader, clipBias: 0.003 });
-    m.material.transparent = true; m.material.depthWrite = false; m.rotation.x = -Math.PI / 2; m.position.set(x, y, z); scene.add(m); WETS.push({ m, q, below: o.below, above: o.above });
+    m.material.transparent = true; m.material.depthWrite = false; m.rotation.x = -Math.PI / 2; m.position.set(x, y, z); scene.add(m);
+    const ob = m.onBeforeRender; m.onBeforeRender = (...a) => { const v = SKYLINE.mesh.visible; SKYLINE.mesh.visible = false; ob(...a); SKYLINE.mesh.visible = v; }; WETS.push({ m, q, below: o.below, above: o.above });   // кольцо горизонта стоит вокруг камеры — в отражении оно ломается, поэтому не отражаем
   };
   // старт и нейтральная — одна общая мокрая плоскость на поверхности
   const zEnd = Z.neutral.rects[0][3]; make(Z.neutral, { w: 440, d: zEnd + 60, x: 0, y: ROOF + 0.03, z: (zEnd - 60) / 2, k: 0.6 }); WETS[0].also = Z.fork;
@@ -439,14 +440,14 @@ const LOGO = { mat: null, slot: V(0, 0, 0), k: 1 };
 // ствол — вход в ротонду, общий; дальше btl идёт по земле, atl над городом — через те же локации
 const ORDER = ['fork', 'neutral', 'asia', 'sport', 'merch', 'ai', 'final'];
 const ROUTES = { btl: [...Z.fork.trunk], atl: [...Z.fork.trunk] };
-for (const r of ['btl', 'atl']) ORDER.forEach(k => ROUTES[r].push(...Z[k].paths[r]));
+for (const r of ['btl', 'atl']) { ORDER.forEach(k => ROUTES[r].push(...Z[k].paths[r])); ROUTES[r] = ROUTES[r].map(p => V(0, p.y, p.z)); }   // рельсы: строго по оси, без вилянья
 const N = 4000, PX = 11;   // пикселей скролла на метр пути
 const R = {};
 for (const [r, raw] of Object.entries(ROUTES)) {
   const pts = raw.filter((p, i) => !i || p.distanceTo(raw[i - 1]) > 1);
   const curve = new THREE.CatmullRomCurve3(pts, false, 'centripetal'), P = curve.getSpacedPoints(N), C = [0], cubes = ZL.flatMap(q => q.cubes).filter(c => !c.r || c.r === r);
   // у кубов своего маршрута скролл тянется дольше — камера как бы присаживается
-  for (let i = 1; i <= N; i++) { const p = P[i], dn = Math.min(...cubes.map(c => Math.hypot(c.p.x - p.x, c.p.z - p.z, (c.p.y - p.y) * 0.5))); C.push(C[i - 1] + P[i].distanceTo(P[i - 1]) * (1 + 2.6 * Math.exp(-((dn / 13) ** 2)))); }
+  for (let i = 1; i <= N; i++) { const p = P[i], dn = Math.min(...cubes.map(c => Math.hypot(c.p.x - p.x, c.p.z - p.z, (c.p.y - p.y) * 0.5))); C.push(C[i - 1] + P[i].distanceTo(P[i - 1]) * (1 + 1.1 * Math.exp(-((dn / 16) ** 2)))); }
   const iF = P.findIndex(p => p.distanceTo(Z.fork.trunk[2]) < 3);
   R[r] = { curve, P, C, cubes, iF, trunkW: C[iF], restW: C[N] - C[iF] };
 }
@@ -501,6 +502,7 @@ routeBtn.addEventListener('click', () => { route = null; scrollTo({ top: (TRUNK_
 // ---------- цикл ----------
 let sSm = 0, mouse = new THREE.Vector2(), mSm = new THREE.Vector2(), lastZone = '';
 addEventListener('pointermove', e => mouse.set(e.clientX / innerWidth - 0.5, e.clientY / innerHeight - 0.5));
+let lookInit = false;
 const clock = new THREE.Clock(), look = V(0, 0, 0), tmp = V(0, 0, 0), ahead = V(0, 0, 0), DOCKQ = new THREE.Quaternion().setFromEuler(new THREE.Euler(0, Math.PI, 0)), endEl = document.getElementById('end');
 const REC = { on: /rec/.test(location.search), t: 0 };
 function frame() {
@@ -511,13 +513,11 @@ function frame() {
   sSm += (s - sSm) * (1 - Math.exp(-dt * 3));
   const r = route || 'btl', o = R[r], u = uAt(r, sSm), du = 14 / o.curve.getLength();
   o.curve.getPointAt(u, camera.position); o.curve.getPointAt(Math.min(1, u + du), ahead);
-  // взгляд: вперёд по пути, у куба — поворот к нему; в финале — на два больших куба
-  look.copy(ahead); look.y = camera.position.y - 0.6;
-  let best = null, bd = 1e9; for (const c of o.cubes) { const d = c.p.distanceTo(camera.position); if (d < bd && c.p.clone().sub(camera.position).dot(tmp.copy(ahead).sub(camera.position)) > 0) { bd = d; best = c; } }
-  if (best) { const w = smooth(clamp01((34 - bd) / 18)) * 0.32, ly = look.y; look.lerp(best.p, w); look.y = ly + (best.p.y - ly) * w * 0.4; }
+  // камера на рельсах: взгляд — по касательной к пути на 30 м вперёд, сглажен; без поворотов к кубам и без сдвига от мыши
+  o.curve.getPointAt(Math.min(1, u + 30 / o.curve.getLength()), tmp); tmp.y -= 0.6;
   const dLogo = camera.position.distanceTo(FIN.logoAt), dock = smooth(clamp01((72 - dLogo) / 24)), landed = clamp01((dock - 0.92) / 0.08);
-  look.lerp(FIN.look, smooth(clamp01((110 - dLogo) / 50)));
-  mSm.lerp(mouse, Math.min(1, dt * 3)); camera.position.x += mSm.x * 1.2; camera.position.y -= mSm.y * 0.8;
+  tmp.lerp(FIN.look, smooth(clamp01((110 - dLogo) / 50)));
+  look.lerp(tmp, REC.on || !lookInit || look.distanceTo(tmp) > 50 ? 1 : 1 - Math.exp(-dt * 4)); lookInit = true;   // после прыжка по навигации — сразу, без разворота
   camera.lookAt(look);
   // искра впереди, чуть выше линии взгляда; в начале — прямо по центру кадра
   const intro = 1 - clamp01(sSm / 40);
@@ -526,7 +526,7 @@ function frame() {
   spark.lookAt(camera.position); spark.rotateZ(time * 0.6 * (1 - dock));
   // в финале искра летит в вырез логотипа, растёт до его размера и разворачивается вместе с ним; логотип загорается
   if (dock > 0) { spark.position.lerp(LOGO.slot, dock); spark.scale.setScalar(1 + (LOGO.k - 1) * dock); spark.quaternion.slerp(DOCKQ, dock); } else spark.scale.setScalar(1);
-  spark.children[0].material.opacity = 1 - dock; spark.material.emissiveIntensity = (HQ ? 6 : 2.2) * (1 - landed) + 1.2 * landed;   // на десктопе ореол искры делает bloom
+  spark.children[0].material.opacity = 1 - dock; spark.material.emissiveIntensity = (HQ ? 3.2 : 2.2) * (1 - landed) + 1.2 * landed;   // на десктопе ореол искры делает bloom
   LOGO.mat.emissiveIntensity = landed * 0.75; LOGO.glow.intensity = landed * 220;
   sparkLight.distance = 30 + 70 * smooth(clamp01((150 - dLogo) / 70));   // на подлёте искра выхватывает чёрный логотип из темноты
   endEl.classList.toggle('on', landed > 0.6);
@@ -571,7 +571,7 @@ function drawMap() {
 // ---------- старт ----------
 history.scrollRestoration = 'manual'; scrollTo(0, 0);
 // отладка и съёмка: ?at=asia:0.3 — встать в зону на долю её пути
-const go = (r, s) => { route = r; document.documentElement.classList.remove('lock'); scrollTo(0, s * PX); sSm = s; };
+const go = (r, s) => { lookInit = false; route = r; document.documentElement.classList.remove('lock'); scrollTo(0, s * PX); sSm = s; };
 const goZone = (k, f = 0.3, r = 'btl') => { const o = R[r], q = Z[k]; const idx = o.P.map((p, i) => rectD(q, p.x, p.z) < 0.01 ? i : -1).filter(i => i >= 0); const i = idx[Math.floor(f * (idx.length - 1))]; const w = o.C[i]; const s = w <= o.trunkW ? w / o.trunkW * TRUNK_W : TRUNK_W + (w - o.trunkW) / o.restW * REST_W; go(k === 'fork' && f < 0.5 ? null : r, s); };
 // проверка пути: лучи от камеры в шесть сторон — ни одна стена ближе 1,5 м
 function check() {
