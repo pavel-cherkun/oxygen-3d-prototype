@@ -50,7 +50,18 @@ function concreteTex(seed, base) {
   for (let i = 0; i < 40; i++) { g.fillStyle = `rgba(15,15,15,${0.03 + r() * 0.06})`; g.fillRect(r() * 512, r() * 512, 1 + r() * 2, 40 + r() * 160); }
   const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.wrapS = t.wrapT = THREE.RepeatWrapping; t.anisotropy = 8; return t;
 }
-const TEX = { light: concreteTex(7, 182), dark: concreteTex(19, 120) };
+const TEX = { light: concreteTex(7, 182), dark: concreteTex(19, 120), clean: cleanTex() };
+// чистый бетон для монументальных объёмов: ровный тон, едва заметные швы опалубки и редкие стяжки
+function cleanTex() {
+  const c = document.createElement('canvas'); c.width = c.height = 512; const g = c.getContext('2d'), r = rng(77);
+  g.fillStyle = 'rgb(200,200,200)'; g.fillRect(0, 0, 512, 512);
+  for (let i = 0; i < 90; i++) { const x = r() * 512, y = r() * 512, rad = 40 + r() * 120, gr = g.createRadialGradient(x, y, 0, x, y, rad); gr.addColorStop(0, `rgba(${r() < 0.5 ? 0 : 255},0,0,0)`); gr.addColorStop(0, `rgba(128,128,128,${0.012 + r() * 0.02})`); gr.addColorStop(1, 'rgba(128,128,128,0)'); g.fillStyle = gr; g.fillRect(x - rad, y - rad, rad * 2, rad * 2); }
+  const id = g.getImageData(0, 0, 512, 512), d = id.data; for (let i = 0; i < d.length; i += 4) { const n = (r() - 0.5) * 7; d[i] += n; d[i + 1] += n; d[i + 2] += n; } g.putImageData(id, 0, 0);
+  g.strokeStyle = 'rgba(60,60,60,.16)'; g.lineWidth = 1.5; g.beginPath(); g.moveTo(0, 256); g.lineTo(512, 256); g.moveTo(256, 0); g.lineTo(256, 512); g.stroke();
+  g.fillStyle = 'rgba(70,70,70,.22)'; [[128, 128], [384, 128], [128, 384], [384, 384]].forEach(([x, y]) => { g.beginPath(); g.arc(x, y, 2.6, 0, 7); g.fill(); });
+  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.wrapS = t.wrapT = THREE.RepeatWrapping; t.anisotropy = 8; return t;
+}
+const clean = (tint, rough = 0.9, side = THREE.FrontSide) => memo(`k${tint}|${rough}|${side}`, () => new THREE.MeshStandardMaterial({ color: tint, map: TEX.clean, bumpMap: TEX.clean, bumpScale: 0.35, roughness: rough, metalness: 0, side }));
 const conc = (tint, dark = false, rough = 0.93) => memo(`c${tint}|${dark}|${rough}`, () => new THREE.MeshStandardMaterial({ color: tint, map: dark ? TEX.dark : TEX.light, bumpMap: dark ? TEX.dark : TEX.light, bumpScale: 1.2, roughness: rough, metalness: 0 }));
 const MEMO = new Map(), memo = (key, make) => MEMO.get(key) || MEMO.set(key, make()).get(key);   // один материал на сочетание параметров — меньше мешей после слияния
 const matte = (c, rough = 0.85, metal = 0) => memo(`m${c}|${rough}|${metal}`, () => new THREE.MeshStandardMaterial({ color: c, roughness: rough, metalness: metal }));
@@ -63,6 +74,8 @@ function boxGeo(w, h, d) {
   for (let f = 0; f < 6; f++) for (let i = 0; i < 4; i++) { const k = f * 4 + i; uv.setXY(k, uv.getX(k) * s[f][0] / TILE, uv.getY(k) * s[f][1] / TILE); }
   return g;
 }
+// цилиндр (стена ротонды) с UV в метрах
+function cylGeo(r, h, a0, a1, seg = 96) { const g = new THREE.CylinderGeometry(r, r, h, seg, 1, true, a0, a1 - a0), uv = g.attributes.uv; for (let i = 0; i < uv.count; i++) uv.setXY(i, uv.getX(i) * r * (a1 - a0) / TILE, uv.getY(i) * h / TILE); return g; }
 // набор зоны: геометрия копится по материалам и сливается в один меш на материал — мало вызовов отрисовки, тени от всего
 class Kit {
   constructor() { this.parts = new Map(); }
@@ -113,55 +126,51 @@ function cube(q, x, y, z, title, r, o = {}) {
 }
 const path = (q, r, ...pts) => pts.forEach(p => q.paths[r].push(V(...p)));
 
-// {00} развилка — бетонная ротонда с окулюсом. btl проходит в арку на земле, atl поднимается по столбу света сквозь окулюс
+// {00} старт и развилка — гладкий бетонный цилиндр, окулюс и столб света; на полу кремовое кольцо под окулюсом.
+// btl уходит в высокую арку, atl поднимается по столбу света сквозь окулюс
 function rotunda() {
-  const R = 50, q = zone('fork', { n: '00', t: 'развилка', line: 'ротонда: btl — в арку, atl — вверх сквозь окулюс', sky: ['#14110f', '#3a3631', '#77706a'], hemi: [0x8a847c, 0x1a1816, 0.35], key: [0xfff0dc, 4, V(0.12, 1, 0.08)], spark: 14 });
-  const k = q.kit, C = conc(0x8a837a), D = conc(0x5a5550, true);
+  const R = 46, q = zone('fork', { n: '00', t: 'старт', line: 'гладкий цилиндр, окулюс и столб света: btl — в арку, atl — вверх', exp: 1.1, sky: ['#0e0d0c', '#2e2b28', '#5e5953'], hemi: [0x9a948c, 0x1a1816, 0.35], key: [0xfff2e0, 4.2, V(0.18, 1, 0.12)], spark: 12 });
+  const k = q.kit, W = clean(0xbfb8ae, 0.9, THREE.DoubleSide), Wd = clean(0x8f8981, 0.9, THREE.DoubleSide), floor = matte(0x2a2826, 0.32, 0.1), a = 12 / R;
   q.rects.push([-62, 62, -62, R]);
-  k.box(conc(0x4a4743, true), 2 * R + 20, 0.3, 2 * R + 20, 0, -0.3, 0);
-  for (let a = 0; a < Math.PI * 2; a += Math.PI / 30) {
-    const x = Math.cos(a) * R, z = Math.sin(a) * R, w = R * Math.PI / 30 + 0.4;
-    if (z > 0 && Math.abs(x) < 11) { k.box(C, 4, 30, w, x, 16, z, -a); continue; }   // над аркой btl — стена
-    k.box(C, 4, 46, w, x, 0, z, -a);
-    k.box(D, 12, 2, w + 0.6, Math.cos(a) * (R - 5), 46, Math.sin(a) * (R - 5), -a);   // кольцо кровли, центр открыт
-  }
-  const shaft = new THREE.Mesh(new THREE.CylinderGeometry(R - 12, R - 12, 70, 64, 1, true), new THREE.MeshBasicMaterial({ color: new THREE.Color(0xfff0dc).multiplyScalar(0.05), transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide, toneMapped: false }));
-  shaft.position.set(0, 35, 0); q.g.add(shaft);
-  const sign = (lines, y, w) => { const m = new THREE.Mesh(new THREE.PlaneGeometry(w, w / 4), new THREE.MeshBasicMaterial({ map: signTex(lines), transparent: true, toneMapped: false, depthWrite: false })); m.position.set(0, y, R - 3); m.rotation.y = Math.PI; q.g.add(m); };
-  sign([['btl · на земле', '400 120px AP, monospace', 150], ['проходите в арку', '520 200px TT, sans-serif', 420]], 20, 22);
-  sign([['atl · над городом', '400 120px AP, monospace', 150], ['вверх, за светом ↑', '520 200px TT, sans-serif', 420]], 38, 22);
-  q.trunk = [V(0, 6, -40), V(0, 6.5, -14), V(0, 7, 0)];
-  path(q, 'btl', [0, 6.5, 24], [0, 6.5, R + 8]);
-  path(q, 'atl', [0, 18, 6], [0, 38, 10], [0, 54, 22], [0, 54, R + 6]);
+  k.box(floor, 2 * R + 12, 0.3, 2 * R + 12, 0, -0.3, 0);
+  k.geo(W, cylGeo(R, 52, a, Math.PI * 2 - a), 0, 26, 0);                    // стена с проёмом арки на +z
+  k.geo(W, cylGeo(R, 28, -a, a, 16), 0, 38, 0);                           // над аркой
+  k.geo(Wd, cylGeo(R + 3, 52, 0, Math.PI * 2), 0, 26, 0);                 // внешняя оболочка
+  [[0, 52], [0, 54]].forEach(([, y]) => k.geo(Wd, new THREE.RingGeometry(R - 13, R + 3, 128, 1), 0, y, 0, 0, Math.PI / 2));   // кровля-кольцо, центр открыт
+  for (const s of [-1, 1]) k.box(W, 3, 24, 4.6, s * 12 * Math.cos(0.02), 0, R - 1.6);   // торцы арки
+  const ring = new THREE.Mesh(new THREE.RingGeometry(R - 13.3, R - 13, 160), glow(CREAM, 0.7)); ring.rotation.x = -Math.PI / 2; ring.position.y = 0.03; q.g.add(ring);
+  const axis = new THREE.Mesh(new THREE.PlaneGeometry(0.16, R - 12), glow(RED, 1.2)); axis.rotation.x = -Math.PI / 2; axis.position.set(0, 0.03, (R + 12) / 2 - 0.5 + 6); q.g.add(axis);   // красная ось к арке
+  for (let i = 1; i < 12; i++) { const t = i / 12 * Math.PI * 2; if (Math.abs(Math.sin(t / 2)) < 0.12) continue; k.box(glow(0xfff0dc, 0.9), 0.25, 30, 0.25, Math.sin(t) * (R - 0.3), 8, Math.cos(t) * (R - 0.3), t); }   // световые щели в стене
+  const shaft = new THREE.Mesh(new THREE.CylinderGeometry(R - 13, R - 13, 80, 96, 1, true), new THREE.MeshBasicMaterial({ color: new THREE.Color(0xfff0dc).multiplyScalar(0.045), transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide, toneMapped: false }));
+  shaft.position.set(0, 40, 0); q.g.add(shaft);
+  const sign = (lines, y, w) => { const m = new THREE.Mesh(new THREE.PlaneGeometry(w, w / 4), new THREE.MeshBasicMaterial({ map: signTex(lines), transparent: true, toneMapped: false, depthWrite: false })); m.position.set(0, y, R - 2.6); m.rotation.y = Math.PI; q.g.add(m); };
+  sign([['btl · на земле', '400 120px AP, monospace', 150], ['в арку', '520 240px TT, sans-serif', 430]], 27, 16);
+  sign([['atl · над городом', '400 120px AP, monospace', 150], ['вверх, за светом ↑', '520 200px TT, sans-serif', 430]], 44, 18);
+  q.anchors.push({ p: V(0, 30, 0), c: 0xfff0dc, i: 0 });
+  q.trunk = [V(0, 6, -36), V(0, 6.5, -14), V(0, 7, 0)];
+  path(q, 'btl', [0, 6.5, 22], [0, 6.5, R + 10]);
+  path(q, 'atl', [0, 18, 6], [0, 40, 10], [0, 60, 20], [0, 58, R + 8]);
   return R;
 }
 
-// {01} нейтральная — бетонный каньон брутализма: btl идёт по дну, atl летит между стенами над мостами; кубы atl — на консолях
+// {01} нейтральная — открытое пространство после закрытой ротонды: огромная бетонная площадь, колоннада без кровли,
+// низкое солнце кладёт длинные тени колонн поперёк. по краям горизонт закрывают длинные стены, впереди — чёрная стена азии со щелью.
+// atl летит над площадью, кубы atl стоят на вершинах колонн
 function neutral(z0) {
-  const q = zone('neutral', { n: '01', t: 'нейтральная', line: 'бетонный каньон: btl по дну, atl между стенами над мостами', exp: 1.25, sky: ['#3a342e', '#8a8178', '#d8cdbf'], hemi: [0xbdb3a6, 0x4a423a, 1.1], key: [0xffe2c0, 4.2, V(-1, 0.62, 0.3)], bloom: 0.7, sun: [V(-1, 0.32, 0.4).normalize(), 0xffe6c8, 1], spark: 10 });
-  const z1 = z0 + 420, C = conc(0xc2bab0), D = conc(0x8e877e, true), slot = matte(0x0d0c0b, 0.9), k = q.kit, r = rng(11);
-  q.rects.push([-80, 80, z0, z1]);
-  k.box(conc(0x4a4743, true), 40, 0.3, z1 - z0, 0, -0.3, (z0 + z1) / 2);
-  [-1, 1].forEach(s => k.box(conc(0x6a645e), 4, 0.35, z1 - z0, s * 16, 0, (z0 + z1) / 2));
-  for (const s of [-1, 1]) for (let z = z0; z < z1;) {
-    const L = 22 + r() * 30, d = 16 + r() * 16, h = 58 + r() * 50, x = s * (18 + d / 2), zc = z + L / 2;
-    k.box(C, d, h, L, x, 0, zc);
-    if (r() < 0.65) k.box(D, d * 0.62, 6 + r() * 16, L * 0.7, x + s * d * 0.16, h, zc);
-    for (let y = 9 + r() * 5; y < h - 5; y += 8 + r() * 7) if (r() < 0.6) k.box(C, 3.6, 1.1, L * (0.45 + r() * 0.5), s * 16.2, y, zc);
-    if (r() < 0.45) for (let zz = z + 1.6; zz < z + L - 1; zz += 2.4) k.box(D, 1.5, h * 0.62, 0.45, s * 17.25, h * 0.18, zz);
-    else for (let y = 7; y < h - 6; y += 6.5) k.box(slot, 0.2, 1.8, L * 0.84, s * 17.95, y, zc);
-    z += L + (r() < 0.3 ? 3 + r() * 4 : 0);
-  }
-  for (let z = z0 + 30; z < z1 - 30; z += 58 + r() * 24) {   // мосты ниже коридора atl
-    const y = 16 + r() * 10; k.box(C, 36, 2.6, 7, 0, y, z); k.box(D, 36, 0.6, 7.6, 0, y + 2.6, z);
-    if (r() < 0.5) for (let x = -15; x <= 15; x += 3) k.box(D, 0.5, 3.4, 0.5, x, y + 3.2, z - 3.4);
-    q.anchors.push({ p: V(0, y - 1.5, z), c: 0xffd2a0, i: 40 }); k.box(glow(0xffd8b0, 1.3), 22, 0.12, 0.3, 0, y - 0.12, z);
-  }
-  k.box(C, 22, 62, 10, -24, 0, z1 - 4); k.box(C, 22, 62, 10, 24, 0, z1 - 4); k.box(D, 70, 14, 12, 0, 62, z1 - 4);   // шлюз в азию: проём 26×62
-  [['ozon селект', 40], ['золотые ворота', 110], ['белград', 180], ['связь есть везде', 250], ['гусь на заводе', 320]].forEach(([t, dz], i) => cube(q, i % 2 ? 10.5 : -10.5, 0, z0 + dz, t, 'btl'));
-  [['дербент', 75], ['tevredens', 145], ['заклинатели', 215], ['дино', 285]].forEach(([t, dz], i) => { const x = i % 2 ? 12 : -12; q.kit.box(C, 10, 1.4, 10, x + Math.sign(x) * 1, 34.6, z0 + dz); cube(q, x, 36, z0 + dz, t, 'atl', { perch: 'slab', plinth: D }); });
-  path(q, 'btl', [0, 6.5, z0 + 10], [2, 7, z0 + 80], [-1, 7.5, z0 + 160], [2, 7, z0 + 240], [-1, 7, z0 + 330], [0, 7, z1]);
-  path(q, 'atl', [0, 46, z0 + 30], [-1.5, 42, z0 + 110], [1.5, 42, z0 + 200], [-1.5, 42, z0 + 290], [0, 44, z1]);
+  const q = zone('neutral', { n: '01', t: 'нейтральная', line: 'открытая площадь, колоннада без кровли, длинные тени', exp: 1.2, sky: ['#4a443e', '#a39a90', '#e6ddd0'], hemi: [0xd0c6ba, 0x5a544c, 1.0], key: [0xffe6c8, 4.6, V(-1, 0.32, 0.5)], bloom: 0.7, sun: [V(-1, 0.22, 0.6).normalize(), 0xffe6c8, 1.2], spark: 6 });
+  const z1 = z0 + 440, C = clean(0xd6cfc5), D = clean(0xaaa399), k = q.kit, floor = clean(0x8a857e, 0.55), mid = (z0 + z1) / 2;
+  q.rects.push([-150, 150, z0, z1]);
+  k.box(floor, 300, 0.3, z1 - z0, 0, -0.3, mid);
+  const joints = []; for (let x = -144; x <= 144; x += 12) joints.push(x, 0.02, z0, x, 0.02, z1); for (let z = z0; z <= z1; z += 12) joints.push(-144, 0.02, z, 144, 0.02, z);
+  const jg = new THREE.BufferGeometry(); jg.setAttribute('position', new THREE.Float32BufferAttribute(joints, 3)); q.g.add(new THREE.LineSegments(jg, new THREE.LineBasicMaterial({ color: 0x5a5650 })));   // швы плит
+  for (const s of [-1, 1]) { k.box(C, 10, 30, z1 - z0, s * 140, 0, mid); k.box(D, 0.4, 1.2, z1 - z0, s * 134.8, 18, mid); }   // длинные стены по краям, одна тёмная линия
+  const cols = []; for (let z = z0 + 30; z < z1 - 30; z += 35) for (const s of [-1, 1]) cols.push([s * 16, z]);
+  const atl = [['дербент', 1], ['tevredens', 4], ['заклинатели', 7], ['дино', 10]];
+  cols.forEach(([x, z], i) => { const top = atl.find(a => a[1] === i); k.box(C, 3.6, top ? 34.6 : 40, 3.6, x, 0, z); if (!top) k.box(D, 4.4, 1, 4.4, x, 40, z); });
+  atl.forEach(([t, i]) => { const [x, z] = cols[i]; cube(q, x, 35.4, z, t, 'atl', { perch: 'slab', plinth: D }); });
+  [['ozon селект', 50], ['золотые ворота', 120], ['белград', 190], ['связь есть везде', 260], ['гусь на заводе', 330]].forEach(([t, dz], i) => cube(q, i % 2 ? 8 : -8, 0, z0 + dz, t, 'btl', { plinth: D }));
+  path(q, 'btl', [0, 6.5, z0 + 10], [1.5, 7, z0 + 90], [-1, 7.5, z0 + 180], [1.5, 7, z0 + 270], [0, 7, z0 + 370], [0, 6.5, z1]);
+  path(q, 'atl', [0, 52, z0 + 20], [-2, 46, z0 + 120], [2, 46, z0 + 220], [-2, 46, z0 + 320], [0, 46, z1]);
   return z1;
 }
 
@@ -171,6 +180,8 @@ function asia(z0) {
   const z1 = z0 + 340, k = q.kit, r = rng(31), B = conc(0x1a1919, true, 0.6), red = glow(RED, 1.5), cr = glow(0xffe0d0, 1.1), tor = matte(0x9a0608, 0.5);
   q.rects.push([-70, 70, z0, z1]);
   k.box(conc(0x1a1414, true, 0.4), 30, 0.3, z1 - z0, 0, -0.3, (z0 + z1) / 2);
+  for (const sd of [-1, 1]) k.box(B, 90, 150, 6, sd * 56, 0, z0 - 3);   // глухая чёрная стена квартала, вход — щель 22 м
+  k.box(glow(RED, 1.2), 0.3, 150, 0.3, -11, 0, z0 - 6.2); k.box(glow(RED, 1.2), 0.3, 150, 0.3, 11, 0, z0 - 6.2);   // красные кромки щели
   for (const s of [-1, 1]) for (let z = z0; z < z1;) {
     const L = 9 + r() * 10, d = 14 + r() * 16, h = 72 + r() * 140, x = s * (11 + d / 2), zc = z + L / 2;
     k.box(B, d, h, L, x, 0, zc); if (r() < 0.5) k.box(B, d * 0.5, 10 + r() * 30, L * 0.6, x, h, zc);
@@ -216,21 +227,27 @@ function sport(z0) {
   return z1;
 }
 
-// {04} мерч — двухэтажная светлая галерея-анфилада: btl — по нижнему этажу (окна в стенах), atl — по верхнему (щель в потолке)
+// {04} мерч — концепт-стор на два этажа: белая штукатурка, полированный пол, светящиеся потолки, рейлы с одеждой
+// по стенам, чёрные глянцевые постаменты с красным контуром. btl — нижний этаж, atl — верхний
 function merch(z0) {
-  const q = zone('merch', { n: '04', t: 'мерч', line: 'двухэтажная анфилада: btl внизу, atl наверху', exp: 1.6, sky: ['#c8c0b6', '#e2dad0', '#f4f0ea'], hemi: [0xf4f0ea, 0xb0a89c, 1.8], key: [0xfff6ea, 3.8, V(0.7, 0.9, 0.18)], bloom: 0.35, spark: 3 });
-  const rooms = 4, L = 46, z1 = z0 + rooms * L, k = q.kit, P = conc(0xe0d8cc, false, 0.85), blk = matte(0x111111, 0.4), floor = conc(0xbab2a6, false, 0.45);
+  const q = zone('merch', { n: '04', t: 'мерч', line: 'концепт-стор: белые залы, светящиеся потолки, рейлы, чёрные постаменты', exp: 0.9, sky: ['#d0c8be', '#e6e0d7', '#f6f2ec'], hemi: [0xffffff, 0xc8c0b4, 1.15], key: [0xfff6ea, 1.4, V(0.4, 1, 0.25)], bloom: 0.45, spark: 3 });
+  const rooms = 4, L = 46, z1 = z0 + rooms * L, k = q.kit, mid = (z0 + z1) / 2;
+  const Wl = matte(0xe2dbd0, 0.92), FL = matte(0xb8b2a8, 0.2, 0.05), blk = matte(0x0d0d0d, 0.22, 0.3), steel = matte(0xc8c8c8, 0.25, 0.9), lightP = glow(0xfff6ec, 0.95), red = glow(RED, 1.5);
   q.rects.push([-30, 30, z0 - 60, z1 + 10]);
-  k.box(floor, 40, 0.3, z1 - z0, 0, -0.3, (z0 + z1) / 2);
-  k.box(floor, 36, 2, z1 - z0, 0, 16, (z0 + z1) / 2);   // перекрытие между этажами
-  for (const s of [-1, 1]) k.box(P, 16, 1, z1 - z0, s * 11, 34, (z0 + z1) / 2);   // кровля с продольной щелью
-  for (const s of [-1, 1]) for (let i = 0; i < rooms; i++) {   // боковые стены: внизу окна-прорези, наверху глухо
-    const zc = z0 + i * L + L / 2; k.box(P, 1.2, 16, L, s * 18.6, 18, zc);
-    k.box(P, 1.2, 16, 14, s * 18.6, 0, zc - 16); k.box(P, 1.2, 16, 14, s * 18.6, 0, zc + 16); k.box(P, 1.2, 4, 18, s * 18.6, 12, zc); k.box(P, 1.2, 2, 18, s * 18.6, 0, zc);
+  k.box(FL, 38, 0.3, z1 - z0, 0, -0.3, mid); k.box(Wl, 38, 2, z1 - z0, 0, 16, mid); k.box(FL, 36, 0.12, z1 - z0, 0, 18, mid); k.box(Wl, 38, 1, z1 - z0, 0, 34.5, mid);
+  for (const s of [-1, 1]) k.box(Wl, 1.2, 35, z1 - z0, s * 18.6, 0, mid);
+  for (let i = 0; i <= rooms; i++) { const z = z0 + i * L; for (const y0 of [0, 18]) { for (const s of [-1, 1]) k.box(Wl, 13.4, 16, 1.2, s * 11.7, y0, z); k.box(Wl, 10, 4, 1.2, 0, y0 + 12, z); } k.box(Wl, 36, 2, 1.2, 0, 16, z); }
+  const clothes = [matte(0x111111, 0.8), matte(CREAM, 0.85), matte(0x2a2a2a, 0.8), matte(RED, 0.7)];
+  for (let i = 0; i < rooms; i++) for (const y0 of [0, 18]) {
+    const zc = z0 + i * L + L / 2;
+    k.box(lightP, 26, 0.1, L - 10, 0, y0 + (y0 ? 16.3 : 15.8), zc);   // светящийся потолок
+    q.anchors.push({ p: V(0, y0 + 12, zc), c: 0xfff4e6, i: 40 });
+    for (const s of [-1, 1]) {
+      k.box(steel, 0.12, 0.12, 16, s * 16.6, y0 + 9, zc); [-8, 8].forEach(o => k.box(steel, 2, 0.1, 0.1, s * 17.6, y0 + 9, zc + o));   // рейл на кронштейнах
+      for (let j = 0; j < 9; j++) k.box(clothes[(j + i + (s > 0 ? 1 : 0)) % 3 === 0 && j === 4 ? 3 : (j + i) % 3], 0.35, 4.4, 1.3, s * 16.6, y0 + 4.5, zc - 7 + j * 1.75);
+    }
   }
-  for (let i = 0; i <= rooms; i++) { const z = z0 + i * L; for (const y0 of [0, 18]) { for (const s of [-1, 1]) k.box(P, 14, 16, 1, s * 11.5, y0, z); k.box(P, 9, 7, 1, 0, y0 + 9, z); } k.box(P, 36, 2, 1, 0, 16, z); }
-  [['мерч g-drive', 1], ['набор креатора', 2], ['мерч льва', 3]].forEach(([t, i]) => cube(q, i % 2 ? 7 : -7, 0, z0 + i * L + L / 2, t, 'btl', { mat: blk, plinth: matte(0xd8d0c4, 0.7) }));
-  for (let i = 0; i < rooms; i++) [-1, 1].forEach(s => { k.box(blk, 0.4, 5, 8, s * 17.9, 22, z0 + i * L + L / 2); });   // наверху тёмные «картины»
+  [['мерч g-drive', 1], ['набор креатора', 2], ['мерч льва', 3]].forEach(([t, i]) => { const x = i % 2 ? 6 : -6, z = z0 + i * L + L / 2; k.box(red, 7.6, 0.05, 7.6, x, 0, z); cube(q, x, 0, z, t, 'btl', { plinth: blk }); });
   path(q, 'btl', [0, 5, z0 - 14], [0, 5, z0 + 6], [0, 5, z0 + 90], [0, 5, z1]);
   path(q, 'atl', [0, 36, z0 - 22], [0, 23.5, z0 - 6], [0, 23.5, z0 + 90], [0, 23.5, z1]);
   return z1;
@@ -274,7 +291,7 @@ function ending(z0) {
 }
 
 // ---------- сборка мира: развилка → нейтральная → азия → спорт → мерч → ai → финал, оба маршрута через все локации ----------
-const zR = rotunda(), zN = neutral(zR + 10), zA = asia(zN), zS = sport(zA), zM = merch(zS + 70), zI = ai(zM), FIN = ending(zI);
+const zR = rotunda(), zN = neutral(zR + 6), zA = asia(zN), zS = sport(zA), zM = merch(zS + 70), zI = ai(zM), FIN = ending(zI);
 ZL.forEach(q => q.kit.flush(q.g));
 const ground = new THREE.Mesh(new THREE.PlaneGeometry(4000, 4000), matte(0x050505, 1)); ground.rotation.x = -Math.PI / 2; ground.position.y = -0.4; scene.add(ground);
 
