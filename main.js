@@ -1125,7 +1125,7 @@ function roof(w) {
 // все кейсы пока — бетонные кубы-плейсхолдеры в габарите будущего носителя: ничего не отвлекает от города и маршрута
 const PH = concrete(0x77777a, { scale: 6, ao: 4 });
 function placeholder(w) {
-  const cube = (sx, sy, sz, x, y, z, ry = 0) => { const m = new THREE.Mesh(new THREE.BoxGeometry(sx, sy, sz), PH); m.position.set(x, y, z); m.rotation.y = ry; m.castShadow = m.receiveShadow = true; m.userData.case = w.id; scene.add(m); clickable.push(m); return solid(m); };
+  const cube = (sx, sy, sz, x, y, z, ry = 0) => { w.cube = { c: V(x, y, z), h: sy, w: Math.max(sx, sz) }; const m = new THREE.Mesh(new THREE.BoxGeometry(sx, sy, sz), PH); m.position.set(x, y, z); m.rotation.y = ry; m.castShadow = m.receiveShadow = true; m.userData.case = w.id; scene.add(m); clickable.push(m); return solid(m); };
   if (w.tower) towerBox(w.tower, CONC.wall);
   if (w.moment === 'izhora') { const s = Math.sign(w.tower.x); return cube(2, 52, 30, w.face - s * 1, 66, w.z); }
   if (w.kind === 'roof') return cube(16, 16, 16, w.tower.x + 4, w.tower.h + 8, w.z);
@@ -1150,7 +1150,7 @@ function checkPath() {
     const k = CAM[r];
     for (let n = 0; n <= 800; n++) {
       const p = FORK + (1 - FORK) * n / 800; let i = 0; while (i < k.length - 2 && p > k[i + 1].p) i++;
-      k.pos.getPoint((i + clamp01((p - k[i].p) / (k[i + 1].p - k[i].p))) / (k.length - 1), q); s.center.copy(q);
+      k.pos.getPoint(camU(k, p), q); s.center.copy(q);
       const b = boxes.find(b => b.box.intersectsSphere(s)); if (b) hits.push({ r, p: +p.toFixed(3), cam: q.toArray().map(v => +v.toFixed(1)).join(' '), obj: b.name });
     }
   }
@@ -1203,33 +1203,42 @@ const firstOf = (zone, r) => WORLD.find(w => w.zone === zone && (!r || w.r === r
 const GO = { reel: 0.48, cross: 0.57, btl: firstOf('asia'), atl: WORLD.find(w => w.r === 'atl').p, alley: firstOf('asia'), sport: firstOf('sport'), event: firstOf('event'), shops: firstOf('merch'), dixy: firstOf('dixy'), ai: firstOf('ai'), awards: 0.944, brief: 1 };
 const FORK = 0.592;
 let CAM = {}, ISK = [], route = null;
+// камера, написанная заново от логотипа: медленная архитектурная съёмка. правило одно на всё —
+// кейс-куб стоит в правой трети кадра, титр живёт слева; камера подъезжает, садится, чуть доезжает и уходит
+// к следующему по оси улицы, без рывков в стороны. между ключами — сплайн, внутри отрезка — плавный разгон и торможение
 function buildTimeline() {
   const s = slotWorld;
   const head = [
-    { p: 0.00, pos: V(0, 430, 330), look: V(0, 400, 200) },
+    { p: 0.00, pos: V(0, 430, 330), look: V(0, 400, 200) },   // искра в темноте (до логотипа — прежний пролёт)
     { p: 0.05, pos: V(0, 430, 330), look: V(0, 400, 200) },
     { p: 0.17, pos: V(30, 370, 250), look: V(0, 300, 80) },
-    { p: 0.31, pos: V(6, s.y + 14, s.z + 70), look: s },
-    { p: 0.37, pos: V(0, s.y - 4, s.z + 95), look: V(0, s.y - 10, 0) },
-    { p: 0.43, pos: V(90, 220, 220), look: V(0, 170, 0) },
-    { p: 0.48, pos: V(0, 30, 112), look: V(0, 30, 20) },
-    { p: 0.502, pos: V(0, 30, 108), look: V(0, 30, 20) },
-    { p: 0.528, pos: V(0, 34, 114), look: V(0, 150, 60) },
-    { p: 0.552, pos: V(0, 24, 116), look: V(0, 95, 210) },
-    { p: 0.572, pos: V(0, 15, 115), look: V(0, 20, 165) },
-    { p: 0.585, pos: V(0, 15, 117), look: V(0, 20, 165) },
+    { p: 0.31, pos: V(0, s.y + 2, s.z + 62), look: s },                        // логотип в лоб: искра встаёт в слот
+    { p: 0.355, pos: V(0, s.y - 2, s.z + 84), look: V(0, s.y - 3, 0) },        // выдох: отъезд, логотип загорается
+    { p: 0.40, pos: V(-30, s.y - 24, s.z + 150), look: V(0, s.y - 34, 0) },     // отходим в сторону, чтобы увидеть монолит башни целиком
+    { p: 0.445, pos: V(-14, 70, 130), look: V(0, 46, 0) },                      // спуск вдоль фасада
+    { p: 0.475, pos: V(0, 30, 96), look: V(0, 30, 0) },                         // шоурил на башне в лоб
+    { p: 0.505, pos: V(0, 30, 90), look: V(0, 30, 0) },
+    { p: 0.545, pos: V(0, 16, 104), look: V(0, 18, 200) },                      // разворот на проспект
+    { p: 0.585, pos: V(0, 14, 122), look: V(0, 16, 200) },                      // развилка
   ];
   const tail = [
-    { p: 0.94, pos: V(0, 10, TAIL.awards - 35), look: V(19, 16, TAIL.awards) },
-    { p: 0.948, pos: V(0, 10, TAIL.awards - 30), look: V(19, 16, TAIL.awards) },
-    { p: 0.988, pos: V(0, 14, TAIL.brief - 60), look: V(0, 20, TAIL.brief) },
-    { p: 1.00, pos: V(0, 14, TAIL.brief - 52), look: V(0, 20, TAIL.brief) },
+    { p: 0.94, pos: V(0, 12, TAIL.awards - 40), look: V(0, 22, TAIL.awards + 60) },
+    { p: 0.975, pos: V(0, 34, TAIL.brief - 110), look: V(0, 90, TAIL.brief + 120) },
+    { p: 1.00, pos: V(0, 70, TAIL.brief - 90), look: V(0, 170, TAIL.brief + 160) },   // финал: камера поднимается к небу между стенами
   ];
-  // на остановке камера присаживается и чуть подаётся вперёд, между остановками летит по коридору маршрута
-  const stops = r => WORLD.filter(w => w.r === r).flatMap(w => w.keys ? w.keys.map(([t, pos, look]) => ({ p: w.p + t * w.span, pos, look })) : [{ p: w.p - w.span * 0.2, pos: w.cam, look: w.look }, { p: w.p + w.span * 0.22, pos: w.cam.clone().add(V(0, 0, 3)), look: w.look }]);
-  CAM.btl = [...head, { p: 0.596, pos: V(10, 13, 150), look: V(-4, 9, 230) }, ...stops('btl'), ...tail];
-  CAM.atl = [...head, { p: 0.596, pos: V(0, 42, 150), look: V(-30, 66, 240) }, ...stops('atl'), { p: 0.93, pos: V(0, 40, TAIL.awards - 80), look: V(19, 16, TAIL.awards) }, ...tail];
-  // камера летит по сплайну через ключи: без остановки на каждом, тормозит только там, где ключи стоят рядом
+  // остановка: подлёт (a) и посадка (b), куб — в правой трети, взгляд смещён к левому краю кадра (+x при взгляде вдоль +z)
+  const stop = w => {
+    const { c, h } = w.cube, air = w.r === 'atl';
+    const d = air ? 46 : 30 + h * 0.5, lift = air ? 6 : Math.min(9, 4 + h * 0.18);
+    const cx = air ? 0 : c.x + 22, cy = air ? c.y + lift : lift, ty = air ? c.y : Math.min(h * 0.45, 10);
+    return [
+      { p: w.p - w.span * 0.24, pos: V(cx + 3, cy + 1.5, c.z - d - 8), look: V(c.x + (air ? 16 : 12), ty, c.z) },
+      { p: w.p + w.span * 0.24, pos: V(cx, cy, c.z - d), look: V(c.x + (air ? 16 : 12), ty, c.z + 2) },
+    ];
+  };
+  const stops = r => WORLD.filter(w => w.r === r).flatMap(stop);
+  CAM.btl = [...head, { p: 0.598, pos: V(8, 9, 152), look: V(0, 9, 240) }, ...stops('btl'), ...tail];
+  CAM.atl = [...head, { p: 0.598, pos: V(0, 40, 150), look: V(0, 62, 260) }, ...stops('atl'), { p: 0.93, pos: V(0, 40, TAIL.awards - 90), look: V(0, 24, TAIL.awards) }, ...tail];
   for (const r of ['btl', 'atl']) {
     const k = CAM[r];
     k.pos = new THREE.CatmullRomCurve3(k.map(x => x.pos), false, 'centripetal');
@@ -1246,6 +1255,8 @@ function buildTimeline() {
     { p: 1.00, pos: s.clone(), scale: sl, spin: 4 * Math.PI },
   ];
 }
+// положение на сплайне: номер отрезка + плавная доля внутри — камера мягко тормозит на каждом ключе
+function camU(k, p) { let i = 0; while (i < k.length - 2 && p > k[i + 1].p) i++; const f = clamp01((p - k[i].p) / (k[i + 1].p - k[i].p)); return (i + f * f * (3 - 2 * f)) / (k.length - 1); }
 function sample(keys, p, fn) {
   let i = 0; while (i < keys.length - 2 && p > keys[i + 1].p) i++;
   const a = keys[i], b = keys[i + 1], t = smooth(clamp01((p - a.p) / (b.p - a.p || 1)));
@@ -1429,10 +1440,10 @@ function frame() {
   else {
     const k = CAM[route || 'btl'];
     let i = 0; while (i < k.length - 2 && pSm > k[i + 1].p) i++;
-    const u = (i + clamp01((pSm - k[i].p) / (k[i + 1].p - k[i].p))) / (k.length - 1);
+    const u = camU(k, pSm);
     k.pos.getPoint(u, camera.position); k.look.getPoint(u, look);
     mouseSm.lerp(mouse, Math.min(1, dt * 3));
-    camera.position.x += mouseSm.x * 4; camera.position.y -= mouseSm.y * 2.5;
+    camera.position.x += mouseSm.x * 1.5; camera.position.y -= mouseSm.y * 1;
     camera.lookAt(look);
   }
   updateSun(orbitOn ? orbit.target : look); updateReach();
