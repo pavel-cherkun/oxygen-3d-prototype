@@ -170,7 +170,7 @@ function rotunda() {
   const R = 40, q = zone('fork', { grade: { sat: 0.85, con: 0.2, tint: [0.98, 0.99, 1.02] },  hdr: 1, fog: 0.0007, n: '00', t: 'старт', line: 'барабан из рёбер: btl — в щель, atl — сквозь световое кольцо', exp: 1.05, sky: ['#121212', '#333333', '#707070'], hemi: [0x8a8a8a, 0x161616, 0.3], key: [0xf2f2f2, 4.6, V(-0.8, 0.38, 0.3)], bloom: 1, spark: 12 });
   const k = q.kit, W = pbr('wall', 0x9a9a9a), Wd = pbr('wall', 0x6a6a6a, 1, THREE.DoubleSide), floor = pbr('floor', 0x3a3a3a, 0.9), red = glow(RED, 1.4), cr = glow(CREAM, 0.6);
   q.rects.push([-56, 56, -56, R + 4]);
-  k.box(pbr('floor', 0x5a5a5a), 440, 2, 2 * R + 16, 0, -2, 0);   // поверхность вокруг барабана
+  k.box(pbr('floor', 0x5a5a5a), 440, 2, 2 * R + 16, 0, -2.04, 0);   // поверхность вокруг барабана — чуть ниже пола барабана, без мерцания
   k.box(floor, 2 * R + 6, 0.3, 2 * R + 6, 0, -0.3, 0);
   const N = 72, gap = 0.16;
   for (let i = 0; i < N; i++) {
@@ -181,11 +181,11 @@ function rotunda() {
   }
   [54, 56].forEach(y => k.geo(Wd, new THREE.RingGeometry(R - 12, R + 3.5, 128, 1), 0, y, 0, 0, Math.PI / 2));
   const halo = new THREE.Mesh(new THREE.TorusGeometry(R - 12, 0.22, 8, 160), glow(0xfff0dc, 2)); halo.rotation.x = Math.PI / 2; halo.position.y = 53.6; q.g.add(halo);   // кольцо atl
-  [[8, cr], [R - 12, cr]].forEach(([rr, m]) => { const g = new THREE.Mesh(new THREE.RingGeometry(rr - 0.12, rr, 160), m); g.rotation.x = -Math.PI / 2; g.position.y = 0.03; q.g.add(g); });
-  const lane = new THREE.Mesh(new THREE.PlaneGeometry(0.2, R - 8), red); lane.rotation.x = -Math.PI / 2; lane.position.set(0, 0.03, (R + 8) / 2); q.g.add(lane);   // светящаяся дорожка btl к щели
+  [[8, cr], [R - 12, cr]].forEach(([rr, m]) => { const g = new THREE.Mesh(new THREE.RingGeometry(rr - 0.12, rr, 160), m); g.rotation.x = -Math.PI / 2; g.position.y = 0.05; q.g.add(g); });
+  const lane = new THREE.Mesh(new THREE.PlaneGeometry(0.2, R - 8), red); lane.rotation.x = -Math.PI / 2; lane.position.set(0, 0.05, (R + 8) / 2); q.g.add(lane);   // светящаяся дорожка btl к щели
   const shaft = new THREE.Mesh(new THREE.CylinderGeometry(R - 12, R - 12, 90, 96, 1, true), new THREE.MeshBasicMaterial({ color: new THREE.Color(0xfff0dc).multiplyScalar(0.04), transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide, toneMapped: false }));
   shaft.position.set(0, 45, 0); q.g.add(shaft);
-  const floorText = (lines, x, z, w) => { const m = new THREE.Mesh(new THREE.PlaneGeometry(w, w / 4), new THREE.MeshBasicMaterial({ map: signTex(lines), transparent: true, toneMapped: false, depthWrite: false })); m.rotation.set(-Math.PI / 2, 0, Math.PI); m.position.set(x, 0.05, z); q.g.add(m); };
+  const floorText = (lines, x, z, w) => { const m = new THREE.Mesh(new THREE.PlaneGeometry(w, w / 4), new THREE.MeshBasicMaterial({ map: signTex(lines), transparent: true, toneMapped: false, depthWrite: false })); m.rotation.set(-Math.PI / 2, 0, Math.PI); m.position.set(x, 0.07, z); q.g.add(m); };
   floorText([['btl · на земле', '400 130px AP, monospace', 170], ['вперёд →', '520 220px TT, sans-serif', 440]], -4, R - 14, 12);
   floorText([['atl · над городом', '400 130px AP, monospace', 170], ['вверх ↑', '520 220px TT, sans-serif', 440]], 0, 4, 12);
   q.trunk = [V(0, 6, -30), V(0, 6.5, -12), V(0, 7, 0)];
@@ -404,7 +404,7 @@ if (HQ) {
     const ob = m.onBeforeRender; m.onBeforeRender = (...a) => { const v = SKYLINE.mesh.visible; SKYLINE.mesh.visible = false; ob(...a); SKYLINE.mesh.visible = v; }; WETS.push({ m, q, below: o.below, above: o.above });   // кольцо горизонта стоит вокруг камеры — в отражении оно ломается, поэтому не отражаем
   };
   // старт и нейтральная — одна общая мокрая плоскость на поверхности
-  const zEnd = Z.neutral.rects[0][3]; make(Z.neutral, { w: 440, d: zEnd + 60, x: 0, y: ROOF + 0.03, z: (zEnd - 60) / 2, k: 0.6 }); WETS[0].also = Z.fork;
+  const zEnd = Z.neutral.rects[0][3]; make(Z.neutral, { w: 440, d: zEnd + 60, x: 0, y: ROOF + 0.015, z: (zEnd - 60) / 2, k: 0.6 }); WETS[0].also = Z.fork;
   ZL.forEach(q => q.wet.forEach(o => make(q, o)));
 }
 // искра: контур из того же svg, что и в прелоадере; летит впереди камеры и светит
@@ -502,7 +502,7 @@ routeBtn.addEventListener('click', () => { route = null; scrollTo({ top: (TRUNK_
 // ---------- цикл ----------
 let sSm = 0, mouse = new THREE.Vector2(), mSm = new THREE.Vector2(), lastZone = '';
 addEventListener('pointermove', e => mouse.set(e.clientX / innerWidth - 0.5, e.clientY / innerHeight - 0.5));
-let lookInit = false;
+let lookInit = false; const tmp2 = V(0, 0, 0);
 const clock = new THREE.Clock(), look = V(0, 0, 0), tmp = V(0, 0, 0), ahead = V(0, 0, 0), DOCKQ = new THREE.Quaternion().setFromEuler(new THREE.Euler(0, Math.PI, 0)), endEl = document.getElementById('end');
 const REC = { on: /rec/.test(location.search), t: 0 };
 function frame() {
@@ -514,11 +514,15 @@ function frame() {
   const r = route || 'btl', o = R[r], u = uAt(r, sSm), du = 14 / o.curve.getLength();
   o.curve.getPointAt(u, camera.position); o.curve.getPointAt(Math.min(1, u + du), ahead);
   // камера на рельсах: взгляд — по касательной к пути на 30 м вперёд, сглажен; без поворотов к кубам и без сдвига от мыши
-  o.curve.getPointAt(Math.min(1, u + 30 / o.curve.getLength()), tmp); tmp.y -= 0.6;
+  // направление всегда вперёд по оси, наклон ограничен — на вертикальном подъёме и крутом спуске камера не переворачивается
+  o.curve.getPointAt(Math.min(1, u + 30 / o.curve.getLength()), tmp);
+  { const L = 30, dy = Math.max(-0.7 * L, Math.min(0.42 * L, tmp.y - 0.6 - camera.position.y)); tmp.set(camera.position.x, camera.position.y + dy, camera.position.z + L); }
   const dLogo = camera.position.distanceTo(FIN.logoAt), dock = smooth(clamp01((72 - dLogo) / 24)), landed = clamp01((dock - 0.92) / 0.08);
   tmp.lerp(FIN.look, smooth(clamp01((110 - dLogo) / 50)));
   look.lerp(tmp, REC.on || !lookInit || look.distanceTo(tmp) > 50 ? 1 : 1 - Math.exp(-dt * 4)); lookInit = true;   // после прыжка по навигации — сразу, без разворота
-  camera.lookAt(look);
+  // лёгкое движение от мыши: камера чуть смещается и чуть смотрит в сторону курсора, без вращения
+  mSm.lerp(mouse, REC.on ? 0 : 1 - Math.exp(-dt * 2.5)); camera.position.x += mSm.x * 0.8; camera.position.y -= mSm.y * 0.5;
+  tmp2.copy(look).add(V(mSm.x * 2.4, -mSm.y * 1.6, 0)); camera.lookAt(tmp2);
   // искра впереди, чуть выше линии взгляда; в начале — прямо по центру кадра
   const intro = 1 - clamp01(sSm / 40);
   o.curve.getPointAt(Math.min(1, u + du * (0.9 - 0.45 * intro)), tmp);
