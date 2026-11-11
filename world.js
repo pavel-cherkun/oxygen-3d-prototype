@@ -524,7 +524,8 @@ let sSm = 0, mouse = new THREE.Vector2(), mSm = new THREE.Vector2(), lastZone = 
 addEventListener('pointermove', e => mouse.set(e.clientX / innerWidth - 0.5, e.clientY / innerHeight - 0.5));
 let lookInit = false, pitch = 0, wP = 0, vS = 0;
 // настройки камеры: vmax — предел скорости (м/с по пути), amax — предел ускорения; pk/pc — пружина наклона, wmax — предел угловой скорости
-const CAMK = { k: 7, c: 5.3, vmax: 38, amax: 32, boostLag: 60, boostMax: 4, pk: 5, pc: 4.5, wmax: 0.35 };   // boostLag — на сколько метров отставания пределы удваиваются; boostMax — во сколько раз максимум
+let boostSm = 1, accS = 0;
+const CAMK = { k: 7, c: 5.3, vmax: 38, amax: 32, boostLag: 60, boostMax: 3, boostRate: 0.8, jerk: 45, pk: 5, pc: 4.5, wmax: 0.35 };   // boostLag — на сколько метров отставания пределы удваиваются; boostMax — во сколько раз максимум
 const clock = new THREE.Clock(), look = V(0, 0, 0), tmp = V(0, 0, 0), ahead = V(0, 0, 0), DOCKQ = new THREE.Quaternion().setFromEuler(new THREE.Euler(0, Math.PI, 0)), endEl = document.getElementById('end');
 const REC = { on: /rec/.test(location.search), t: 0 };
 function frame() {
@@ -533,8 +534,12 @@ function frame() {
   if (!route && s > TRUNK_W) { s = TRUNK_W; scrollTo(0, TRUNK_W * PX); }
   forkEl.classList.toggle('on', !route && s > TRUNK_W - 14);
   // движение: скролл задаёт только цель, камера догоняет её пружиной с пределом скорости и ускорения — без рывков
-  if (!REC_) { const boost = Math.min(CAMK.boostMax, 1 + Math.abs(s - sSm) / CAMK.boostLag), am = CAMK.amax * boost, vm = CAMK.vmax * boost;   // чем сильнее отстаём от скролла, тем выше пределы разгона и скорости
-    let acc = CAMK.k * (s - sSm) - CAMK.c * vS; acc = Math.max(-am, Math.min(am, acc)); vS = Math.max(-vm, Math.min(vm, vS + acc * dt)); sSm += vS * dt; if (Math.abs(s - sSm) < 0.01 && Math.abs(vS) < 0.05) { sSm = s; vS = 0; } }
+  if (!REC_) {
+    // чем сильнее отстаём от скролла, тем выше пределы — но сам множитель растёт медленно (boostRate в секунду), а ускорение меняется не резче jerk
+    const bT = Math.min(CAMK.boostMax, 1 + Math.abs(s - sSm) / CAMK.boostLag); boostSm += Math.max(-CAMK.boostRate * dt, Math.min(CAMK.boostRate * dt, bT - boostSm));
+    const am = CAMK.amax * boostSm, vm = CAMK.vmax * boostSm;
+    let accT = CAMK.k * (s - sSm) - CAMK.c * vS; accT = Math.max(-am, Math.min(am, accT));
+    accS += Math.max(-CAMK.jerk * dt, Math.min(CAMK.jerk * dt, accT - accS)); vS = Math.max(-vm, Math.min(vm, vS + accS * dt)); sSm += vS * dt; if (Math.abs(s - sSm) < 0.01 && Math.abs(vS) < 0.05) { sSm = s; vS = 0; accS = 0; } }
   const r = route || 'btl', o = R[r], len = o.curve.getLength(), u = uAt(r, sSm), du = 14 / len;
   o.curve.getPointAt(u, camera.position);
   // взгляд всегда вперёд по ходу; наклон — по уклону рельсов на 40 м вперёд, доводится пружиной с пределом угловой скорости
@@ -598,7 +603,7 @@ function drawMap() {
 // ---------- старт ----------
 history.scrollRestoration = 'manual'; scrollTo(0, 0);
 // отладка и съёмка: ?at=asia:0.3 — встать в зону на долю её пути
-const go = (r, s) => { lookInit = false; vS = 0; route = r; document.documentElement.classList.remove('lock'); scrollTo(0, s * PX); sSm = s; };
+const go = (r, s) => { lookInit = false; vS = 0; accS = 0; boostSm = 1; route = r; document.documentElement.classList.remove('lock'); scrollTo(0, s * PX); sSm = s; };
 const goZone = (k, f = 0.3, r = 'btl') => { const o = R[r], q = Z[k]; const idx = o.P.map((p, i) => rectD(q, p.x, p.z) < 0.01 ? i : -1).filter(i => i >= 0); const i = idx[Math.floor(f * (idx.length - 1))]; const w = o.C[i]; const s = w <= o.trunkW ? w / o.trunkW * TRUNK_W : TRUNK_W + (w - o.trunkW) / o.restW * REST_W; go(k === 'fork' && f < 0.5 ? null : r, s); };
 // проверка пути: лучи от камеры в шесть сторон — ни одна стена ближе 1,5 м
 function check() {
