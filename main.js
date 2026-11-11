@@ -10,6 +10,7 @@ import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 import { Reflector } from 'three/addons/objects/Reflector.js';
+import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
 
 const RED = 0xf40709, CREAM = 0xe1d9cf;
 const V = (x, y, z) => new THREE.Vector3(x, y, z);
@@ -33,7 +34,36 @@ const camera = new THREE.PerspectiveCamera(50, innerWidth / innerHeight, 0.5, 90
 const composer = new EffectComposer(renderer);
 composer.addPass(new RenderPass(scene, camera));
 const bloom = new UnrealBloomPass(new THREE.Vector2(innerWidth / 2, innerHeight / 2), 0.42, 0.4, 0.9);
+// лучи: радиальное размытие ярких пикселей от экранной позиции контрового источника (god rays)
+const rays = new ShaderPass({
+  uniforms: { tDiffuse: { value: null }, uLight: { value: new THREE.Vector2(0.5, 0.5) }, uK: { value: 0 } },
+  vertexShader: 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.); }',
+  fragmentShader: `uniform sampler2D tDiffuse; uniform vec2 uLight; uniform float uK; varying vec2 vUv;
+    void main(){
+      vec4 base = texture2D(tDiffuse, vUv);
+      if (uK <= 0.001) { gl_FragColor = base; return; }
+      vec2 d = (vUv - uLight) * 0.0085, uv = vUv; float w = 1.0; vec3 acc = vec3(0.0);
+      for (int i = 0; i < 64; i++) { uv -= d; vec3 s = texture2D(tDiffuse, uv).rgb; float l = max(max(s.r, s.g), s.b); acc += s * smoothstep(2.0, 4.0, l) * w; w *= 0.945; }
+      gl_FragColor = vec4(base.rgb + acc * uK * 0.008, base.a);
+    }`,
+});
+composer.addPass(rays);
 composer.addPass(bloom); composer.addPass(new OutputPass());
+// плёнка: зерно и виньетка, как на раскадровке
+const grain = new ShaderPass({
+  uniforms: { tDiffuse: { value: null }, uT: { value: 0 } },
+  vertexShader: 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.); }',
+  fragmentShader: `uniform sampler2D tDiffuse; uniform float uT; varying vec2 vUv;
+    float h(vec2 p){ return fract(sin(dot(p, vec2(12.9898, 78.233))) * 43758.5453); }
+    void main(){
+      vec3 c = texture2D(tDiffuse, vUv).rgb;
+      float v = smoothstep(1.15, 0.35, length((vUv - 0.5) * vec2(1.25, 1.0)));
+      c *= mix(0.35, 1.0, v);
+      c += (h(vUv * 1600.0 + fract(uT) * 91.0) - 0.5) * 0.06;
+      gl_FragColor = vec4(c, 1.0);
+    }`,
+});
+composer.addPass(grain);
 
 // ---------- бетон ----------
 const texL = new THREE.TextureLoader();
@@ -152,6 +182,7 @@ const WALL = { x0: -140, x1: 50, h: 270, z: 4 };
 const LOGO = V(-48, 196, WALL.z + 0.6);
 const REEL = { w: 48, h: 27 };
 const LOW = -160, STAIR = { x0: 56, x1: 128, z0: -300, z1: -620 };
+const VENT = { x: 110, h: 220, cy: -160 + 110, r: 100 };
 const ZN = { hyp: -1500, asia: -2100, asiaR: 260, ret0: -2420, ret1: -3320, ai0: -3420, ai1: -4440, st1: -5160, fan: -6420 };
 const CUBES = [
   { p: V(-170, LOW, -880), s: 30, t: 'спорт' }, { p: V(170, LOW, -1220), s: 30, t: 'ивенты' }, { p: V(-222, LOW, -2100), s: 22, t: 'азия' },
@@ -169,7 +200,7 @@ const ZONES = [      // дымка и общий свет по локациям 
   { z: -3440, haze: [0.012, 0.02, 0.036], k: 0.0007, amb: [0.02, 0.026, 0.04] },
   { z: -4460, haze: [0.022, 0.024, 0.03], k: 0.0006, amb: [0.04, 0.042, 0.048] },
   { z: -5120, haze: [0.022, 0.024, 0.03], k: 0.0006, amb: [0.04, 0.042, 0.048] },
-  { z: -5240, haze: [0.06, 0.03, 0.012], k: 0.0018, amb: [0.025, 0.015, 0.01] },
+  { z: -5240, haze: [0.05, 0.022, 0.008], k: 0.0011, amb: [0.006, 0.005, 0.004] },
 ];
 let PATH = [], SEG = [], S_TOTAL = 0;
 const FX = { beams: [], glows: [], cubes: [], dots: [] };
@@ -291,12 +322,23 @@ function buildWorld(slot) {
   for (let k = 0; k < 10; k++) [-1, 1].forEach(sd => { const pz = (k + (sd > 0 ? 1 : 0)) % 2 ? zA - 20 : zB + 20, pp = V(sd * (SX - 30), LOW + k * 90 + 70, pz); LAMPS.push({ p: pp, r: 90, c: V(1, 0.88, 0.7).multiplyScalar(1.4) }); stG.push(pp); });
   FX.stairGlow = stG;
 
-  // ===== 7. вентиляционная шахта: 1,26 км квадратного сечения, рёбра-рамы, в конце — вентилятор-Искра =====
-  const VX = 70, VY = LOW + 140;
-  box(-VX - 12, -VX, LOW, VY, ZN.fan - 60, ZN.st1); box(VX, VX + 12, LOW, VY, ZN.fan - 60, ZN.st1); box(-VX - 12, VX + 12, VY, VY + 12, ZN.fan - 60, ZN.st1);
-  box(-VX, VX, LOW, VY, ZN.fan - 72, ZN.fan - 60);
-  for (let zz = ZN.st1 - 30; zz > ZN.fan + 30; zz -= 26) { box(-VX, -VX + 5, LOW, VY, zz - 2, zz + 2, 0.85); box(VX - 5, VX, LOW, VY, zz - 2, zz + 2, 0.85); box(-VX, VX, VY - 5, VY, zz - 2, zz + 2, 0.85); }
-  LAMPS.push({ p: V(0, LOW + 70, ZN.fan - 20), r: 300, c: V(1, 0.6, 0.32).multiplyScalar(2.4) });
+  // ===== 7. вентиляционная шахта (кадры 10–11): 220×220 м, ступенчатые рамы, трубы по стенам, в торце — вентилятор-Искра =====
+  const VX = VENT.x, VY = LOW + VENT.h, z0 = ZN.st1, z1 = ZN.fan;
+  box(-VX - 14, -VX, LOW, VY, z1 - 80, z0); box(VX, VX + 14, LOW, VY, z1 - 80, z0); box(-VX - 14, VX + 14, VY, VY + 14, z1 - 80, z0);
+  for (let zz = z0 - 40, n = 0; zz > z1 + 20; zz -= 48, n++) {                      // рамы: глубина 16 м, внутрь на 16 м
+    const t = 16, d = 8;
+    box(-VX, -VX + t, LOW, VY, zz - d, zz + d, 0.85); box(VX - t, VX, LOW, VY, zz - d, zz + d, 0.85); box(-VX, VX, VY - t, VY, zz - d, zz + d, 0.85);
+    box(-VX + t, -VX + t + 3, LOW, VY - t, zz - d - 3, zz - d, 0.7); box(VX - t - 3, VX - t, LOW, VY - t, zz - d - 3, zz - d, 0.7);   // фаска-ступень
+  }
+  const pipes = [];
+  [[-VX + 22, LOW + 14, 5], [-VX + 22, LOW + 30, 3.4], [VX - 22, LOW + 14, 5], [VX - 22, LOW + 30, 3.4], [-VX + 24, VY - 30, 4], [VX - 24, VY - 30, 4]].forEach(([x, y, r]) => pipes.push({ m: M(V(x, y, (z0 + z1) / 2), [Math.PI / 2, 0, 0], V(r, z0 - z1, r)), c: new THREE.Color(0.09, 0.085, 0.08) }));
+  inst(new THREE.CylinderGeometry(1, 1, 1, 16), flatMat, pipes);
+  // торцевая стена с круглым проёмом под вентилятор
+  const sq = new THREE.Shape([new THREE.Vector2(-VX, 0), new THREE.Vector2(VX, 0), new THREE.Vector2(VX, VENT.h), new THREE.Vector2(-VX, VENT.h)]);
+  sq.holes.push(new THREE.Path().absarc(0, VENT.cy - LOW, VENT.r + 4, 0, Math.PI * 2, false));
+  inst(new THREE.ShapeGeometry(sq, 64), concrete, [{ m: M(V(0, LOW, z1 + 6)) }, { m: M(V(0, LOW, z1 - 6)) }]);
+  // за вентилятором — раскалённая камера: свет, который делает всё контровым
+  LAMPS.push({ p: V(0, VENT.cy, z1 + 30), r: 420, c: V(1, 0.6, 0.32).multiplyScalar(1.1) });
 
   SHAFTS.forEach((sh, i) => { U.uS.value[i].set(sh.x, sh.z, sh.r, sh.k); U.uSY.value[i].set(sh.floor, sh.top); });
   const im = flushBoxes();
@@ -423,7 +465,7 @@ function buildLight() {
     LAMPS.push({ p: m.position.clone(), r: c.s * 1.6, c: CREAM_V.clone().multiplyScalar(0.9) });
   });
   // крошечные люди
-  const people = [V(30, 0, -290), V(36, 0, -292), V(-150, 0, -40), V(80, LOW, -660), V(-60, LOW, -1300), V(-40, LOW, -1700), V(-200, LOW, -2160), V(10, LOW, -3000), V(-40, LOW, -3800), V(30, LOW, -4400), V(-6, LOW, -6300)];
+  const people = [V(30, 0, -290), V(36, 0, -292), V(-150, 0, -40), V(80, LOW, -660), V(-60, LOW, -1300), V(-40, LOW, -1700), V(-200, LOW, -2160), V(10, LOW, -3000), V(-40, LOW, -3800), V(30, LOW, -4400), V(-4, LOW, -6230)];
   const pg = new THREE.CapsuleGeometry(0.32, 1.1, 3, 8); pg.translate(0, 0.87, 0);
   inst(pg, new THREE.MeshBasicMaterial({ color: 0x050505 }), people.map(p => ({ m: M(p) })));
   buildFan();
@@ -431,18 +473,19 @@ function buildLight() {
 
 // финал: вентилятор в форме Искры, контровой свет за ним, поток пыли
 function buildFan() {
-  const z = ZN.fan, cy = LOW + 70;
-  inst(new THREE.TorusGeometry(68, 6, 12, 96), flatMat, [{ m: M(V(0, cy, z)), c: new THREE.Color(0.06, 0.06, 0.065) }]);
-  inst(new THREE.CylinderGeometry(9, 9, 10, 32), flatMat, [{ m: M(V(0, cy, z - 2), [Math.PI / 2, 0, 0]), c: new THREE.Color(0.05, 0.05, 0.055) }]);
-  inst(new THREE.BoxGeometry(1, 1, 1), flatMat, [[0, 0], [Math.PI / 2, 0]].map(([r]) => ({ m: M(V(0, cy, z - 8), [0, 0, r], V(136, 2.5, 2.5)), c: new THREE.Color(0.05, 0.05, 0.055) })));
-  const g = iskra.geometry.clone(); g.computeBoundingBox(); const bb = g.boundingBox, k = 128 / Math.max(bb.max.x - bb.min.x, bb.max.y - bb.min.y);
-  const bi = new THREE.InstancedMesh(g, litMat({ flat: true }), 1); bi.setMatrixAt(0, M(V(0, cy, z), [0, 0, 0], V(k, k, k * 0.35))); bi.setColorAt(0, new THREE.Color(0.035, 0.03, 0.03)); bi.frustumCulled = false; scene.add(bi);
-  const disc = new THREE.Mesh(new THREE.CircleGeometry(66, 64), basic(0xffb070, 2.2)); disc.position.set(0, cy, z - 40); scene.add(disc); FX.glows.push(disc);
-  const rays = new THREE.Mesh(new THREE.CylinderGeometry(64, 70, 700, 48, 1, true), beamMat(0xffa860)); rays.rotation.x = -Math.PI / 2; rays.position.set(0, cy, z + 350); scene.add(rays); FX.beams.push({ b: rays, k: 0.5 });
-  const n = 2500, pos = new Float32Array(n * 3), r = mulberry(5);
-  for (let i = 0; i < n; i++) pos.set([(r() - 0.5) * 130, LOW + 4 + r() * 130, z + r() * 1200], i * 3);
+  const z = ZN.fan, cy = VENT.cy, R = VENT.r, dark = new THREE.Color(0.03, 0.028, 0.026);
+  inst(new THREE.TorusGeometry(R + 2, 7, 16, 128), flatMat, [{ m: M(V(0, cy, z + 4)), c: new THREE.Color(0.07, 0.065, 0.06) }]);
+  inst(new THREE.CylinderGeometry(14, 14, 24, 48), flatMat, [{ m: M(V(0, cy, z - 4), [Math.PI / 2, 0, 0]), c: dark }]);
+  inst(new THREE.BoxGeometry(1, 1, 1), flatMat, [0, 1, 2, 3].map(i => ({ m: M(V(0, cy, z - 16), [0, 0, i * Math.PI / 4], V(2 * R + 10, 3, 3)), c: dark })));   // растяжки за лопастями
+  const g = iskra.geometry.clone(); g.computeBoundingBox(); const bb = g.boundingBox, k = 2 * (R - 3) / Math.max(bb.max.x - bb.min.x, bb.max.y - bb.min.y);
+  const bi = new THREE.InstancedMesh(g, litMat({ flat: true }), 1); bi.setMatrixAt(0, M(V(0, cy, z), [0, 0, 0], V(k, k, k * 0.3))); bi.setColorAt(0, dark); bi.frustumCulled = false; scene.add(bi);
+  // раскалённый свет за вентилятором: диск + ореол
+  const disc = new THREE.Mesh(new THREE.CircleGeometry(R + 6, 96), basic(0xffb27a, 3.6)); disc.position.set(0, cy, z - 60); scene.add(disc); FX.glows.push(disc);
+  const halo = new THREE.Sprite(new THREE.SpriteMaterial({ map: softDot, color: new THREE.Color(1, 0.55, 0.28).multiplyScalar(1.4), blending: THREE.AdditiveBlending, depthWrite: false, toneMapped: false })); halo.scale.setScalar(R * 3.2); halo.position.set(0, cy, z - 30); scene.add(halo); FX.glows.push(halo);
+  const n = 4000, pos = new Float32Array(n * 3), r = mulberry(5);
+  for (let i = 0; i < n; i++) pos.set([(r() - 0.5) * 2 * (VENT.x - 20), LOW + 2 + r() * (VENT.h - 10), z + r() * 1300], i * 3);
   const dg = new THREE.BufferGeometry(); dg.setAttribute('position', new THREE.BufferAttribute(pos, 3));
-  FX.vdust = new THREE.Points(dg, new THREE.PointsMaterial({ map: softDot, size: 1.4, color: new THREE.Color(1, 0.75, 0.5), transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, opacity: 0.6 }));
+  FX.vdust = new THREE.Points(dg, new THREE.PointsMaterial({ map: softDot, size: 1.8, color: new THREE.Color(1, 0.72, 0.45), transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, opacity: 0.6 }));
   FX.vdust.frustumCulled = false; scene.add(FX.vdust);
   FX.fan = { bi, k, cy, z, rot: 0, speed: 0 };
 }
@@ -561,10 +604,10 @@ function buildTimeline() {
     K(0, -4600, V(0, Y(40), -4500), V(0, Y(760), -4820)),
     K(0, -4950, V(0, Y(36), -4830), V(-290, Y(420), -5000)),
     // 7. вентшахта: строгая центральная перспектива на вентилятор
-    K(0, -5160, V(0, Y(48), -5060), V(0, Y(62), -5400)),
-    K(0, -5800, V(0, Y(62), -5690), V(0, Y(70), -6420)),
-    { p: P_END, pos: V(0, Y(68), -6200), look: V(0, Y(70), -6420) },
-    { p: 1, pos: V(0, Y(68), -6235), look: V(0, Y(72), -6420) },
+    K(0, -5160, V(0, Y(40), -5060), V(0, Y(80), -5600)),
+    K(0, -5700, V(0, Y(42), -5600), V(0, Y(104), -6420)),          // кадр 10: строгая перспектива на вентилятор
+    { p: P_END, pos: V(0, Y(34), -6120), look: V(0, Y(112), -6420) },
+    { p: 1, pos: V(0, Y(30), -6160), look: V(0, Y(116), -6420) },   // кадр 11: вентилятор на весь кадр
   ];
   CAMK.sort((a, b) => a.p - b.p);
   CAMK.pos = new THREE.CatmullRomCurve3(CAMK.map(k => k.pos), false, 'centripetal');
@@ -588,6 +631,19 @@ let pSm = 0; const mouse = new THREE.Vector2(), mouseSm = new THREE.Vector2(), l
 addEventListener('pointermove', e => mouse.set(e.clientX / innerWidth - 0.5, e.clientY / innerHeight - 0.5));
 const clock = new THREE.Clock();
 const RED_C = new THREE.Color(1, 0.06, 0.05), RED_V = V(1, 0.06, 0.05), CREAM_V = V(1, 0.9, 0.78);
+const BACKLIGHTS = [   // точка, откуда бьёт контровой свет, — для лучей
+  { z0: -5150, z1: -6600, p: V(0, -50, -6480), k: 1.0 },
+];
+const _sp = new THREE.Vector3();
+function updateRays() {
+  const cz = camera.position.z; let k = 0;
+  for (const b of BACKLIGHTS) if (cz < b.z0 + 200 && cz > b.z1) {
+    _sp.copy(b.p).project(camera); if (_sp.z > 1) continue;
+    const on = clamp01(1.4 - Math.max(Math.abs(_sp.x), Math.abs(_sp.y)));
+    rays.uniforms.uLight.value.set(_sp.x * 0.5 + 0.5, _sp.y * 0.5 + 0.5); k = b.k * on * clamp01((b.z0 + 200 - cz) / 200);
+  }
+  rays.uniforms.uK.value = k;
+}
 const zoneAt = z => { let i = 0; while (i < ZONES.length - 2 && z < ZONES[i + 1].z) i++; const a = ZONES[i], b = ZONES[i + 1], t = smooth(clamp01((a.z - z) / (a.z - b.z))); const mix = (u, v) => u.map((x, k) => x + (v[k] - x) * t); return { haze: mix(a.haze, b.haze), k: a.k + (b.k - a.k) * t, amb: mix(a.amb, b.amb) }; };
 function frame() {
   const dt = Math.min(clock.getDelta(), 0.05), time = clock.elapsedTime;
@@ -630,14 +686,15 @@ function frame() {
   // вентилятор: на подходе к шахте раскручивается, гонит пыль на зрителя
   const F = FX.fan, spin = smooth(clamp01((pSm - 0.93) / 0.05));
   F.speed += (spin * 7 - F.speed) * Math.min(1, dt * 1.5); F.rot += F.speed * dt;
-  F.bi.setMatrixAt(0, M(V(0, F.cy, F.z), [0, 0, F.rot], V(F.k, F.k, F.k * 0.35))); F.bi.instanceMatrix.needsUpdate = true;
+  F.bi.setMatrixAt(0, M(V(0, F.cy, F.z), [0, 0, F.rot], V(F.k, F.k, F.k * 0.3))); F.bi.instanceMatrix.needsUpdate = true;
   const dp = FX.vdust.geometry.attributes.position;
-  for (let n = 0; n < dp.count; n++) { let zz = dp.getZ(n) + dt * (6 + F.speed * 55); if (zz > F.z + 1200) zz = F.z + 10; dp.setZ(n, zz); }
+  for (let n = 0; n < dp.count; n++) { let zz = dp.getZ(n) + dt * (6 + F.speed * 55); if (zz > F.z + 1300) zz = F.z + 10; dp.setZ(n, zz); }
   dp.needsUpdate = true; FX.vdust.material.opacity = 0.25 + 0.5 * spin;
   // ролик
   if (!promo.on && pSm > 0.2) { promo.on = true; promo.v.play().then(() => promo.m.material.color.set(0xffffff)).catch(() => addEventListener('pointerdown', () => promo.v.play().then(() => promo.m.material.color.set(0xffffff)), { once: true })); }
   ovs.forEach(o => o.el.classList.toggle('on', pSm >= o.a && pSm <= o.b));
   pctEl.textContent = `${String(Math.round(pSm * 100)).padStart(3, '0')}% · 20_26`;
+  updateRays(); grain.uniforms.uT.value = time;
   composer.render();
   requestAnimationFrame(frame);
 }
