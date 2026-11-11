@@ -3,133 +3,39 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Oxygen — прототип 3D</title>
-<meta name="description" content="Oxygen — рекламное агентство полного цикла, Санкт-Петербург. BTL, ATL, креатив и продакшн. Прототип 3D-главной.">
+<title>Oxygen — мегаструктура</title>
+<meta name="description" content="Oxygen — ai-first рекламное агентство из Санкт-Петербурга: федеральные кампании, бренд-зоны и ивенты, продакшн полного цикла.">
 <link rel="icon" href="assets/iskra.svg">
 <style>
 @font-face{font-family:"TT";src:url("assets/fonts/tiktok-sans.woff2") format("woff2");font-weight:300 900;font-display:swap}
 @font-face{font-family:"AP";src:url("assets/fonts/anonymous-pro.woff2") format("woff2");font-display:swap}
-:root{--bg:#111111;--cream:#E1D9CF;--red:#F40709;--mute:#8d867e}
+:root{--bg:#010101;--cream:#E1D9CF;--red:#F40709;--mute:#8d867e}
 *{box-sizing:border-box;margin:0;padding:0}
 html,body{background:var(--bg);color:var(--cream)}
+html.lock,html.lock body{overflow:hidden}
 body{font:400 17px/1.45 "TT",system-ui,sans-serif;font-variation-settings:"opsz" 36,"wdth" 100;overflow-x:hidden}
 canvas#gl{position:fixed;inset:0;width:100vw;height:100vh;display:block;z-index:0}
-#scroll{height:2600vh;position:relative;z-index:-1}
-body.orbit #scroll{display:none}
-.t{font-family:"AP",monospace;color:var(--red);font-size:13px;letter-spacing:.02em}
-header{position:fixed;top:0;left:0;right:0;z-index:5;display:flex;align-items:center;justify-content:space-between;padding:20px 28px;pointer-events:none}
-header>*{pointer-events:auto}
-header img{height:26px;display:block}
-nav{display:flex;gap:22px;align-items:center}
-nav a{color:var(--cream);text-decoration:none;font-size:15px;opacity:.85}
-nav a:hover{opacity:1}
-nav a.cta{border:1px solid var(--red);padding:7px 14px;border-radius:40px;opacity:1}
-.hud{position:fixed;z-index:5;pointer-events:none}
-.hud.bl{left:28px;bottom:22px}
-.hud.br{right:28px;bottom:22px;text-align:right}
-.hud.tl{left:28px;top:70px}
-.ov{position:fixed;z-index:4;opacity:0;pointer-events:none;transition:none;max-width:520px}
-.ov.on{pointer-events:auto}
-.ov h1{font-weight:520;font-size:clamp(54px,8.4vw,132px);line-height:.92;margin:14px 0 0}
-.ov h2{font-weight:520;font-size:clamp(36px,4.6vw,64px);line-height:.98;margin:10px 0 14px}
-.ov p{font-size:19px;line-height:1.35}
-.ov .lead{font-weight:420;font-size:clamp(20px,2vw,28px);line-height:1.2}
-.left{left:28px;bottom:14vh}
-.right{right:28px;bottom:14vh}
-.center{left:50%;bottom:12vh;transform:translateX(-50%);text-align:left}
-.panel{background:rgba(20,20,23,.5);backdrop-filter:blur(30px) saturate(1.25) brightness(.62);-webkit-backdrop-filter:blur(30px) saturate(1.25) brightness(.62);border:1px solid rgba(225,217,207,.1);box-shadow:inset 0 1px 0 rgba(225,217,207,.08);padding:22px 24px 24px}
-.panel .steps{margin:12px 0 4px;display:grid;gap:5px}.panel .steps div{display:grid;grid-template-columns:34px 1fr;font-size:14px;line-height:1.3}.panel .steps b{font-weight:520}.panel .steps span.d{color:var(--mute);display:block}
-.case{display:grid;grid-template-columns:120px 1fr;gap:14px;margin-top:14px;align-items:start}
-.case img{width:120px;height:80px;object-fit:cover;display:block}
-.case b{font-weight:520}
-.row{border-top:1px solid #2a2a2a;padding:10px 0;display:flex;justify-content:space-between;gap:16px}
-.row:last-child{border-bottom:1px solid #2a2a2a}
-.btn{display:inline-flex;align-items:center;gap:10px;margin-top:16px;background:var(--red);color:var(--bg);border:0;font:520 16px "TT",sans-serif;padding:12px 18px;border-radius:40px;cursor:pointer}
-.btn.ghost{background:transparent;color:var(--cream);border:1px solid #444}
-form{display:grid;gap:10px;margin-top:14px}
-input,textarea{background:transparent;border:0;border-bottom:1px solid #444;color:var(--cream);font:400 17px "TT",sans-serif;padding:8px 0;outline:none}
-input::placeholder,textarea::placeholder{color:var(--mute)}
-#orbitUi{position:fixed;inset:0;z-index:6;display:none;pointer-events:none}
-body.orbit #orbitUi{display:block}
-body.orbit .ov,body.orbit .hud.tl{display:none}
-#orbitUi .panel{position:absolute;left:28px;bottom:28px;max-width:420px;pointer-events:auto}
-#orbitUi .hint{position:absolute;right:28px;bottom:28px}
-/* прелоадер — изначальная Искра: висит в темноте и дышит, пока грузится мир; скролл заперт до конца загрузки */
-html.lock,html.lock body{overflow:hidden}
-#loader{position:fixed;inset:0;z-index:10;background:#020203;display:flex;align-items:center;justify-content:center;transition:opacity 1.4s ease-out}
+#scroll{height:1600vh;position:relative;z-index:-1}
+.t{font-family:"AP",monospace;font-size:13px;letter-spacing:.04em}
+header{position:fixed;top:0;left:0;right:0;z-index:5;display:flex;align-items:center;justify-content:space-between;padding:22px 28px}
+header img{height:22px}
+header a{color:var(--cream);text-decoration:none;font-size:14px;margin-left:22px}
+header a.cta{border:1px solid var(--red);padding:8px 16px;border-radius:40px}
+.ov{position:fixed;z-index:4;max-width:520px;opacity:0;transition:opacity .5s;pointer-events:none}
+.ov.on{opacity:1}
+.ov h1{font-weight:520;font-size:clamp(56px,7.4vw,124px);line-height:.9;letter-spacing:-.02em}
+.ov h2{font-weight:520;font-size:clamp(34px,3.6vw,58px);line-height:.95;letter-spacing:-.01em}
+.ov p{margin-top:14px;font-size:18px;max-width:34ch}
+.ov .t{color:var(--red)}
+.l{left:28px;bottom:12vh}.r{right:28px;bottom:12vh;text-align:right}.r p{margin-left:auto}
+#pct{position:fixed;right:28px;bottom:22px;z-index:5;color:var(--mute)}
+#loader{position:fixed;inset:0;z-index:10;background:var(--bg);display:flex;align-items:center;justify-content:center;transition:opacity 1.4s ease-out}
 #loader img{width:clamp(64px,7vw,104px);filter:drop-shadow(0 0 18px rgba(244,7,9,.85)) drop-shadow(0 0 60px rgba(255,120,80,.35));animation:hover 3.2s ease-in-out infinite,flick .13s steps(2) infinite}
-#loader .t{position:absolute;left:50%;bottom:44px;transform:translateX(-50%);color:var(--mute);letter-spacing:.12em}
+#loader .t{position:absolute;left:50%;bottom:44px;transform:translateX(-50%);color:var(--mute)}
 @keyframes hover{0%,100%{transform:translateY(-6px) rotate(-6deg)}50%{transform:translateY(6px) rotate(8deg)}}
 @keyframes flick{50%{opacity:.93}}
 #loader.done{opacity:0;pointer-events:none}
-@media(max-width:760px){nav a:not(.cta){display:none}.left,.right{left:16px;right:16px;bottom:8vh;max-width:none}.center{left:16px;right:16px;transform:none}header{padding:16px}.hud.bl,.hud.tl{left:16px}.hud.br{right:16px}.ov p{font-size:16px}}
-.choice{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:16px}
-.choice button{background:rgba(17,17,17,.8);border:1px solid #333;color:var(--cream);text-align:left;padding:18px;cursor:pointer;font:400 15px "TT",sans-serif}
-.choice button b{display:block;font-weight:520;font-size:44px;line-height:1;margin:6px 0 8px}
-.choice button:hover{border-color:var(--red)}
-.list button{all:unset;cursor:pointer;display:flex;justify-content:space-between;gap:16px;width:100%;border-top:1px solid #2a2a2a;padding:10px 0}
-.list button:hover span:first-child{color:#fff;text-decoration:underline}
-.list:last-child button:last-child{border-bottom:1px solid #2a2a2a}
-.chips{display:flex;flex-wrap:wrap;gap:6px;margin:10px 0}
-.chips span{border:1px solid #333;padding:4px 10px;border-radius:30px;font-size:14px}
-.flex{max-width:min(720px,calc(100vw - 56px))}
-.flex h2{font-size:clamp(64px,9vw,148px);line-height:.84;margin:6px 0 14px;letter-spacing:-.03em;text-shadow:0 0 40px rgba(58,107,255,.55),0 4px 0 rgba(0,0,0,.4)}
-.flex .idea{font-size:clamp(17px,1.5vw,21px);max-width:460px;text-shadow:0 1px 12px rgba(0,0,0,.8)}
-.flex .hit{display:flex;align-items:baseline;gap:12px;margin-top:14px}.flex .hit b{font-weight:620;font-size:clamp(40px,4vw,64px);color:var(--red);line-height:1}
-.nums{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin:12px 0}
-.nums b{display:block;font-weight:520;font-size:30px;font-variation-settings:"opsz" 36,"wdth" 100,"slnt" -6}
-footer.ft{display:flex;gap:18px;margin-top:16px;padding-top:12px;border-top:1px solid #2a2a2a;flex-wrap:wrap}
-footer.ft a{color:var(--cream);font-size:14px}
-select{background:#111;border:0;border-bottom:1px solid #444;color:var(--cream);font:400 17px "TT",sans-serif;padding:8px 0}
-/* 2D-слой по рефу 4: сетка, микротекст, простые формы */
-#grid2d{position:fixed;inset:0;z-index:2;pointer-events:none;background-image:linear-gradient(to right,rgba(225,217,207,.05) 1px,transparent 1px),linear-gradient(to bottom,rgba(225,217,207,.05) 1px,transparent 1px);background-size:calc(100vw/12) calc(100vw/12)}
-.sq{position:fixed;z-index:3;width:7px;height:7px;background:var(--red);pointer-events:none;transition:left .45s cubic-bezier(.2,.8,.2,1),top .45s cubic-bezier(.2,.8,.2,1)}
-.tick{position:fixed;z-index:3;width:14px;height:14px;border-color:rgba(225,217,207,.5);border-style:solid;pointer-events:none}
-#micro{position:fixed;right:28px;top:76px;z-index:5;text-align:right;line-height:1.55;pointer-events:none;font-size:11px;transition:opacity .3s}
-#micro a,#micro [data-j]{pointer-events:auto;cursor:pointer}
-#micro [data-j]:hover{color:var(--cream)}
-#micro .on{color:var(--cream)}
-#micro.dim{opacity:.16}#micro.dim:hover{opacity:1}
-#microL{position:fixed;left:28px;top:96px;z-index:5;pointer-events:none;font-size:11px;line-height:1.55;color:var(--mute)}
-#wipe{position:fixed;left:0;right:0;top:50%;z-index:3;pointer-events:none;white-space:nowrap;font-weight:520;font-size:11vw;line-height:.8;translate:0 -50%;color:transparent;-webkit-text-stroke:1px rgba(244,7,9,.35);transform:translateX(100%)}
-#wipe.go{animation:wipe 1.4s cubic-bezier(.2,.8,.2,1) forwards}
-@keyframes wipe{0%{transform:translateX(100%)}35%{transform:translateX(6%)}65%{transform:translateX(-6%)}100%{transform:translateX(-110%)}}
-#curtain{position:fixed;inset:0;z-index:15;background:var(--red);transform:scaleY(0);transform-origin:bottom;pointer-events:none;display:flex;align-items:center;padding-left:28px}
-#curtain b{font-weight:520;font-size:16vw;color:var(--bg);line-height:.85}
-#curtain.in{transition:transform .32s cubic-bezier(.7,0,.3,1);transform:scaleY(1)}
-#curtain.out{transition:transform .45s cubic-bezier(.2,.8,.2,1);transform:scaleY(0);transform-origin:top}
-/* развилка: экран на всю высоту, два больших пункта */
-#fork{left:0;right:0;top:0;bottom:0;max-width:none;display:grid;grid-template-rows:1fr 1fr}
-#fork button{all:unset;cursor:pointer;position:relative;display:flex;flex-direction:column;justify-content:center;padding:0 28px;background:linear-gradient(to top,rgba(17,17,17,.9),rgba(17,17,17,.55));transition:background .25s ease-out}
-#fork button.up{background:linear-gradient(to bottom,rgba(17,17,17,.9),rgba(17,17,17,.55));border-bottom:1px solid rgba(225,217,207,.14)}
-#fork button:hover{background:linear-gradient(to top,rgba(244,7,9,.8),rgba(244,7,9,.1) 80%)}#fork button.up:hover{background:linear-gradient(to bottom,rgba(244,7,9,.8),rgba(244,7,9,.1) 80%)}
-#fork button b{display:block;font-weight:520;font-size:clamp(90px,12vw,200px);line-height:.8;margin:6px 0 12px}
-#fork button p{font-size:20px;max-width:30ch}
-#fork .ask{position:absolute;right:28px;top:50%;translate:0 -50%;text-align:right;z-index:2;pointer-events:none}
-#fork .ask h2{margin:8px 0 0}
-#fork .arr{display:inline-block;animation:bob 1.2s ease-in-out infinite}
-@keyframes bob{50%{translate:0 6px}}
-#fork.pulse button{animation:pulse .5s ease-out 2}
-@keyframes pulse{50%{background:rgba(244,7,9,.45)}}
-#modal{position:fixed;inset:0;z-index:20;background:rgba(10,10,10,.96);overflow:auto;display:none}
-#modal.on{display:block}
-#modal .wrap{max-width:1100px;margin:0 auto;padding:90px 28px 80px}
-#modal h1{font-weight:520;font-size:clamp(48px,7vw,104px);line-height:.92;margin:12px 0 16px}
-#modal .tags a{color:var(--cream);border:1px solid #444;border-radius:30px;padding:5px 12px;margin-right:6px;text-decoration:none;font-size:14px}
-#modal .pass{display:flex;gap:28px;flex-wrap:wrap;margin:26px 0;padding:14px 0;border-top:1px solid #2a2a2a;border-bottom:1px solid #2a2a2a}
-#modal .ti{display:grid;grid-template-columns:1fr 1fr;gap:32px;margin:28px 0}
-#modal .ti p{font-size:22px;line-height:1.25}
-#modal .gal{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:14px;margin:18px 0 30px}
-#modal .gal figure img{width:100%;display:block;aspect-ratio:16/10;object-fit:cover}
-#modal figcaption{margin-top:6px;font-size:15px}
-#modal .res{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:18px;margin:18px 0 34px}
-#modal .res b{display:block;font-weight:520;font-size:clamp(44px,5vw,72px);line-height:1;font-variation-settings:"opsz" 36,"wdth" 100,"slnt" -6;color:var(--red)}
-#modal .close{position:fixed;top:20px;right:28px;z-index:21}
-@media(max-width:760px){#fork{grid-template-columns:1fr}#fork button{padding-bottom:4vh}#micro,#microL{display:none}.choice{grid-template-columns:1fr}#modal .ti{grid-template-columns:1fr}#modal .wrap{padding:80px 16px}}
-#views{position:fixed;left:50%;bottom:14px;translate:-50% 0;z-index:9;display:flex;gap:6px;align-items:center;font-size:11px;background:rgba(17,17,17,.7);backdrop-filter:blur(10px);padding:5px 8px;border:1px solid rgba(225,217,207,.12)}
-#views button{all:unset;cursor:pointer;color:var(--cream);padding:3px 8px;border:1px solid rgba(225,217,207,.2)}#views button:hover,#views button.on{background:var(--red);border-color:var(--red)}
-body.qview .ov,body.qview #orbitUi,body.qview #wipe{display:none!important}
-#viewInfo{position:fixed;left:28px;bottom:64px;z-index:6;width:min(420px,calc(100vw - 32px));max-height:70vh;overflow:auto}#viewInfo button{all:unset;cursor:pointer;display:block;padding:10px 0;border-top:1px solid rgba(225,217,207,.12)}#viewInfo button:hover b{color:var(--red)}#viewInfo b{display:block;font-weight:520;font-size:20px}#viewInfo .d{display:block;font-size:14px;color:var(--mute);margin-top:4px}
+@media(max-width:760px){header nav a:not(.cta){display:none}.l,.r{left:16px;right:16px;text-align:left}.r p{margin-left:0}}
 </style>
 <script type="importmap">
 {"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.169.0/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.169.0/examples/jsm/"}}
@@ -138,124 +44,29 @@ body.qview .ov,body.qview #orbitUi,body.qview #wipe{display:none!important}
 <body>
 <div id="loader"><img src="assets/iskra.svg" alt=""><span class="t"><span id="loadPct">000</span>%</span></div>
 <canvas id="gl"></canvas>
-<div id="grid2d"></div>
-<div class="tick" style="left:20px;top:64px;border-width:1px 0 0 1px"></div><div class="tick" style="right:20px;top:64px;border-width:1px 1px 0 0"></div><div class="tick" style="left:20px;bottom:14px;border-width:0 0 1px 1px"></div><div class="tick" style="right:20px;bottom:14px;border-width:0 1px 1px 0"></div>
-<div class="sq"></div><div class="sq"></div><div class="sq"></div><div class="sq"></div>
-<div id="micro" class="t"></div><div id="microL" class="t"></div>
-<div id="wipe"></div>
-<div id="curtain"><b id="curtainWord"></b></div>
+<header><img src="assets/logo.svg" alt="Oxygen"><nav><a href="#">кейсы</a><a href="#">награды</a><a href="#">контакты</a><a href="#" class="cta">есть задача</a></nav></header>
 
-<header>
-  <img src="assets/logo.svg" alt="Oxygen">
-  <nav>
-    <a href="#" data-go="btl">btl</a><a href="#" data-go="atl">atl</a><a href="#" data-go="awards">награды</a><a href="#" data-modal="jobs">вакансии</a><a href="#" data-go="brief">контакты</a><a href="#" class="cta" data-go="brief">есть задача</a>
-  </nav>
-</header>
-<div class="hud tl t">спб 59°n · 30°e</div>
-<div class="hud bl t" id="hudStage">{00} вход</div>
-<button class="hud t" id="routeBtn" data-go="cross" style="display:none;left:28px;bottom:44px;pointer-events:auto;background:none;border:0;cursor:pointer;text-decoration:underline"></button>
-<div class="hud br t"><span id="hudPct">000</span>% · 20_26</div>
-
-<!-- текст живёт в HTML: его видят поисковики и нейросети, 3D только иллюстрирует -->
-<section class="ov left" data-a="0" data-b="0.05">
+<!-- текст живёт в HTML: его видят поисковики, 3D только иллюстрирует -->
+<section class="ov l" data-a="0" data-b="0.045">
   <span class="t">ai-first рекламное агентство · санкт-петербург</span>
-  <h1>топливо<br>ваших идей</h1>
-  <p class="lead" style="margin-top:18px;max-width:30ch">федеральные кампании, бренд-зоны и ивенты, продакшн полного цикла. здесь идеи разгораются, а не тлеют в рутине</p>
-  <button class="btn" data-go="brief">есть задача</button> <button class="btn ghost" data-go="reel">смотреть шоурил</button>
-  <p class="t" style="margin-top:18px"><a href="#" data-go="awards" style="color:inherit">16 металлов · заклинатели — gold · дербент — gold · треснутые — 5 наград →</a></p>
+  <h1 style="margin-top:12px">топливо<br>ваших идей</h1>
+  <p>федеральные кампании, бренд-зоны и ивенты, продакшн полного цикла</p>
 </section>
-
-<section class="ov right" data-a="0.12" data-b="0.27">
-  <span class="t">{01} как работаем</span>
-  <p class="lead" style="margin-top:12px">берём на себя скучное<br>и возвращаем интересное</p>
-  <p style="margin-top:10px;max-width:40ch">провести концепцию через сорок носителей, три подрядчика и два круга правок, не растеряв драйв, — в этом мы так же устойчивы, как в креативе</p>
-  <p class="lead" style="margin-top:18px">раскручиваем то, что в брифе<br>только намечалось</p>
+<section class="ov r" data-a="0.2" data-b="0.3">
+  <span class="t">{01} искра</span>
+  <h2 style="margin-top:10px">здесь идеи<br>разгораются</h2>
+  <p>а не тлеют в рутине</p>
 </section>
-
-<section class="ov left" data-a="0.36" data-b="0.43">
-  <span class="t">{01} как работаем</span>
-  <p class="lead" style="margin-top:12px">вам есть что показать —<br>мы делаем так, чтобы это заметили</p>
-  <p style="margin-top:10px;max-width:40ch">после этого рекламу перестают терпеть и начинают пересматривать</p>
-</section>
-
-<section class="ov right panel" data-a="0.45" data-b="0.51">
+<section class="ov l" data-a="0.31" data-b="0.38">
   <span class="t">{02} шоурил</span>
-  <h2>фильм бренда</h2>
-  <p>фильм бренда на экране главной башни. по клику — окно с видео и звуком</p>
-  <button class="btn" data-modal="reel">смотреть ▶</button>
+  <h2 style="margin-top:10px">фильм бренда</h2>
 </section>
-
-<section class="ov" id="fork" data-a="0.535" data-b="0.62">
-  <div class="ask"><span class="t">{03} перекрёсток</span><h2>с чем пришли?</h2><p class="t" style="margin-top:6px">выберите маршрут: наверх или вниз — дальше скролл пойдёт по нему</p></div>
-  <button data-go="atl" class="up"><span class="t">{05} эфир · над городом ↑</span><b>atl</b><p>кампании, которые продолжаются без нас: вселенные, бренд-платформы, сезонные рамки и ai-продакшн</p></button>
-  <button data-go="btl"><span class="t">{04} проспект · на земле ↓</span><b>btl</b><p>гости приходят зрителями — и становятся участниками: фестивали, гонки, марафоны, промо</p></button>
+<section class="ov r" data-a="0.55" data-b="0.64">
+  <span class="t">{03} мегаструктура</span>
+  <h2 style="margin-top:10px">всё, что мы<br>построили</h2>
+  <p>кампании, зоны, ивенты и продакшн — в одном пространстве</p>
 </section>
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-<section class="ov right panel" data-a="0.935" data-b="0.965">
-  <span class="t">{06} награды</span>
-  <h2>оценили не только клиенты</h2>
-  <div class="list">
-    <button data-case="treschnutye"><span>треснутые · дикси</span><span class="t">silver ×2 · bronze ×3</span></button>
-    <button data-case="zaklinateli"><span>заклинатели · дикси</span><span class="t">gold · bronze</span></button>
-    <button data-case="derbent"><span>дербент</span><span class="t">gold · red apple</span></button>
-    <button data-case="fandom"><span>ozon corp · ozon</span><span class="t">silver · bronze ×2</span></button>
-  </div>
-  <p class="t" style="margin-top:10px">4 gold · 6 silver · 6 bronze · 4 short-list · silver mercury · red apple · e+ · white square · perspectum</p>
-  <span class="t" style="display:block;margin-top:14px">рейтинги</span>
-  <div class="row"><span>adindex · качество услуг</span><span class="t">3 место</span></div>
-  <div class="row"><span>акар · брендинг, 2022</span><span class="t">4 место</span></div>
-  <div class="row"><span>national event services rating</span><span class="t">топ</span></div>
-</section>
-
-
-<section class="ov right panel" data-a="0.982" data-b="1.01" id="brief" style="width:min(460px,calc(100vw - 32px))">
-  <span class="t">{07} бриф · горит? раздуем</span>
-  <h2>с чем вы приходите?</h2>
-  <form id="briefForm" onsubmit="event.preventDefault();this.innerHTML='<p>прототип: данные никуда не отправлены</p>'">
-    <select id="briefDir"><option value="">выберите задачу</option><option value="atl">нужна кампания к запуску</option><option value="tender">скоро тендер</option><option value="btl">нужно мероприятие или промо</option><option value="audience">хотим выйти на новую аудиторию</option><option value="special">нужен спецпроект</option></select>
-    <input id="briefCase" placeholder="по мотивам кейса" style="display:none">
-    <input placeholder="имя *" required><input placeholder="компания"><input placeholder="телефон или почта *" required>
-    <textarea rows="2" placeholder="задача в двух словах *" required></textarea>
-    <button class="btn" style="justify-self:start">отправить</button>
-  </form>
-  <div style="margin-top:14px">
-    <div class="row"><span>new business</span><span class="t">имя · почта — от риты</span></div>
-    <div class="row"><span>пресса · hr</span><span class="t">почты — от риты</span></div>
-    <div class="row"><span>санкт-петербург</span><span class="t">адрес → на карте</span></div>
-  </div>
-  <footer class="ft t"><a href="#">new business</a><a href="#">пресса</a><a href="#" data-modal="jobs">ищем тех, кто превращает чужие искры в пламя →</a></footer>
-</section>
-
-<div id="orbitUi">
-  <div class="panel">
-    <span class="t">{04} btl · кейс</span>
-    <h2 style="font-weight:520;font-size:40px;line-height:1;margin:8px 0 10px">ozon corp</h2>
-    <p>бренд-зона ozon на фестивале vk. крутите мышью или пальцем, колесо — ближе и дальше</p>
-    <p class="t" style="margin-top:10px">модель собрана Higgsfield по рендеру из презентации. в рабочей версии — экспорт из исходника визуализации</p>
-    <button class="btn" data-case="fandom">страница кейса</button> <button class="btn ghost" id="closeOrbit">← на проспект</button>
-  </div>
-  <div class="hint t">drag · zoom</div>
-</div>
-
-<!-- временно: обзорные виды на кварталы для работы над сценой -->
-<div id="viewInfo" class="panel" style="display:none"></div>
-<div id="views" class="t"><span>виды:</span><button data-view="asia">азия</button><button data-view="dixy">дикси</button><button data-view="sport">спорт</button><button data-view="merch">мерч</button><button data-view="ai">ai</button><button data-view="off">✕</button></div>
-<div id="modal"><button class="btn ghost close" id="modalClose">закрыть ✕</button><div class="wrap" id="modalBody"></div></div>
-
+<div id="pct" class="t">000% · 20_26</div>
 <div id="scroll"></div>
 <script type="module" src="main.js"></script>
 </body>
