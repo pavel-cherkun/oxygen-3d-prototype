@@ -180,11 +180,11 @@ function asia(z0) {
   for (let z = z0 + 14; z < z1 - 10; z += 13) { const y = 9 + r() * 8; for (let x = -10; x <= 10; x += 1.6) { const sag = (1 - (x / 10) ** 2) * 1.6; k.box(red, 0.55, 0.7, 0.55, x, y - sag, z); } }
   for (let z = z0 + 20; z < z1 - 10; z += 31) { const y = 30 + r() * 20; for (let x = -10; x <= 10; x += 2.2) k.box(r() < 0.3 ? cr : red, 0.4, 0.4, 0.4, x, y - (1 - (x / 10) ** 2) * 2.4, z); }   // верхние гирлянды — для atl
   for (let i = 0; i < 4; i++) { const z = z0 + 30 + i * 84; [-8.5, 8.5].forEach(x => k.geo(tor, new THREE.CylinderGeometry(0.45, 0.55, 15, 12), x, 7.5, z)); k.box(tor, 22, 0.9, 1.1, 0, 15, z); k.box(tor, 19, 0.6, 0.7, 0, 12.6, z); q.anchors.push({ p: V(0, 13, z), c: 0xff3020, i: 70 }); }
-  [['ozon corp', 60], ['т-банк', 150], ['хроники ижоры', 240]].forEach(([t, dz], i) => cube(q, i % 2 ? 6.5 : -6.5, 0, z0 + dz, t, 'btl', { s: 3.6 }));
-  q.kit.box(B, 8, 1.2, 8, 7.5, 38.8, z0 + 200); cube(q, 7, 40, z0 + 200, 'треснутые', 'atl', { s: 3.6, perch: 'slab', plinth: B });
-  q.anchors.push({ p: V(0, 46, z0 + 200), c: 0xff4030, i: 50 });
+  [['ozon corp', 80], ['т-банк', 200]].forEach(([t, dz], i) => cube(q, i % 2 ? 6.5 : -6.5, 0, z0 + dz, t, 'btl', { s: 3.6 }));
+  // наверху квартала, на консолях между башнями: хроники ижоры и треснутые
+  [['хроники ижоры', 120, -7], ['треснутые', 230, 7]].forEach(([t, dz, x]) => { q.kit.box(B, 8, 1.2, 8, x + Math.sign(x) * 0.5, 38.8, z0 + dz); cube(q, x, 40, z0 + dz, t, 'atl', { s: 3.6, perch: 'slab', plinth: B }); q.anchors.push({ p: V(0, 46, z0 + dz), c: 0xff4030, i: 50 }); });
   path(q, 'btl', [0, 5.5, z0 + 6], [1.5, 5.5, z0 + 100], [-1.5, 6, z0 + 190], [1, 5.5, z0 + 280], [0, 6, z1]);
-  path(q, 'atl', [0, 44, z0 + 20], [-1, 44, z0 + 120], [-1.5, 44, z0 + 200], [0, 50, z1 - 30], [0, 58, z1]);
+  path(q, 'atl', [0, 44, z0 + 20], [1, 44, z0 + 120], [-1, 44, z0 + 230], [0, 50, z1 - 30], [0, 58, z1]);
   return z1;
 }
 
@@ -208,10 +208,11 @@ function sport(z0) {
   }
   [[1, 1], [1, -1], [-1, 1], [-1, -1]].forEach(([sx, sz]) => { const x = sx * A * 1.95, z = cz + sz * Bz * 1.05; k.box(steel, 2.4, 78, 2.4, x, 0, z); k.box(D, 16, 9, 2, x - sx * 1.5, 74, z - sz * 1.2, Math.atan2(-x, cz - z)); const p = new THREE.Mesh(new THREE.PlaneGeometry(14, 7), glow(0xffffff, 2.2)); p.position.set(x - sx * 3, 78.5, z - sz * 2.6); p.lookAt(0, 0, cz); q.g.add(p); });
   [[z0, z0 + 40], [z1 - 40, z1]].forEach(([a, b]) => { for (const s of [-1, 1]) k.box(C, 2, 12, b - a, s * 9, 0, (a + b) / 2); k.box(D, 20, 1.6, b - a, 0, 12, (a + b) / 2); q.anchors.push({ p: V(0, 9, (a + b) / 2), c: 0xe8eef4, i: 30 }); });
-  [['синегривый лев', -90], ['ironstar', -30], ['шёлковый путь', 30], ['балтика 7', 90]].forEach(([t, dz], i) => cube(q, i % 2 ? 14 : -14, 0, cz + dz, t, 'btl'));
-  cube(q, -24, 40, cz, 'время авангарда', 'atl', { perch: 'mast', plinth: D });
+  [['ironstar', -70], ['шёлковый путь', 0], ['балтика 7', 70]].forEach(([t, dz], i) => cube(q, i % 2 ? 14 : -14, 0, cz + dz, t, 'btl'));
+  // наверху чаши, на мачтах: синегривый лев и время авангарда
+  cube(q, 22, 40, cz - 60, 'синегривый лев', 'atl', { perch: 'mast', plinth: D }); cube(q, -22, 40, cz + 50, 'время авангарда', 'atl', { perch: 'mast', plinth: D });
   path(q, 'btl', [0, 5, z0 + 4], [0, 6, z0 + 50], [1, 8, cz - 80], [-1, 10, cz], [1, 8, cz + 80], [0, 6, z1 - 50], [0, 5, z1]);
-  path(q, 'atl', [0, 58, z0 + 10], [0, 52, z0 + 70], [2, 45, cz - 50], [2, 44, cz], [0, 46, cz + 60], [0, 54, z1 - 60], [0, 60, z1 - 10]);
+  path(q, 'atl', [0, 58, z0 + 10], [0, 52, z0 + 70], [2, 45, cz - 50], [2, 44, cz], [0, 46, cz + 60], [0, 54, z1 - 60], [0, 60, z1 - 10], [0, 58, z1 + 16]);
   return z1;
 }
 
@@ -219,7 +220,7 @@ function sport(z0) {
 function merch(z0) {
   const q = zone('merch', { n: '04', t: 'мерч', line: 'двухэтажная анфилада: btl внизу, atl наверху', exp: 1.6, sky: ['#c8c0b6', '#e2dad0', '#f4f0ea'], hemi: [0xf4f0ea, 0xb0a89c, 1.8], key: [0xfff6ea, 3.8, V(0.7, 0.9, 0.18)], bloom: 0.35, spark: 3 });
   const rooms = 4, L = 46, z1 = z0 + rooms * L, k = q.kit, P = conc(0xe0d8cc, false, 0.85), blk = matte(0x111111, 0.4), floor = conc(0xbab2a6, false, 0.45);
-  q.rects.push([-30, 30, z0 - 30, z1 + 10]);
+  q.rects.push([-30, 30, z0 - 60, z1 + 10]);
   k.box(floor, 40, 0.3, z1 - z0, 0, -0.3, (z0 + z1) / 2);
   k.box(floor, 36, 2, z1 - z0, 0, 16, (z0 + z1) / 2);   // перекрытие между этажами
   for (const s of [-1, 1]) k.box(P, 16, 1, z1 - z0, s * 11, 34, (z0 + z1) / 2);   // кровля с продольной щелью
@@ -258,30 +259,22 @@ function ai(z0) {
   const blk = matte(0x111111, 0.3, 0.3);
   [['ai · fonbet', 60], ['ai · mango', 120], ['ai · лавка', 180], ['ai · альфа', 240]].forEach(([t, dz], i) => cube(q, i % 2 ? 7 : -7, 27, z0 + dz, t, 'atl', { float: true, mat: blk }));
   path(q, 'btl', [0, 4.5, z0 + 4], [0, 5, z0 + 150], [0, 4.5, z1]);
-  path(q, 'atl', [0, 26, z0 + 4], [1, 30, z0 + 150], [0, 34, z1 - 20], [0, 42, z1]);
+  path(q, 'atl', [0, 26, z0 + 4], [1, 30, z0 + 150], [0, 32, z1 - 20], [0, 32, z1]);
   return z1;
 }
 
-// финал — бетонный двор: btl входит туннелем, atl перелетает через стену и опускается; два больших куба — награды и бриф
-function final(z0) {
-  const cz = z0 + 90, q = zone('final', { n: '06', t: 'награды и бриф', line: 'двор, где сходятся маршруты', exp: 1.15, sky: ['#1a0a0a', '#5a1010', '#c8a090'], hemi: [0xc0a090, 0x1a1210, 0.5], key: [0xffd8c0, 3.4, V(-0.5, 0.5, -0.6)], bloom: 0.9, sun: [V(-0.4, 0.15, -1).normalize(), 0xffc8a0, 0.8], spark: 10 });
-  const k = q.kit, C = conc(0x9c948a), D = conc(0x6a645e, true);
-  q.rects.push([-70, 70, z0, cz + 70]);
-  k.box(conc(0x4a4743, true), 140, 0.3, cz + 70 - z0, 0, -0.3, (z0 + cz + 70) / 2);
-  for (const s of [-1, 1]) k.box(C, 4, 34, 140, s * 60, 0, cz);
-  k.box(C, 124, 34, 4, 0, 0, cz + 62); k.box(C, 48, 34, 4, -36, 0, cz - 62); k.box(C, 48, 34, 4, 36, 0, cz - 62); k.box(D, 30, 20, 4, 0, 14, cz - 62);
-  for (let z = z0; z < cz - 62; z += 6) for (const s of [-1, 1]) k.box(C, 2, 12, 6, s * 9, 0, z + 3);
-  k.box(D, 20, 1.4, cz - 62 - z0, 0, 12, (z0 + cz - 62) / 2);
-  cube(q, -12, 0, cz + 44, 'награды', null, { s: 8 }); cube(q, 12, 0, cz + 44, 'бриф', null, { s: 8, mat: matte(RED, 0.5) });
-  q.anchors.push({ p: V(0, 20, cz + 30), c: 0xffd0b0, i: 80 });
-  path(q, 'btl', [0, 6, z0 + 6], [0, 6.5, cz - 40], [0, 7.5, cz + 4]);
-  path(q, 'atl', [0, 44, z0 + 4], [0, 40, cz - 64], [0, 22, cz - 30], [0, 9, cz + 4]);
-  q.look = V(0, 8, cz + 48);
+// финал — чистая чернота после ai: ни стен, ни неба, только логотип, который проявляется в свете искры; искра встаёт в него
+function ending(z0) {
+  const q = zone('final', { n: '06', t: 'oxygen', line: 'чистая чернота: искра встаёт в логотип', sky: ['#000000', '#000000', '#000000'], hemi: [0x000000, 0x000000, 0], key: [0x000000, 0, V(0, 1, 0)], bloom: 1.3, spark: 34 });
+  const cz = z0 + 160; q.rects.push([-120, 120, z0, cz + 60]);
+  q.logoAt = V(0, 14, cz); q.look = V(0, 14, cz);
+  path(q, 'btl', [0, 5.5, z0 + 12], [0, 9, z0 + 60], [0, 13, cz - 70], [0, 14, cz - 46]);
+  path(q, 'atl', [0, 30, z0 + 12], [0, 22, z0 + 60], [0, 15, cz - 70], [0, 14, cz - 46]);
   return q;
 }
 
 // ---------- сборка мира: развилка → нейтральная → азия → спорт → мерч → ai → финал, оба маршрута через все локации ----------
-const zR = rotunda(), zN = neutral(zR + 10), zA = asia(zN), zS = sport(zA), zM = merch(zS + 40), zI = ai(zM), FIN = final(zI);
+const zR = rotunda(), zN = neutral(zR + 10), zA = asia(zN), zS = sport(zA), zM = merch(zS + 70), zI = ai(zM), FIN = ending(zI);
 ZL.forEach(q => q.kit.flush(q.g));
 const ground = new THREE.Mesh(new THREE.PlaneGeometry(4000, 4000), matte(0x050505, 1)); ground.rotation.x = -Math.PI / 2; ground.position.y = -0.4; scene.add(ground);
 
@@ -307,6 +300,24 @@ let spark, sparkLight = new THREE.PointLight(0xff6a50, 0, 30, 1.5); scene.add(sp
   spark = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({ color: RED, emissive: RED, emissiveIntensity: 2.2, roughness: 0.3 })); scene.add(spark);
   const halo = new THREE.Sprite(new THREE.SpriteMaterial({ map: (() => { const c = document.createElement('canvas'); c.width = c.height = 128; const g = c.getContext('2d'), gr = g.createRadialGradient(64, 64, 0, 64, 64, 64); gr.addColorStop(0, 'rgba(255,80,60,.9)'); gr.addColorStop(0.3, 'rgba(244,7,9,.25)'); gr.addColorStop(1, 'rgba(0,0,0,0)'); g.fillStyle = gr; g.fillRect(0, 0, 128, 128); return new THREE.CanvasTexture(c); })(), transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, toneMapped: false }));
   halo.scale.setScalar(3.2); spark.add(halo);
+}
+
+// логотип в финале: «O» с вырезом под искру; пока искра не встала, он чёрный и виден только в её свете
+const LOGO = { mat: null, slot: V(0, 0, 0), k: 1 };
+{
+  const data = await new SVGLoader().loadAsync('assets/logo.svg'), shapes = data.paths.flatMap(p => SVGLoader.createShapes(p));
+  const bbOf = pts => { const b = new THREE.Box2(); pts.forEach(p => b.expandByPoint(p)); return b; }, boxes = shapes.map(sh => bbOf(sh.getPoints()));
+  const all = new THREE.Box2(); boxes.forEach(b => all.union(b));
+  const oIdx = boxes.reduce((m, b, i) => b.min.x < boxes[m].min.x ? i : m, 0); let slot;
+  if (shapes[oIdx].holes.length) slot = shapes[oIdx].holes.map(h => bbOf(h.getPoints())).sort((a, b) => (b.max.x - b.min.x) * (b.max.y - b.min.y) - (a.max.x - a.min.x) * (a.max.y - a.min.y))[0];
+  else { const inner = boxes.findIndex((b, i) => i !== oIdx && boxes[oIdx].containsBox(b)); slot = boxes[inner]; shapes.splice(inner, 1); }
+  const cx = (all.min.x + all.max.x) / 2, cy = (all.min.y + all.max.y) / 2, S = 40 / (all.max.x - all.min.x);
+  const geo = new THREE.ExtrudeGeometry(shapes, { depth: 6, bevelEnabled: false, curveSegments: 8 }); geo.translate(-cx, -cy, -3);
+  LOGO.mat = new THREE.MeshPhysicalMaterial({ color: 0x0b0b0b, emissive: RED, emissiveIntensity: 0, roughness: 0.25, clearcoat: 1, clearcoatRoughness: 0.08, side: THREE.DoubleSide });
+  const g = new THREE.Group(); g.add(new THREE.Mesh(geo, LOGO.mat)); g.scale.set(S, -S, S); g.rotation.y = Math.PI; g.position.copy(FIN.logoAt); FIN.g.add(g); g.updateMatrixWorld(true);
+  const sc = slot.getCenter(new THREE.Vector2()); LOGO.slot.set(sc.x - cx, sc.y - cy, 0).applyMatrix4(g.matrixWorld);
+  LOGO.k = (slot.max.x - slot.min.x) * S / 0.8;   // во сколько раз искра должна вырасти, чтобы встать в вырез
+  LOGO.glow = new THREE.PointLight(0xff3a20, 0, 90, 1.2); LOGO.glow.position.copy(FIN.logoAt).add(V(0, 8, -34)); scene.add(LOGO.glow);
 }
 
 // ---------- маршруты ----------
@@ -370,7 +381,7 @@ routeBtn.addEventListener('click', () => { route = null; scrollTo({ top: (TRUNK_
 // ---------- цикл ----------
 let sSm = 0, mouse = new THREE.Vector2(), mSm = new THREE.Vector2(), lastZone = '';
 addEventListener('pointermove', e => mouse.set(e.clientX / innerWidth - 0.5, e.clientY / innerHeight - 0.5));
-const clock = new THREE.Clock(), look = V(0, 0, 0), tmp = V(0, 0, 0), ahead = V(0, 0, 0);
+const clock = new THREE.Clock(), look = V(0, 0, 0), tmp = V(0, 0, 0), ahead = V(0, 0, 0), DOCKQ = new THREE.Quaternion().setFromEuler(new THREE.Euler(0, Math.PI, 0)), endEl = document.getElementById('end');
 function frame() {
   const dt = Math.min(clock.getDelta(), 0.05), time = clock.elapsedTime;
   let s = scrollY / PX;
@@ -383,14 +394,21 @@ function frame() {
   look.copy(ahead); look.y = camera.position.y - 0.6;
   let best = null, bd = 1e9; for (const c of o.cubes) { const d = c.p.distanceTo(camera.position); if (d < bd && c.p.clone().sub(camera.position).dot(tmp.copy(ahead).sub(camera.position)) > 0) { bd = d; best = c; } }
   if (best) { const w = smooth(clamp01((34 - bd) / 18)) * 0.32, ly = look.y; look.lerp(best.p, w); look.y = ly + (best.p.y - ly) * w * 0.4; }
-  if (u > 0.985) look.lerp(FIN.look, smooth((u - 0.985) / 0.015));
+  const dLogo = camera.position.distanceTo(FIN.logoAt), dock = smooth(clamp01((72 - dLogo) / 24)), landed = clamp01((dock - 0.92) / 0.08);
+  look.lerp(FIN.look, smooth(clamp01((110 - dLogo) / 50)));
   mSm.lerp(mouse, Math.min(1, dt * 3)); camera.position.x += mSm.x * 1.2; camera.position.y -= mSm.y * 0.8;
   camera.lookAt(look);
   // искра впереди, чуть выше линии взгляда; в начале — прямо по центру кадра
   const intro = 1 - clamp01(sSm / 40);
   o.curve.getPointAt(Math.min(1, u + du * (0.9 - 0.45 * intro)), tmp);
   spark.position.copy(tmp).add(V(Math.sin(time * 0.9) * 0.5, 1.4 + Math.sin(time * 1.3) * 0.25 - intro * 1.6, 0));
-  spark.lookAt(camera.position); spark.rotateZ(time * 0.6);
+  spark.lookAt(camera.position); spark.rotateZ(time * 0.6 * (1 - dock));
+  // в финале искра летит в вырез логотипа, растёт до его размера и разворачивается вместе с ним; логотип загорается
+  if (dock > 0) { spark.position.lerp(LOGO.slot, dock); spark.scale.setScalar(1 + (LOGO.k - 1) * dock); spark.quaternion.slerp(DOCKQ, dock); } else spark.scale.setScalar(1);
+  spark.children[0].material.opacity = 1 - dock; spark.material.emissiveIntensity = 2.2 * (1 - landed) + 1.2 * landed;
+  LOGO.mat.emissiveIntensity = landed * 0.75; LOGO.glow.intensity = landed * 220;
+  sparkLight.distance = 30 + 70 * smooth(clamp01((150 - dLogo) / 70));   // на подлёте искра выхватывает чёрный логотип из темноты
+  endEl.classList.toggle('on', landed > 0.6);
   sparkLight.position.copy(spark.position);
   const dawn = smooth(clamp01((sSm - 6) / 50));   // мир проявляется, когда искра трогается с места
   updateZones(dawn);

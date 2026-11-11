@@ -25,6 +25,11 @@ html.lock,html.lock body{overflow:hidden}
 #pct{right:28px;bottom:26px;color:var(--red)}
 #route{right:28px;top:28px;pointer-events:auto;background:none;border:0;color:var(--cream);cursor:pointer;text-decoration:underline;display:none}
 #hint{left:50%;bottom:26px;translate:-50% 0;opacity:.6;transition:opacity .6s}
+#end{position:fixed;left:50%;bottom:9vh;translate:-50% 0;z-index:3;text-align:center;opacity:0;pointer-events:none;transition:opacity .8s}
+#end.on{opacity:1;pointer-events:auto}
+#end h2{font:520 clamp(36px,5vw,72px)/1 "TT",sans-serif;margin:8px 0 18px;text-transform:lowercase}
+#end button{all:unset;cursor:pointer;border:1px solid var(--red);border-radius:40px;padding:12px 24px;color:var(--cream)}
+#end button:hover{background:var(--red)}
 /* развилка: два проспекта на весь экран */
 #fork{position:fixed;inset:0;z-index:4;display:grid;grid-template-columns:1fr 1fr;opacity:0;pointer-events:none;transition:opacity .5s}
 #fork.on{opacity:1;pointer-events:auto}
@@ -61,6 +66,7 @@ html.lock,html.lock body{overflow:hidden}
 <div class="hud t" id="pct">000%</div>
 <div class="hud t" id="hint">скролл — идти за искрой</div>
 <button class="hud t" id="route"></button>
+<div id="end"><span class="t">{06} финал</span><h2>добавьте кислорода</h2><button class="t">есть задача →</button></div>
 <div id="fork">
   <button data-r="btl"><span class="t">btl · на земле · в арку</span><b>btl</b><p class="t">гости приходят зрителями и становятся участниками: зоны, фестивали, гонки, промо</p></button>
   <button data-r="atl"><span class="t">atl · над городом · вверх, за светом</span><b>atl</b><p class="t">кампании, которые продолжаются без нас: вселенные, бренд-платформы, ai-продакшн</p></button>
