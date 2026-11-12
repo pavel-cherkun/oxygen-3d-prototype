@@ -321,7 +321,7 @@ function brutalBlock(c, r) {
   }
   if (!glass && BR.boxes.length - n0 === 1 && Math.abs(c.x) < 200 && r() < 0.7) {
     const k = 1 + (r() * 3 | 0);
-    for (let i = 0; i < k; i++) { const zz = c.z + (i - (k - 1) / 2) * c.d / (k + 1) * 1.6, hh = c.h * (0.45 + r() * 0.4), wd = 0.7 + r() * 0.6;
+    for (let i = 0; i < k; i++) { const zz = c.z + (i - (k - 1) / 2) * c.d / (k + 1) * 1.6, hh = Math.min(c.h * (0.45 + r() * 0.4), 18 + r() * 10), wd = 0.7 + r() * 0.6;   // щели — только на уровне улицы
       BR.lit.push([fx - side * 0.08, 1 + hh / 2, zz, wd, hh, side]);
       BR.rays.push([fx, zz, 26 + r() * 40, wd * 1.3, side]); }
   }
@@ -1367,23 +1367,28 @@ function placeholder(w) {
 const BANNERS = [];
 function banner(w) {
   const IMG = { izhora: 'izhora-48-1' }, img = IMG[w.id] || w.img, vert = w.id === 'izhora';
-  let B, N, W = 46, H = 46 * 9 / 16;
-  if (vert) { W = 30; H = 52; }
-  if (w.kind === 'roof') { W = 36; H = 36 * 9 / 16; const T = w.tower; towerBox(T, CONC.wall); B = V(T.x + T.w / 2 - 1.5, T.h + H / 2 + 3, w.z); N = V(1, 0, 0);
-    const leg = new THREE.Mesh(new THREE.BoxGeometry(2, 3.2, W * 0.6), CONC.wall); leg.position.set(B.x - 1.4, T.h + 1.6, w.z); scene.add(leg); }
-  else if (w.zone === 'city' || w.zone === 'arena') { const sd = Math.sign(w.tower.x); rock('mountainside', sd * 80, -4, w.z, 13, sd > 0 ? -Math.PI / 2 : Math.PI / 2);
-    SOLIDS.push({ box: new THREE.Box3(V(sd * 80 - 34, 0, w.z - 60), V(sd * 80 + 40, 130, w.z + 60)), name: 'скала' }); B = V(sd * 45, w.F.y, w.z); N = V(-sd, 0, 0); }
-  else { towerBox(w.tower, CONC.wall); const sd = Math.sign(w.tower.x); B = V(sd * (Math.abs(w.tower.x) - w.tower.w / 2 - 1.2), vert ? 66 : w.F.y, w.z); N = V(-sd, 0, 0); }
+  let W = 46, H = 46 * 9 / 16, x0, sd, y;
+  if (vert) { W = 25; H = 44; }
+  if (w.kind === 'roof') { W = 38; H = 38 * 9 / 16; const T = w.tower; towerBox(T, CONC.wall); x0 = T.x + T.w / 2; sd = -1; y = T.h + H / 2 + 4; }
+  else if (w.zone === 'city' || w.zone === 'arena') { sd = Math.sign(w.tower.x); rock('mountainside', sd * 80, -4, w.z, 13, sd > 0 ? -Math.PI / 2 : Math.PI / 2);
+    SOLIDS.push({ box: new THREE.Box3(V(sd * 80 - 34, 0, w.z - 60), V(sd * 80 + 40, 130, w.z + 60)), name: 'скала' }); x0 = sd * 46; y = w.F.y; }
+  else { towerBox(w.tower, CONC.wall); sd = Math.sign(w.tower.x); x0 = sd * (Math.abs(w.tower.x) - w.tower.w / 2); y = vert ? 64 : w.F.y; }
+  // щит развёрнут на 25° к прилетающей камере: его видно почти в лоб, крупно, и он не уходит в фасад
+  const A = 25 * Math.PI / 180, N = V(-sd * Math.cos(A), 0, -Math.sin(A)), B = V(x0 - sd * (1.2 + W / 2 * Math.sin(A)), y, w.z);
   const g = new THREE.Group(); g.position.copy(B); g.lookAt(B.clone().add(N)); g.userData.case = w.id; scene.add(g);
   const back = new THREE.Mesh(new THREE.BoxGeometry(W + 1.6, H + 1.6, 1.2), CONC.wall); back.position.z = -0.7; back.castShadow = back.receiveShadow = true; g.add(back);
+  const P = B.clone().addScaledVector(N, -2.2), arm = new THREE.Mesh(new THREE.BoxGeometry(Math.abs(x0 - P.x) + 1, 1.6, 1.6), CONC.wall); arm.position.set((x0 + P.x) / 2, y, P.z); scene.add(arm);   // консоль к фасаду — за щитом, не сквозь него
   const pic = new THREE.Mesh(new THREE.PlaneGeometry(W, H), new THREE.MeshBasicMaterial({ map: caseTexture(`assets/cases/${img}.jpg`, false, vert ? 576 : 1024, vert ? 1024 : 576), toneMapped: false }));
   pic.material.color.setScalar(0.95); pic.userData.case = w.id; g.add(pic); clickable.push(pic);
-  // точка съёмки: под углом к баннеру со стороны подлёта, баннер в правой трети, коридор между башнями не покидаем
-  const D = Math.max(W, H * 1.7) / 0.6, cosA = Math.min(0.9, (Math.abs(B.x) + 24) / D), sinA = Math.sqrt(1 - cosA * cosA);
-  const C = B.clone().addScaledVector(N, D * cosA).add(V(0, 3, -D * sinA));
-  const F = B.clone().sub(C).normalize(), R = F.clone().cross(V(0, 1, 0)).normalize(), L = B.clone().addScaledVector(R, -0.245 * B.distanceTo(C));
+  // точка съёмки почти в лоб: баннер ~половина ширины кадра, в правой части; камера не выходит из коридора между башнями
+  const D = Math.max(W / (0.5 * 1.48), H / (0.72 * 0.93)), C = B.clone().addScaledVector(N, D).add(V(0, 3, 0));
+  C.x = Math.max(-9, Math.min(9, C.x));   // камера держится оси проспекта: без мотания от борта к борту
+  const F = B.clone().sub(C).normalize(), R = F.clone().cross(V(0, 1, 0)).normalize(), L = B.clone().addScaledVector(R, -0.34 * B.distanceTo(C));   // баннер справа, титр слева — не пересекаются
   w.cube = { c: B, h: H, w: W }; w.shot = { C, L };
-  BANNERS.push({ B, N, W, H, C });
+  const T = V(-N.z, 0, N.x), box = new THREE.Box3();
+  [-1, 1].forEach(a => [-1, 1].forEach(b => box.expandByPoint(B.clone().addScaledVector(T, a * W / 2).add(V(0, b * H / 2, 0)))));
+  box.expandByScalar(3); box.expandByPoint(V(x0, y, B.z));
+  BANNERS.push({ B, C, box });
   const bb = new THREE.Mesh(new THREE.BoxGeometry(W + 2, H + 2, 3)); bb.position.copy(B); bb.quaternion.copy(g.quaternion); return solid(bb);
 }
 // всё, что режет баннер или стоит между точкой съёмки и баннером, — убрать (дома, скалы)
@@ -1391,7 +1396,7 @@ function clearBanners() {
   const seg = new THREE.Line3(), q = new THREE.Vector3(), box = new THREE.Box3(), sph = new THREE.Sphere();
   const hit = (min, max) => BANNERS.some(b => {
     box.set(min, max);
-    const pb = new THREE.Box3().setFromCenterAndSize(b.B, V(Math.abs(b.N.x) > 0.5 ? 6 : b.W + 6, b.H + 6, Math.abs(b.N.x) > 0.5 ? b.W + 6 : 6)); if (box.intersectsBox(pb)) return true;
+    if (box.intersectsBox(b.box)) return true;
     seg.set(b.C, b.B); for (let t = 0; t <= 1; t += 0.05) { seg.at(t, q); sph.set(q, 7); if (box.intersectsSphere(sph)) return true; } return false; });
   BR.boxes = BR.boxes.filter(([x, y, z, w0, h, d0, ry = 0]) => { const w = ry ? Math.hypot(w0, d0) : w0, d = ry ? w : d0; return !hit(V(x - w / 2, y - h / 2, z - d / 2), V(x + w / 2, y + h / 2, z + d / 2)); });
   ROCKS.list = ROCKS.list.filter(r => { const rr = r.type === 'boulder_01' ? r.k * 1 : r.k * 6; return r.type === 'mountainside' && r.k > 10 || !hit(V(r.x - rr, 0, r.z - rr), V(r.x + rr, rr * 1.5, r.z + rr)); });
@@ -1813,7 +1818,7 @@ function frame() {
     const U = grain.uniforms; U.fin.value = fin; U.spd.value = spd;
     U.uA.value = ss(0, 0.35, fin); U.uB.value = ss(0.3, 0.7, fin); U.uC.value = ss(0.62, 0.95, fin); U.uW.value = ss(0.985, 1.0, pSm);   // «сигнал» — только финал
     const W = { scan: 0, zoom: 0, spot: 0, ink: 0, bars: 0, gen: 0, print: 0, view: 0, anime: 0, led: 0, duo: 0, keep: 0, engr: 0 };
-    if (route && !orbitOn) for (const w of WORLD) { if (w.r !== route) continue; const b = ss(0, 1, 1 - Math.abs(pSm - w.p) / (w.span * 0.95)), k = CFX[w.id] || ZFX[w.zone]; if (k) W[k] = Math.max(W[k], b); }
+    if (route && !orbitOn) for (const w of WORLD) { if (w.r !== route) continue; const b = ss(0, 1, 1 - Math.abs(pSm - w.p) / (w.span * 0.95)) * (w.r === 'atl' ? 0.5 : 1), k = CFX[w.id] || ZFX[w.zone]; if (k) W[k] = Math.max(W[k], b); }   // на баннерах эффект вдвое тише — кадр кейса должен читаться
     const fade = 1 - fin;   // к финалу эффекты мест уступают «сигналу»
     U.wScan.value = W.scan * fade; U.wZoom.value = W.zoom * fade; U.wSpot.value = W.spot * fade; U.wInk.value = W.ink * fade; U.wBars.value = W.bars * fade; U.wGen.value = W.gen * fade; U.wPrint.value = W.print * fade; U.wView.value = W.view * fade; U.wAnime.value = W.anime * fade; U.wLed.value = W.led * fade; U.wDuo.value = W.duo * fade; U.wKeep.value = W.keep * fade; U.wEngr.value = W.engr * fade;
   }
