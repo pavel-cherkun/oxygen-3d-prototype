@@ -360,6 +360,7 @@ async function buildRocks() {
 }
 // раскладка всех коробок по кускам вдоль z: в каждом куске один InstancedMesh бетона и один — тёплых окон
 function flushBrutal() {
+  clearBanners();
   const box = new THREE.BoxGeometry(1, 1, 1), plane = new THREE.PlaneGeometry(1, 1), d = new THREE.Object3D(), by = new Map();
   const litM = new THREE.MeshBasicMaterial({ color: 0xffffff, side: THREE.DoubleSide, fog: false });   // щель — чистый белый свет
   const rayTex = canvasTex(8, 256, (g, w, h) => { const gr = g.createLinearGradient(0, 0, 0, h); gr.addColorStop(0, 'rgba(255,255,255,0)'); gr.addColorStop(0.75, 'rgba(255,255,255,.55)'); gr.addColorStop(1, 'rgba(255,255,255,.95)'); g.fillStyle = gr; g.fillRect(0, 0, w, h); });
@@ -1345,6 +1346,7 @@ function placeholder(w) {
     const ex = span * 0.5, bb = new THREE.Mesh(new THREE.BoxGeometry(sx + (along === 'x' ? ex : 0), sy * 1.5, sz + (along === 'z' ? ex : 0)));
     bb.position.copy(g.position).addScaledVector(ax, away * ex / 2); bb.rotation.y = ry; return solid(bb);
   };
+  if (w.r === 'atl') return banner(w);
   const onRock = w.kind === 'screen' && (w.zone === 'city' || w.zone === 'arena');
   if (onRock) {   // баннер на скале: вместо башни — скальный массив, плита кейса висит на его грани к улице
     const sd = Math.sign(w.tower.x);
@@ -1360,6 +1362,40 @@ function placeholder(w) {
   const [hw, hd, hh] = w.hero, H = w.heroH || Math.max(hh, 6), c = w.center || w.heroPos;
   return cube(hw, H, hd, c.x, H / 2, c.z);
 }
+// atl — большие баннеры-превью с кадром кейса: на фасаде башни, на грани скалы или на крыше «дикси».
+// для каждого заранее считается точка съёмки, и всё, что стоит между ней и баннером или режет баннер, убирается (clearBanners)
+const BANNERS = [];
+function banner(w) {
+  const IMG = { izhora: 'izhora-48-1' }, img = IMG[w.id] || w.img, vert = w.id === 'izhora';
+  let B, N, W = 46, H = 46 * 9 / 16;
+  if (vert) { W = 30; H = 52; }
+  if (w.kind === 'roof') { W = 36; H = 36 * 9 / 16; const T = w.tower; towerBox(T, CONC.wall); B = V(T.x + T.w / 2 - 1.5, T.h + H / 2 + 3, w.z); N = V(1, 0, 0);
+    const leg = new THREE.Mesh(new THREE.BoxGeometry(2, 3.2, W * 0.6), CONC.wall); leg.position.set(B.x - 1.4, T.h + 1.6, w.z); scene.add(leg); }
+  else if (w.zone === 'city' || w.zone === 'arena') { const sd = Math.sign(w.tower.x); rock('mountainside', sd * 80, -4, w.z, 13, sd > 0 ? -Math.PI / 2 : Math.PI / 2);
+    SOLIDS.push({ box: new THREE.Box3(V(sd * 80 - 34, 0, w.z - 60), V(sd * 80 + 40, 130, w.z + 60)), name: 'скала' }); B = V(sd * 45, w.F.y, w.z); N = V(-sd, 0, 0); }
+  else { towerBox(w.tower, CONC.wall); const sd = Math.sign(w.tower.x); B = V(sd * (Math.abs(w.tower.x) - w.tower.w / 2 - 1.2), vert ? 66 : w.F.y, w.z); N = V(-sd, 0, 0); }
+  const g = new THREE.Group(); g.position.copy(B); g.lookAt(B.clone().add(N)); g.userData.case = w.id; scene.add(g);
+  const back = new THREE.Mesh(new THREE.BoxGeometry(W + 1.6, H + 1.6, 1.2), CONC.wall); back.position.z = -0.7; back.castShadow = back.receiveShadow = true; g.add(back);
+  const pic = new THREE.Mesh(new THREE.PlaneGeometry(W, H), new THREE.MeshBasicMaterial({ map: caseTexture(`assets/cases/${img}.jpg`, false, vert ? 576 : 1024, vert ? 1024 : 576), toneMapped: false }));
+  pic.material.color.setScalar(0.95); pic.userData.case = w.id; g.add(pic); clickable.push(pic);
+  // точка съёмки: под углом к баннеру со стороны подлёта, баннер в правой трети, коридор между башнями не покидаем
+  const D = Math.max(W, H * 1.7) / 0.6, cosA = Math.min(0.9, (Math.abs(B.x) + 24) / D), sinA = Math.sqrt(1 - cosA * cosA);
+  const C = B.clone().addScaledVector(N, D * cosA).add(V(0, 3, -D * sinA));
+  const F = B.clone().sub(C).normalize(), R = F.clone().cross(V(0, 1, 0)).normalize(), L = B.clone().addScaledVector(R, -0.245 * B.distanceTo(C));
+  w.cube = { c: B, h: H, w: W }; w.shot = { C, L };
+  BANNERS.push({ B, N, W, H, C });
+  const bb = new THREE.Mesh(new THREE.BoxGeometry(W + 2, H + 2, 3)); bb.position.copy(B); bb.quaternion.copy(g.quaternion); return solid(bb);
+}
+// всё, что режет баннер или стоит между точкой съёмки и баннером, — убрать (дома, скалы)
+function clearBanners() {
+  const seg = new THREE.Line3(), q = new THREE.Vector3(), box = new THREE.Box3(), sph = new THREE.Sphere();
+  const hit = (min, max) => BANNERS.some(b => {
+    box.set(min, max);
+    const pb = new THREE.Box3().setFromCenterAndSize(b.B, V(Math.abs(b.N.x) > 0.5 ? 6 : b.W + 6, b.H + 6, Math.abs(b.N.x) > 0.5 ? b.W + 6 : 6)); if (box.intersectsBox(pb)) return true;
+    seg.set(b.C, b.B); for (let t = 0; t <= 1; t += 0.05) { seg.at(t, q); sph.set(q, 7); if (box.intersectsSphere(sph)) return true; } return false; });
+  BR.boxes = BR.boxes.filter(([x, y, z, w0, h, d0, ry = 0]) => { const w = ry ? Math.hypot(w0, d0) : w0, d = ry ? w : d0; return !hit(V(x - w / 2, y - h / 2, z - d / 2), V(x + w / 2, y + h / 2, z + d / 2)); });
+  ROCKS.list = ROCKS.list.filter(r => { const rr = r.type === 'boulder_01' ? r.k * 1 : r.k * 6; return r.type === 'mountainside' && r.k > 10 || !hit(V(r.x - rr, 0, r.z - rr), V(r.x + rr, rr * 1.5, r.z + rr)); });
+}
 function buildWorld() {
   for (const w of WORLD) placeholder(w);
   // люди для масштаба: крошечные чёрные фигуры у кейсов на земле и у монументов
@@ -1367,14 +1403,14 @@ function buildWorld() {
   const spots = WORLD.filter(w => w.r === 'btl').flatMap(w => [[w.cube.c.x + 9, w.cube.c.z - 7], [w.cube.c.x + 14, w.cube.c.z + 3]]).concat([[-6, 330], [4, 336], [-140, -20], [0, TAIL.brief + 20]]);
   const ppl = new THREE.InstancedMesh(body, new THREE.MeshStandardMaterial({ color: 0x0a0a0a, roughness: 0.9 }), spots.length), pd = new THREE.Object3D(); ppl.castShadow = true;
   spots.forEach(([x, z], i) => { pd.position.set(x, 0, z); pd.rotation.set(0, i * 2.3, 0); pd.updateMatrix(); ppl.setMatrixAt(i, pd.matrix); }); ppl.computeBoundingSphere(); scene.add(ppl);
-  for (const w of WORLD) { const { c, h } = w.cube, air = w.r === 'atl'; GLOW.pts.push(Object.assign(air ? V(c.x - Math.sign(c.x) * 20, c.y + 4, c.z - 16) : V(c.x + 16, Math.min(h * 0.6, 10) + 6, c.z - 14), { col: new THREE.Color(BRAND[w.id] ?? RED) })); }
+  for (const w of WORLD) { const { c, h } = w.cube, air = w.r === 'atl'; GLOW.pts.push(Object.assign(air ? c.clone().lerp(w.shot.C, 0.25) : V(c.x + 16, Math.min(h * 0.6, 10) + 6, c.z - 14), { col: new THREE.Color(BRAND[w.id] ?? RED) })); }
   for (let i = 0; i < 4; i++) { const l = new THREE.PointLight(RED, 0, 60, 1.6); scene.add(l); GLOW.pool.push(l); }
   buildAsia();
 }
 const CUBES = [];
 // эффект по смыслу кейса (важнее квартального): манга, видоискатель, табло, пустыня, стоп-кадр, гравюра
-const CFX = { tbank: 'anime', treschnutye: 'anime', zaklinateli: 'anime', dino: 'anime', selekt: 'view', lion: 'led', gdrive: 'duo', megafon: 'keep', derbent: 'engr' };
-const ZFX = { asia: 'scan', joint: 'spot', sport: 'zoom', event: 'spot', merch: 'print', asiaAir: 'ink', dixy: 'ink', arena: 'bars', city: 'bars', ai: 'gen' };   // какой эффект у какого квартала
+const CFX = { tbank: 'anime', treschnutye: 'anime', selekt: 'view', lion: 'led', gdrive: 'duo', megafon: 'keep', derbent: 'engr' };
+const ZFX = { asia: 'scan', joint: 'spot', sport: 'zoom', event: 'spot', merch: 'print', asiaAir: 'ink', dixy: null, arena: 'bars', city: 'bars', ai: 'gen' };   // какой эффект у какого квартала
 function updateCubes() {
   for (const q of CUBES) {
     const t = clamp01((150 - q.g.position.distanceTo(camera.position)) / 70), I = t * t * (3 - 2 * t);
@@ -1480,14 +1516,17 @@ function buildTimeline() {
     { p: 0.542, pos: V(0, 16, 110), look: V(0, 17, 210) },                      // уже смотрим вдоль проспекта
     { p: 0.585, pos: V(0, 14, 120), look: V(0, 16, 210) },                      // развилка
   ];
-  const tail = [
-    { p: 0.94, pos: V(26, 110, TAIL.awards - 190), look: V(0, 30, TAIL.brief) },            // финал: взлёт над городом — шейдер разбирает живой город, а не пустую стену
-    { p: 0.972, pos: V(0, 70, TAIL.brief - 230), look: V(0, 60, TAIL.brief + 50) },
-    { p: 0.99, pos: V(0, 58, TAIL.brief - 40), look: V(0, 60, TAIL.brief + 50) },
+  // финал строго вперёд: от последнего кейса камера плавно набирает высоту, выходит на ось проспекта и идёт в проём
+  const tail = lastZ => [
+    { p: 0.945, pos: V(0, 40, Math.max(lastZ + 70, TAIL.awards - 40)), look: V(0, 52, TAIL.brief + 50) },
+    { p: 0.975, pos: V(0, 56, TAIL.brief - 160), look: V(0, 60, TAIL.brief + 50) },
+    { p: 0.99, pos: V(0, 59, TAIL.brief - 40), look: V(0, 60, TAIL.brief + 50) },
     { p: 1.00, pos: V(0, 60, TAIL.brief + 43), look: V(0, 60, TAIL.brief + 60) },         // входим в светлый проём: весь экран — белый
   ];
   // остановка: подлёт (a) и посадка (b), куб — в правой трети, взгляд смещён к левому краю кадра (+x при взгляде вдоль +z)
   const stop = w => {
+    if (w.shot) { const { C, L } = w.shot; return [   // баннер atl: подлёт сзади-сверху и посадка в точке съёмки
+      { p: w.p - w.span * 0.26, pos: C.clone().add(V(0, 2.5, -16)), look: L.clone().add(V(0, 0, -4)) }, { p: w.p + w.span * 0.24, pos: C.clone(), look: L.clone() }]; }
     const { c, h } = w.cube, air = w.r === 'atl';
     const d = air ? 46 : 30 + h * 0.5, lift = air ? 6 : Math.min(9, 4 + h * 0.18);
     const cx = air ? 0 : c.x + 22, cy = air ? c.y + lift : lift, ty = air ? c.y : Math.min(h * 0.45, 10);
@@ -1497,8 +1536,11 @@ function buildTimeline() {
     ];
   };
   const stops = r => WORLD.filter(w => w.r === r).flatMap(stop);
-  CAM.btl = [...head, { p: 0.598, pos: V(8, 9, 152), look: V(0, 9, 240) }, ...stops('btl'), ...tail];
-  CAM.atl = [...head, { p: 0.598, pos: V(0, 40, 150), look: V(0, 62, 260) }, ...stops('atl'), { p: 0.93, pos: V(0, 40, TAIL.awards - 90), look: V(0, 24, TAIL.awards) }, ...tail];
+  const route_ = (first, r) => { const st = stops(r), lastZ = st.length ? st[st.length - 1].pos.z : 200, k = [...head, first, ...st, ...tail(lastZ)];
+    for (let i = head.length; i < k.length; i++) if (k[i].pos.z < k[i - 1].pos.z + 3) k[i].pos.z = k[i - 1].pos.z + 3;   // после развилки — только вперёд
+    return k; };
+  CAM.btl = route_({ p: 0.598, pos: V(8, 9, 152), look: V(0, 9, 240) }, 'btl');
+  CAM.atl = route_({ p: 0.598, pos: V(0, 40, 150), look: V(0, 62, 260) }, 'atl');
   for (const r of ['btl', 'atl']) prepRoute(CAM[r]);
   const sl = iskra.userData.slotScale;
   const narrow = innerWidth < 760, heroY = narrow ? 412 : 398, heroK = narrow ? 2.2 : 3.2;
