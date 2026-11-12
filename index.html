@@ -28,7 +28,7 @@ header a.cta{border:1px solid var(--red);padding:8px 16px;border-radius:40px}
 .ov p{margin-top:14px;font-size:18px;max-width:34ch}
 .ov .t{color:var(--red)}
 .c{left:50%;top:50%;transform:translate(-50%,-50%);text-align:center;max-width:none;transition:opacity 1.6s}.c h1{font-size:clamp(48px,6.4vw,112px);color:#140606;mix-blend-mode:multiply}.c .t{display:block;margin-bottom:16px}
-#case{position:fixed;right:6vw;top:50%;z-index:4;width:min(440px,36vw);opacity:0;transform:translateY(calc(-50% + 14px));transition:opacity .5s,transform .5s;pointer-events:none}#case.on{opacity:1;transform:translateY(-50%);pointer-events:auto}#case.left{right:auto;left:6vw}#case::before{content:'';position:absolute;inset:-90px -140px;background:radial-gradient(closest-side,rgba(1,1,1,.62),rgba(1,1,1,0));z-index:-1}
+#case{position:fixed;right:6vw;top:50%;z-index:4;width:min(440px,36vw);opacity:0;transform:translateY(calc(-50% + 14px));transition:opacity .5s,transform .5s;pointer-events:none}#case.on{opacity:1;transform:translateY(-50%);pointer-events:auto}#case.left{right:auto;left:6vw}#shade{position:fixed;inset:0;z-index:3;pointer-events:none;opacity:0;transition:opacity .7s;background:linear-gradient(to left,rgba(1,1,1,.78),rgba(1,1,1,.5) 28%,rgba(1,1,1,0) 52%)}#shade.left{background:linear-gradient(to right,rgba(1,1,1,.78),rgba(1,1,1,.5) 28%,rgba(1,1,1,0) 52%)}#shade.on{opacity:1}@media(max-width:760px){#shade,#shade.left{background:linear-gradient(to top,rgba(1,1,1,.8),rgba(1,1,1,0) 50%)}}
 #case .btn,#page .btn{display:inline-block;margin-top:24px;border:1px solid var(--red);color:var(--cream);text-decoration:none;padding:11px 22px;border-radius:40px;font-size:15px;transition:background .3s}#case .btn:hover,#page .btn:hover{background:var(--red)}
 #page{position:fixed;inset:0;z-index:20;background:rgba(1,1,1,.96);overflow-y:auto;opacity:0;pointer-events:none;transition:opacity .4s}#page.on{opacity:1;pointer-events:auto}
 #page .in{max-width:1100px;margin:0 auto;padding:110px 28px 120px}#page h1{font-weight:520;font-size:clamp(48px,7vw,112px);line-height:.9;letter-spacing:-.02em;margin:14px 0 26px}
@@ -81,7 +81,7 @@ header a.cta{border:1px solid var(--red);padding:8px 16px;border-radius:40px}
   <span class="t">{04} вентиляция</span>
   <h1>сколько кислорода<br>нужно вашему огню</h1>
 </section>
-<aside id="case"></aside>
+<div id="shade"></div><aside id="case"></aside>
 <div id="page"><button class="x">закрыть</button><div class="in"></div></div>
 <div id="pct" class="t">000% · 20_26</div>
 <div id="scroll"></div>
