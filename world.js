@@ -12,6 +12,7 @@ import { GTAOPass } from 'three/addons/postprocessing/GTAOPass.js';
 import { RGBELoader } from 'three/addons/loaders/RGBELoader.js';
 import { Reflector } from 'three/addons/objects/Reflector.js';
 import { Pass, FullScreenQuad } from 'three/addons/postprocessing/Pass.js';
+import { CASES, renderCase } from './cases.js';
 
 const RED = 0xf40709, CREAM = 0xe1d9cf;
 const V = (x, y, z) => new THREE.Vector3(x, y, z);
@@ -44,9 +45,11 @@ composer.addPass(bloom); composer.addPass(new OutputPass());
 // фильтр камеры: у каждой локации свой грейдинг — насыщенность, оттенок, контраст, зерно, виньетка, аберрация;
 // red — сколько красного сохранять при обесцвечивании (в ai кадр чёрно-белый, а искра остаётся красной)
 const GRADE0 = { sat: 1, con: 0.18, grain: 0.045, vig: 0.55, ca: 1, red: 0, tint: [1, 1, 1], rays: 0, streak: 0, rain: 0 };
-const film = new ShaderPass({ uniforms: { tDiffuse: { value: null }, uT: { value: 0 }, uSat: { value: 1 }, uCon: { value: 0.18 }, uGrain: { value: 0.045 }, uVig: { value: 0.55 }, uCA: { value: 1 }, uRed: { value: 0 }, uTint: { value: new THREE.Vector3(1, 1, 1) }, uSunUV: { value: new THREE.Vector2(0.5, 0.5) }, uRays: { value: 0 }, uStreak: { value: 0 }, uRain: { value: 0 }, uAspect: { value: innerWidth / innerHeight }, tGlare: { value: null } },
+const film = new ShaderPass({ uniforms: { tDiffuse: { value: null }, uT: { value: 0 }, uSat: { value: 1 }, uCon: { value: 0.18 }, uGrain: { value: 0.045 }, uVig: { value: 0.55 }, uCA: { value: 1 }, uRed: { value: 0 }, uTint: { value: new THREE.Vector3(1, 1, 1) }, uSunUV: { value: new THREE.Vector2(0.5, 0.5) }, uRays: { value: 0 }, uStreak: { value: 0 }, uRain: { value: 0 }, uAspect: { value: innerWidth / innerHeight }, tGlare: { value: null }, uHov: { value: 0 }, uQ: { value: [new THREE.Vector2(), new THREE.Vector2(), new THREE.Vector2(), new THREE.Vector2()] } },
   vertexShader: 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
-  fragmentShader: `uniform sampler2D tDiffuse, tGlare; uniform float uT, uSat, uCon, uGrain, uVig, uCA, uRed, uRays, uStreak, uRain, uAspect; uniform vec3 uTint; uniform vec2 uSunUV; varying vec2 vUv;
+  fragmentShader: `uniform sampler2D tDiffuse, tGlare; uniform float uT, uSat, uCon, uGrain, uVig, uCA, uRed, uRays, uStreak, uRain, uAspect, uHov; uniform vec3 uTint; uniform vec2 uSunUV, uQ[4]; varying vec2 vUv;
+    float eg(vec2 a, vec2 b, vec2 p){ vec2 e = b - a, q = p - a; return (e.x * q.y - e.y * q.x) / max(length(e), 1e-4); }
+    float inQuad(vec2 p){ float s = sign(eg(uQ[0], uQ[1], uQ[2])), m = 1e3; for (int i = 0; i < 4; i++) m = min(m, s * eg(uQ[i], uQ[i == 3 ? 0 : i + 1], p)); return smoothstep(0.0, 0.004, m); }
     vec3 hi(vec2 p){ vec3 t = texture2D(tDiffuse, p).rgb; return max(t - 0.72, 0.0) * 3.0; }
     float h(vec2 p){ return fract(sin(dot(p, vec2(12.9898, 78.233))) * 43758.5453); }
     void main(){ vec2 d = vUv - 0.5; float r2 = dot(d, d); vec2 ca = d * 0.0035 * r2 * 4.0 * uCA;
@@ -59,8 +62,10 @@ const film = new ShaderPass({ uniforms: { tDiffuse: { value: null }, uT: { value
           r += step(0.82, rnd) * smoothstep(0.0, 0.03, y) * smoothstep(0.16, 0.03, y) * smoothstep(0.12, 0.0, x) * (k == 0 ? 0.6 : 1.0); }
         c = mix(c, vec3(0.86, 0.84, 0.82), clamp(r * uRain * 0.35, 0.0, 0.35)); }
       float l = dot(c, vec3(0.2126, 0.7152, 0.0722)), red = smoothstep(0.22, 0.45, c.r - max(c.g, c.b));   // только чистый красный бренда, тёплый кремовый не считается
-      c = mix(vec3(l), c, mix(uSat, max(uSat, 1.0), red * uRed));      // насыщенность, красный можно сохранить
-      c = clamp(c * uTint, 0.0, 1.0);                                    // оттенок; без зажима насыщенный красный уходил в минус и S-кривая выворачивала его в зелёный
+      float hv = uHov > 0.001 ? inQuad(vUv) * uHov : 0.0, sat = mix(uSat, max(uSat, 1.0), max(red * uRed, hv));
+      c = mix(vec3(l), c, sat);      // насыщенность, красный можно сохранить; превью под курсором — всегда в цвете
+      c = mix(c, c * (1.0 + 0.12 * hv), hv);
+      c = clamp(c * mix(uTint, vec3(1.0), hv), 0.0, 1.0);                                    // оттенок; без зажима насыщенный красный уходил в минус и S-кривая выворачивала его в зелёный
       c = mix(c, c * c * (3.0 - 2.0 * c), uCon);                         // S-кривая
       c *= 1.0 - smoothstep(0.18, 0.85, r2 * 1.6) * uVig;                // виньетка
       c += (h(vUv * 1000.0 + uT) - 0.5) * uGrain;                        // зерно
@@ -180,7 +185,7 @@ function cube(q, x, y, z, title, r, o = {}) {
   const top = o.float ? y : o.perch ? y : y + 0.8;
   q.kit.box(mat, s, s, s, x, top, z);
   q.kit.box(glow(r === 'atl' ? CREAM : RED, 1.4), s + 0.06, 0.12, 0.12, x, top + s - 0.06, z - s / 2 - 0.02);
-  q.cubes.push({ p: V(x, top + s / 2, z), title, r });
+  q.cubes.push({ p: V(x, top + s / 2, z), title, r, s });
   const n = String(q.cubes.filter(c => c.r === r).length).padStart(2, '0');
   const lab = new THREE.Mesh(new THREE.PlaneGeometry(9, 2.25), new THREE.MeshBasicMaterial({ map: labelTex(title, `{${q.n}·${r || 'финал'}${r ? '·' + n : ''}} ${q.t}`), transparent: true, depthWrite: false, toneMapped: false }));
   lab.position.set(x, top + s + 2.2, z); lab.rotation.y = Math.PI; q.g.add(lab); LABELS.push(lab);
@@ -229,7 +234,7 @@ function banner(q, x, y, z, title, o = {}) {
     add(m, lx, yb - h / 2, -0.1).userData.leg = true;
   }
   q.cubes.push({ p: V(x, y, z), title, r: 'atl', banner: g, W, H });
-  BANNERS.push({ g, W, H, title, q });
+  BANNERS.push({ g, W, H, title, q, scr }); scr.userData.caseTitle = title;
 }
 const path = (q, r, ...pts) => pts.forEach(p => q.paths[r].push(V(...p)));
 
@@ -320,7 +325,7 @@ function asia(z0) {
   [['ozon corp', DS + 60], ['т-банк', DS + 170]].forEach(([t, dz], i) => cube(q, i % 2 ? 6.5 : -6.5, 0, z0 + dz, t, 'btl', { s: 3.6 }));
   NICHE.forEach(([s, z], i) => { banner(q, s * 11, 49, z, ['хроники ижоры', 'треснутые'][i], { w: 16, turn: 0.42, leg: 'beam', img: ['cases/izhora-48-1.jpg', 'cases/treschnutye-1.jpg'][i] }); q.anchors.push({ p: V(s * 4, 54, z - 6), c: 0xff4030, i: 50 }); });   // баннер в нише башни, наверху квартала
   path(q, 'btl', ...[10, 50, 90, 130, 170, 210].map(dz => [0, gy(z0 + dz) + 6.5, z0 + dz]), [1.5, 6, z0 + DS + 30], [-1.5, 6, z0 + DS + 110], [1, 5.5, z0 + DS + 190], [0, 6, z1]);
-  path(q, 'atl', [0, ROOF + 26, z0 + 10], ...[70, 130, 190].map(dz => [0, Math.max(50, gy(z0 + dz) + 50), z0 + dz]), [1, 50, z0 + DS + 20], [-1, 50, z0 + DS + 130], [0, 54, z1 - 30], [0, 58, z1]);
+  path(q, 'atl', [0, ROOF + 26, z0 + 10], ...[70, 130, 190].map(dz => [0, ROOF + 26 - (ROOF + 26 - 50) * (dz - 10) / (DS + 10), z0 + dz]), [1, 50, z0 + DS + 20], [-1, 50, z0 + DS + 130], [0, 54, z1 - 30], [0, 58, z1]);
   return z1;
 }
 
@@ -531,7 +536,7 @@ for (const [r, raw] of Object.entries(ROUTES)) {
   for (let it = 0; it < 4; it++) { const c = ys.slice(); for (let i = 0; i < ys.length; i++) { let a = 0, n = 0; for (let j = -6; j <= 6; j++) { const k = Math.min(ys.length - 1, Math.max(0, i + j)); a += c[k]; n++; } ys[i] = a / n; } }
   const curve = new THREE.CatmullRomCurve3(raw0.map((p, i) => V(0, ys[i], p.z)), false, 'catmullrom', 0.5), P = curve.getSpacedPoints(N), C = [0], cubes = ZL.flatMap(q => q.cubes).filter(c => !c.r || c.r === r);
   // у кубов своего маршрута скролл тянется дольше — камера как бы присаживается
-  for (let i = 1; i <= N; i++) { const p = P[i], dn = Math.min(...cubes.map(c => Math.hypot(c.p.x - p.x, c.p.z - p.z, (c.p.y - p.y) * 0.5))); C.push(C[i - 1] + P[i].distanceTo(P[i - 1]) * (1 + 2.2 * Math.exp(-((dn / 22) ** 2)))); }
+  for (let i = 1; i <= N; i++) { const p = P[i], dn = Math.min(...cubes.map(c => Math.hypot(c.p.x - p.x, c.p.z - p.z, (c.p.y - p.y) * 0.5))); C.push(C[i - 1] + P[i].distanceTo(P[i - 1]) * (1 + 0.8 * Math.exp(-((dn / 22) ** 2)))); }
   const iF = P.findIndex(p => p.z >= Z.fork.trunk[2].z);
   R[r] = { curve, P, C, cubes, iF, trunkW: C[iF], restW: C[N] - C[iF] };
 }
@@ -543,14 +548,49 @@ function uAt(r, s) {
   return clamp01((lo + (target - o.C[lo]) / ((o.C[hi] - o.C[lo]) || 1)) / N);
 }
 let route = null;
-// остановки: точка на рельсах, откуда кейс виден лучше всего (у баннера — за 40 м, у куба — за 18 м). Скролл замер рядом — камера доводится сюда
+// кейсы: id страницы кейса по подписи в мире
+const CASE_ID = { 'дербент': 'derbent', 'tevredens': 'tevredens', 'заклинатели': 'zaklinateli', 'дино': 'dino', 'хроники ижоры': 'izhora', 'треснутые': 'treschnutye', 'синегривый лев': 'lion', 'время авангарда': 'avangard',
+  'ai · fonbet': 'aiFonbet', 'ai · mango': 'aiMango', 'ai · лавка': 'aiLavka', 'ai · альфа': 'aiAlfa',
+  'ozon селект': 'selekt', 'золотые ворота': 'megafon', 'белград': 'mice', 'связь есть везде': 'megafonTravel', 'гусь на заводе': 'baltikaPlant', 'ozon corp': 'fandom', 'т-банк': 'tbank',
+  'ironstar': 'ironstar', 'шёлковый путь': 'gdrive', 'балтика 7': 'baltika7', 'мерч g-drive': 'gdriveMerch', 'набор креатора': 'oxygenSet', 'мерч льва': 'lionMerch' };
+// остановка у кейса: камера поворачивает голову к нему, кейс встаёт в одну половину кадра целиком, в другой — карточка с текстом.
+// точка остановки — ближайшая к кейсу точка рельсов, откуда он в повёрнутом взгляде целиком помещается в свою половину кадра
+const FOC = { half: 0.47, cam: new THREE.PerspectiveCamera(52, 1, 0.3, 700) };
+function caseCorners(c) {
+  if (c.banner) { c.banner.updateWorldMatrix(true, false); const W = c.W + 0.8, H = c.H + 0.8; return [[-1, -1], [1, -1], [1, 1], [-1, 1]].map(([a, b]) => V(a * W / 2, b * H / 2, 0.3).applyMatrix4(c.banner.matrixWorld)); }
+  const s = c.s || 5, o = []; for (const a of [-1, 1]) for (const b of [-1, 1]) for (const y of [-s / 2 - 1, s / 2 + 3.4]) o.push(V(c.p.x + a * (s / 2 + 1), c.p.y + y, c.p.z + b * s / 2)); return o;   // куб с постаментом и подписью
+}
+function focusSide(c) { return innerWidth / innerHeight < 1 ? [0, 0.42] : [-0.5 * (Math.sign(c.p.x) || 1), 0.04]; }   // кейс справа от рельсов (x<0) — в правой половине кадра; на телефоне — сверху
+// углы взгляда: кейс встаёт в точку (xo, yo) кадра
+function focusAng(pos, c, out) {
+  const d = c.p.clone().sub(pos), cam = FOC.cam, ty = Math.tan(cam.fov * Math.PI / 360), tx = ty * camera.aspect, [xo, yo] = focusSide(c);
+  out.yaw = Math.atan2(-d.x, -d.z) + Math.atan(xo * tx) - Math.PI; out.pitch = Math.atan2(d.y, Math.hypot(d.x, d.z)) - Math.atan(yo * ty); return out;
+}
+const fa = { yaw: 0, pitch: 0 };
+function fits(pos, c) {
+  const cam = FOC.cam; cam.aspect = camera.aspect; cam.updateProjectionMatrix(); focusAng(pos, c, fa);
+  cam.position.copy(pos); cam.rotation.set(fa.pitch, Math.PI + fa.yaw, 0, 'YXZ'); cam.updateMatrixWorld(true);
+  const [xo, yo] = focusSide(c), mob = innerWidth / innerHeight < 1;
+  for (const k of c.corners) { const p = k.clone().applyMatrix4(cam.matrixWorldInverse); if (p.z > -1) return false; p.applyMatrix4(cam.projectionMatrix);
+    if (Math.abs(p.x - xo) > (mob ? 0.92 : FOC.half) || Math.abs(p.y - yo) > (mob ? 0.5 : 0.82)) return false; }
+  return true;
+}
 const w2s = (o, w) => w <= o.trunkW ? w / o.trunkW * TRUNK_W : TRUNK_W + (w - o.trunkW) / o.restW * REST_W;
-const STOPS = {}; for (const r of ['btl', 'atl']) { const o = R[r]; STOPS[r] = o.cubes.filter(c => c.r === r).map(c => { const i = Math.max(0, o.P.findIndex(p => p.z >= c.p.z - (c.banner ? 40 : 18))); return w2s(o, o.C[i]); }).sort((a, b) => a - b); }
-const MAG = { range: 55, idle: 260, last: 0, done: true };   // range — в метрах скролла: насколько далеко магнит дотягивается; idle — через сколько мс тишины срабатывает
+const STOPS = {};
+function buildStops() {
+  for (const r of ['btl', 'atl']) { const o = R[r];
+    STOPS[r] = o.cubes.filter(c => c.r === r).map(c => { c.id = CASE_ID[c.title]; c.corners ||= caseCorners(c);
+      let i = o.P.findIndex(p => p.z >= c.p.z - 6); while (i > 0 && !fits(o.P[i], c)) i--;   // от кейса назад по рельсам, пока он не влезет в свою половину кадра
+      c.stop = w2s(o, o.C[i]); return { s: c.stop, c }; }).sort((a, b) => a.s - b.s); }
+}
+buildStops();
+// магнит: если скролл замер у кейса, камера доезжает до точки обзора. тянет только туда, куда листали, — уйти от кейса ничто не мешает
+const MAG = { range: 30, back: 3, idle: 320, last: 0, done: true, dir: 1, y: scrollY };   // range — в метрах скролла вперёд по ходу; back — насколько можно вернуть назад, если чуть проскочили; idle — мс тишины
+addEventListener('scroll', () => { const d = scrollY - MAG.y; if (Math.abs(d) > 2) MAG.dir = Math.sign(d); MAG.y = scrollY; }, { passive: true });
 for (const ev of ['wheel', 'touchmove', 'keydown', 'pointerdown']) addEventListener(ev, () => { MAG.last = performance.now(); MAG.done = false; }, { passive: true });
 function magnet(s) {
   if (!route || MAG.done || performance.now() - MAG.last < MAG.idle || s <= TRUNK_W) return; MAG.done = true;
-  let best = null; for (const st of STOPS[route]) if (Math.abs(st - s) < MAG.range && (best === null || Math.abs(st - s) < Math.abs(best - s))) best = st;
+  let best = null; for (const { s: st } of STOPS[route]) { const ds = (st - s) * MAG.dir; if (ds > -MAG.back && ds < MAG.range && (best === null || Math.abs(st - s) < Math.abs(best - s))) best = st; }
   if (best !== null && Math.abs(best - s) > 0.5) scrollTo(0, best * PX);
 }
 
@@ -616,14 +656,47 @@ function govern() {
   if (now - QL.t0 > 1500) { const fps = QL.n * 1000 / (now - QL.t0); QL.t0 = now; QL.n = 0; if (fps < 50) setQuality(QL.lvl + 1); }
 }
 { const qp = new URLSearchParams(location.search).get('q'); if (qp !== null) { QL.fixed = true; setQuality(+qp); } else setQuality(1); }   // по умолчанию без затенения углов: оно самое дорогое, а на глаз почти незаметно; ?q=0 — включить
+// ---------- карточка кейса у остановки, наведение на превью, страница кейса ----------
+const cardEl = document.getElementById('card'), modalEl = document.getElementById('modal'), modalBody = document.getElementById('modalBody');
+let cardC = null;
+function updateCard() {
+  const on = !!focC && focW > 0.8 && !!focC.id && !modalEl.classList.contains('on');
+  if (on && focC !== cardC) { cardC = focC; const c = CASES[focC.id], yr = c.pass.год && c.pass.год !== '—' ? ' · ' + c.pass.год : '';
+    cardEl.innerHTML = `<span class="t">${c.pass.клиент}${yr}</span><h3>${c.title}</h3><p>${c.idea}</p><button class="t" data-case="${focC.id}">читать кейс →</button>`;
+    cardEl.classList.toggle('left', focusSide(focC)[0] > 0); }
+  cardEl.classList.toggle('on', on);
+}
+const openCase = id => { modalBody.innerHTML = renderCase(id); modalEl.classList.add('on'); modalEl.scrollTop = 0; };
+const closeCase = () => modalEl.classList.remove('on');
+addEventListener('click', e => {
+  const el = e.target.closest?.('[data-case],[data-go],[data-brief],.close');
+  if (el) { if (el.tagName === 'A') e.preventDefault(); if (el.dataset.case) openCase(el.dataset.case); else closeCase(); return; }
+  if (HOV.b && e.target === renderer.domElement) openCase(HOV.b.id);
+});
+addEventListener('keydown', e => { if (e.key === 'Escape') closeCase(); });
+// превью под курсором проступает в цвете (в ai-зоне кадр чёрно-белый): плёнка получает четырёхугольник экрана и снимает с него обесцвечивание
+const HOV = { b: null, k: 0, ndc: new THREE.Vector2(9, 9), rc: new THREE.Raycaster() };
+addEventListener('pointermove', e => HOV.ndc.set(e.clientX / innerWidth * 2 - 1, -(e.clientY / innerHeight) * 2 + 1));
+function updateHover(dt) {
+  let hit = null;
+  if (!modalEl.classList.contains('on')) { HOV.rc.setFromCamera(HOV.ndc, camera); let best = 1e9;
+    for (const b of BANNERS) { if (!b.q.g.visible || b.g.position.distanceTo(camera.position) > 260) continue; const h = HOV.rc.intersectObject(b.scr, false)[0]; if (h && h.distance < best) { best = h.distance; hit = b; } } }
+  if (hit) { if (!hit.id) hit.id = CASE_ID[hit.title]; HOV.b = hit; }
+  HOV.k += ((hit ? 1 : 0) - HOV.k) * (1 - Math.exp(-dt * 6)); if (!hit && HOV.k < 0.01) HOV.b = null;
+  renderer.domElement.style.cursor = hit ? 'pointer' : '';
+  const f = film.uniforms; f.uHov.value = 0;
+  if (HOV.b) { const b = HOV.b, sc = b.scr; sc.updateWorldMatrix(true, false); let ok = true;
+    [[-1, -1], [1, -1], [1, 1], [-1, 1]].forEach(([a, c], i) => { const p = V(a * b.W / 2, c * b.H / 2, 0).applyMatrix4(sc.matrixWorld).project(camera); if (p.z > 1) ok = false; f.uQ.value[i].set(p.x * 0.5 + 0.5, p.y * 0.5 + 0.5); });
+    if (ok) f.uHov.value = HOV.k; }
+}
 // ---------- цикл ----------
 let sSm = 0, mouse = new THREE.Vector2(), mSm = new THREE.Vector2(), lastZone = '';
 addEventListener('pointermove', e => mouse.set(e.clientX / innerWidth - 0.5, e.clientY / innerHeight - 0.5));
-let lookInit = false, pitch = 0, vS = 0, accS = 0, boostSm = 1;
+let lookInit = false, pitch = 0, yaw = 0, vS = 0, accS = 0, boostSm = 1, focW = 0, focC = null;
 // настройки камеры: vmax — предел скорости (м/с по пути), amax — предел разгона, dec — торможение, на которое рассчитана кривая подхода (меньше amax, с запасом — поэтому камера не проскакивает цель и не качается назад);
 // near — у самой цели скорость = near × расстояние (мягкий доезд без перелёта); jerk — как быстро нарастает разгон; prate — скорость доводки наклона (без пружины, без перелёта); wmax — предел угловой скорости
-const CAMK = { vmax: 38, amax: 32, dec: 18, near: 2.2, boostLag: 60, boostMax: 3, boostRate: 0.8, jerk: 45, prate: 2.2, wmax: 0.35 };
-const clock = new THREE.Clock(), look = V(0, 0, 0), tmp = V(0, 0, 0), ahead = V(0, 0, 0), DOCKQ = new THREE.Quaternion().setFromEuler(new THREE.Euler(0, Math.PI, 0)), endEl = document.getElementById('end');
+const CAMK = { vmax: 38, amax: 32, dec: 18, near: 2.2, boostLag: 60, boostMax: 3, boostRate: 0.8, jerk: 45, prate: 2.2, wmax: 0.35, ymax: 0.6 };   // ymax — предел скорости поворота головы к кейсу
+const clock = new THREE.Clock(), look = V(0, 0, 0), tmp = V(0, 0, 0), tmp2 = V(0, 0, 0), ahead = V(0, 0, 0), DOCKQ = new THREE.Quaternion().setFromEuler(new THREE.Euler(0, Math.PI, 0)), endEl = document.getElementById('end');
 const REC = { on: /rec/.test(location.search), t: 0 };
 function frame() {
   const REC_ = REC.on, dt = REC_ ? 0 : Math.min(clock.getDelta(), 0.05), time = REC_ ? REC.t : clock.elapsedTime;   // при записи видео время идёт по кадрам, а не по часам
@@ -649,16 +722,23 @@ function frame() {
   // взгляд всегда вперёд по ходу; наклон — по уклону рельсов на 40 м вперёд, доводится пружиной с пределом угловой скорости
   o.curve.getPointAt(Math.min(1, u + 40 / len), tmp);
   const dLogo = camera.position.distanceTo(FIN.logoAt), dock = smooth(clamp01((72 - dLogo) / 24)), landed = clamp01((dock - 0.92) / 0.08);
-  let pT = Math.max(-0.42, Math.min(0.3, Math.atan2(tmp.y - camera.position.y, 40)));
+  // наклон по уклону рельсов — вполовину и не круче 0,2 рад: на спусках камера смотрит вперёд, а не носом в землю
+  let pT = 0.5 * Math.max(-0.4, Math.min(0.3, Math.atan2(tmp.y - camera.position.y, 40)));
   const toLogo = Math.atan2(FIN.logoAt.y - camera.position.y, Math.max(8, FIN.logoAt.z - camera.position.z)); pT += (toLogo - pT) * smooth(clamp01((140 - dLogo) / 70));
-  if (REC_ || !lookInit) { pitch = pT; lookInit = true; } else { const dp = (pT - pitch) * (1 - Math.exp(-dt * CAMK.prate)); pitch += Math.max(-CAMK.wmax * dt, Math.min(CAMK.wmax * dt, dp)); }   // наклон доводится экспонентой: без перелёта
+  // у кейса голова поворачивается к нему: вес растёт за 70 м до точки обзора и гаснет за 25 м после неё
+  let yT = 0; focW = 0; focC = null;
+  if (route && sSm > TRUNK_W) for (const { s: st, c } of STOPS[route]) { const d = sSm - st, w = smooth(clamp01(d < 0 ? 1 + d / 70 : 1 - d / 25)); if (w > focW) { focW = w; focC = c; } }
+  if (focC) { focusAng(camera.position, focC, fa); yT = fa.yaw * focW; pT += (fa.pitch - pT) * focW; }
+  if (REC_ || !lookInit) { pitch = pT; yaw = yT; lookInit = true; } else {
+    const k = 1 - Math.exp(-dt * CAMK.prate), dp = (pT - pitch) * k, dy = (yT - yaw) * k;   // наклон и поворот доводятся экспонентой: без перелёта, с пределом угловой скорости
+    pitch += Math.max(-CAMK.wmax * dt, Math.min(CAMK.wmax * dt, dp)); yaw += Math.max(-CAMK.ymax * dt, Math.min(CAMK.ymax * dt, dy)); }
   // мышь: лёгкий сдвиг и чуть-чуть поворот головы, медленно
-  mSm.lerp(mouse, REC_ ? 0 : 1 - Math.exp(-dt * 1.6)); camera.position.x += mSm.x * 0.7; camera.position.y -= mSm.y * 0.45;
-  camera.rotation.set(pitch - mSm.y * 0.035, Math.PI - mSm.x * 0.05, 0, 'YXZ');
+  mSm.lerp(mouse, REC_ ? 0 : 1 - Math.exp(-dt * 1.6)); const base = tmp2.copy(camera.position); camera.position.x += mSm.x * 0.7; camera.position.y -= mSm.y * 0.45;
+  camera.rotation.set(pitch - mSm.y * 0.035, Math.PI + yaw - mSm.x * 0.05, 0, 'YXZ');
   // искра впереди, чуть выше линии взгляда; в начале — прямо по центру кадра
   const intro = 1 - clamp01(sSm / 40);
-  o.curve.getPointAt(Math.min(1, u + du * (0.9 - 0.45 * intro)), tmp);
-  spark.position.copy(tmp).add(V(Math.sin(time * 0.9) * 0.5, 1.4 + Math.sin(time * 1.3) * 0.25 - intro * 1.6, 0));
+  // искра летит по прямой взгляда (по ходу маршрута, с тем же сглаженным наклоном), а не по изгибам рельсов — на спусках не виляет
+  { const D = 14 * (0.9 - 0.45 * intro); spark.position.set(0, Math.sin(pitch) * D, Math.cos(pitch) * D).add(base).add(V(Math.sin(time * 0.9) * 0.5, 1.4 + Math.sin(time * 1.3) * 0.25 - intro * 1.6, 0)); }
   spark.lookAt(camera.position); spark.rotateZ(time * 0.6 * (1 - dock));
   // в финале искра летит в вырез логотипа, растёт до его размера и разворачивается вместе с ним; логотип загорается
   if (dock > 0) { spark.position.lerp(LOGO.slot, dock); spark.scale.setScalar(1 + (LOGO.k - 1) * dock); spark.quaternion.slerp(DOCKQ, dock); } else spark.scale.setScalar(1);
@@ -677,9 +757,10 @@ function frame() {
   pct.textContent = String(Math.round(sSm / TOTAL * 100)).padStart(3, '0') + '%';
   hint.style.opacity = sSm < 10 ? 0.6 : 0;
   routeBtn.style.display = route ? 'block' : 'none'; routeBtn.textContent = `маршрут ${route} · сменить ↺`;
+  updateCard(); if (!REC_) updateHover(dt);
   film.uniforms.uT.value = (time * 60) % 1000; composer.render(); if (!REC_) govern(); requestAnimationFrame(frame);
 }
-addEventListener('resize', () => { camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix(); renderer.setSize(innerWidth, innerHeight); composer.setSize(innerWidth, innerHeight); film.uniforms.uAspect.value = innerWidth / innerHeight; gtao?.setSize(innerWidth, innerHeight); });
+addEventListener('resize', () => { camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix(); renderer.setSize(innerWidth, innerHeight); composer.setSize(innerWidth, innerHeight); film.uniforms.uAspect.value = innerWidth / innerHeight; gtao?.setSize(innerWidth, innerHeight); buildStops(); });
 
 // ?map — план мира из тех же данных: зоны, маршруты, кубы
 function drawMap() {
