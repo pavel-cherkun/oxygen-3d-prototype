@@ -167,6 +167,36 @@ function cube(q, x, y, z, title, r, o = {}) {
   const lab = new THREE.Mesh(new THREE.PlaneGeometry(9, 2.25), new THREE.MeshBasicMaterial({ map: labelTex(title, `{${q.n}·${r || 'финал'}${r ? '·' + n : ''}} ${q.t}`), transparent: true, depthWrite: false, toneMapped: false }));
   lab.position.set(x, top + s + 2.2, z); lab.rotation.y = Math.PI; q.g.add(lab); LABELS.push(lab);
 }
+// превью кейса для баннера: пока заглушка — фон в цвете зоны, сетка, крупное имя кейса. Потом сюда встаёт кадр кейса
+function previewTex(title, sub, bg, accent) {
+  const c = document.createElement('canvas'); c.width = 1600; c.height = 900; const g = c.getContext('2d');
+  const gr = g.createLinearGradient(0, 0, 1600, 900); gr.addColorStop(0, bg[0]); gr.addColorStop(1, bg[1]); g.fillStyle = gr; g.fillRect(0, 0, 1600, 900);
+  g.strokeStyle = 'rgba(225,217,207,.07)'; g.lineWidth = 2; for (let x = 0; x <= 1600; x += 100) { g.beginPath(); g.moveTo(x, 0); g.lineTo(x, 900); g.stroke(); } for (let y = 0; y <= 900; y += 100) { g.beginPath(); g.moveTo(0, y); g.lineTo(1600, y); g.stroke(); }
+  const rg = g.createRadialGradient(1180, 360, 10, 1180, 360, 520); rg.addColorStop(0, accent + 'aa'); rg.addColorStop(1, accent + '00'); g.fillStyle = rg; g.fillRect(0, 0, 1600, 900);
+  g.fillStyle = '#F40709'; g.font = '400 44px AP, monospace'; g.fillText(sub, 80, 120);
+  g.fillStyle = '#E1D9CF'; let fs = 230; g.font = `520 ${fs}px TT, sans-serif`; while (g.measureText(title).width > 1440) { fs -= 8; g.font = `520 ${fs}px TT, sans-serif`; } g.fillText(title, 72, 760);
+  g.globalAlpha = 0.55; g.font = '400 34px AP, monospace'; g.fillText('превью кейса', 80, 830); g.globalAlpha = 1;
+  g.strokeStyle = '#E1D9CF'; g.lineWidth = 4; g.beginPath(); g.arc(1440, 150, 56, 0, Math.PI * 2); g.stroke(); g.fillStyle = '#E1D9CF'; g.beginPath(); g.moveTo(1424, 124); g.lineTo(1424, 176); g.lineTo(1468, 150); g.fill();
+  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 8; return t;
+}
+// atl-кейс — крупный баннер 16:9 с превью. Стоит сбоку от рельсов и чуть развёрнут к подлетающей камере.
+// o.w — ширина; o.turn — разворот к оси; o.leg — опоры: 'beam' (световые тросы до земли), 'mast' (стальные мачты), нет — парит; o.ground — высота земли под ним
+const BANNERS = [];
+function banner(q, x, y, z, title, o = {}) {
+  const W = o.w || 20, H = W * 9 / 16, sx = Math.sign(x) || 1, n = String(q.cubes.filter(c => c.r === 'atl').length + 1).padStart(2, '0');
+  const g = new THREE.Group(); g.position.set(x, y, z); g.rotation.y = Math.PI + sx * (o.turn ?? 0.3); q.g.add(g);
+  const add = (m, px, py, pz) => { m.position.set(px, py, pz); m.castShadow = m.receiveShadow = true; m.userData.banner = true; g.add(m); return m; };
+  add(new THREE.Mesh(new THREE.BoxGeometry(W + 0.8, H + 0.8, 0.5), o.frame || matte(0x0e0e0e, 0.4, 0.5)), 0, 0, 0);
+  const scr = add(new THREE.Mesh(new THREE.PlaneGeometry(W, H), new THREE.MeshBasicMaterial({ map: previewTex(title, `{${q.n}·atl·${n}} ${q.t}`, o.bg || ['#151515', '#2a2a2a'], o.accent || '#f40709'), toneMapped: false })), 0, 0, 0.26); scr.material.color.setScalar(o.lum ?? 0.85); scr.castShadow = false;
+  add(new THREE.Mesh(new THREE.BoxGeometry(W + 0.8, 0.14, 0.14), glow(CREAM, 1.4)), 0, H / 2 + 0.47, 0.2);
+  const yb = -(H / 2 + 0.4), ground = o.ground ?? 0, h = y + yb - ground;
+  if (o.leg && h > 0.5) for (const lx of [-W * 0.32, W * 0.32]) {
+    const m = o.leg === 'mast' ? new THREE.Mesh(new THREE.BoxGeometry(0.9, h, 0.9), matte(0x9aa0a6, 0.4, 0.7)) : new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.1, h, 8), glow(0xf2efe9, 0.7));
+    add(m, lx, yb - h / 2, -0.1).userData.leg = true;
+  }
+  q.cubes.push({ p: V(x, y, z), title, r: 'atl', banner: g, W, H });
+  BANNERS.push({ g, W, H, title, q });
+}
 const path = (q, r, ...pts) => pts.forEach(p => q.paths[r].push(V(...p)));
 
 // крыши: старт и нейтральная локация стоят на поверхности города, на высоте ROOF; в азии маршруты ныряют вниз
@@ -215,8 +245,8 @@ function neutral(z0) {
   for (let z = z0 + 40; z < z1; z += 80) { k.box(ln, 440, 0.06, 0.45, 0, 0, z); [-90, -30, 30, 90].forEach(x => k.box(ln, 2.6, 0.07, 2.6, x, 0, z)); }   // поперечные и колодцы на узлах
   const r = rng(91); [[-120, z0 + 90, 34], [150, z0 + 160, 46], [-170, z0 + 260, 40], [110, z0 + 330, 30], [-70, z0 + 380, 22], [190, z0 + 40, 26]].forEach(([x, z, a]) => k.box(blk, a, a, a, x, -a * (0.25 + r() * 0.3), z, r() * 0.6));   // кубы-гиганты, утопленные в плиты
   [['ozon селект', 40], ['золотые ворота', 110], ['белград', 180], ['связь есть везде', 250], ['гусь на заводе', 320]].forEach(([t, dz], i) => cube(q, i % 2 ? 9 : -9, 0, z0 + dz, t, 'btl', { plinth: blk }));
-  [['дербент', 75], ['tevredens', 145], ['заклинатели', 215], ['дино', 285]].forEach(([t, dz], i) => { const x = i % 2 ? 14 : -14, z = z0 + dz;
-    cube(q, x, 34, z, t, 'atl', { float: true }); k.geo(glow(0xf2efe9, 0.7), new THREE.CylinderGeometry(0.12, 0.12, 34, 8), x, 17, z); k.box(ln, 6, 0.07, 6, x, 0, z); });   // столб света под кубом
+  [['дербент', 75], ['tevredens', 145], ['заклинатели', 215], ['дино', 285]].forEach(([t, dz], i) => { const x = i % 2 ? 19 : -19, z = z0 + dz;
+    banner(q, x, 44, z, t, { w: 24, leg: 'beam', bg: ['#1a1a1a', '#3a3a3a'], accent: '#d8d8d8' }); for (const lx of [-24 * 0.32, 24 * 0.32]) k.box(ln, 3, 0.07, 3, x - lx * Math.cos(0.3), 0, z + Math.sign(x) * lx * Math.sin(0.3)); });   // баннер держат световые тросы, под ними — светящиеся колодцы
   path(q, 'btl', [0, 6.5, z0 + 6], [1.5, 7, z0 + 80], [-1, 7.5, z0 + 160], [1.5, 7, z0 + 240], [0, 7, z0 + 330], [0, 6.5, z1]);
   path(q, 'atl', [0, 52, z0 + 20], [-2, 46, z0 + 120], [2, 46, z0 + 220], [-2, 44, z0 + 320], [0, 36, z1]);
   // парапеты: после последнего кейса блока вдоль дороги встают две низкие стенки с кремовой линией — они же уходят вниз по лестнице азии
@@ -241,18 +271,20 @@ function asia(z0) {
   k.box(pbr('floor', 0x241e1e, 0.9, THREE.FrontSide, 0.1), 22, 0.3, z1 - z0 - DS, 0, -0.3, (z0 + DS + z1) / 2);
   q.wet.push({ w: 22, d: z1 - z0 - DS, x: 0, y: 0.03, z: (z0 + DS + z1) / 2, k: 0.75 });   // мокрая улица: в лужах красные вывески
   for (const sd of [-1, 1]) k.box(S, 180, 2, z1 - z0, sd * 130, ROOF - 2, (z0 + z1) / 2);   // поверхность города продолжается над кварталом
+  const NICHE = [[-1, z0 + DS + 20], [1, z0 + DS + 130]];   // ниши в башнях под баннеры atl: башни здесь расступаются
   for (const s of [-1, 1]) for (let z = z0; z < z1;) {
     const L = 9 + r() * 10, d = 30, x = s * (11 + d / 2), zc = z + L / 2, g0 = gy(z + L);
+    if (NICHE.some(([ns, nz]) => ns === s && z < nz + 11 && z + L > nz - 11)) { z += L + 1.4 + r() * 2; continue; }
     k.box(B, d, ROOF, L, x, 0, zc);   // башни: крыши вровень с поверхностью
     for (let i = 0, n = g0 > ROOF - 24 ? 0 : 1 + (r() * 4 | 0); i < n; i++) { const hh = 5 + r() * Math.min(12, ROOF - g0 - 14), y = g0 + 4 + r() * Math.max(0, ROOF - g0 - hh - 8); k.box(r() < 0.8 ? red : cr, 0.5, hh, 2.6, s * 9.4, y, z + 1 + r() * (L - 2)); }
     z += L + 1.4 + r() * 2;   // щели между башнями — красные прорези света, видны и сверху, с поверхности
   }
   for (let z = z0 + 30; z < z1 - 10; z += 13) { if (gy(z) > ROOF - 26) continue; const y = gy(z) + 9 + r() * 8; for (let x = -10; x <= 10; x += 1.6) { const sag = (1 - (x / 10) ** 2) * 1.6; k.box(red, 0.55, 0.7, 0.55, x, y - sag, z); } }
-  for (let z = z0 + DS + 20; z < z1 - 10; z += 31) { const y = 30 + r() * 16; for (let x = -10; x <= 10; x += 2.2) k.box(r() < 0.3 ? cr : red, 0.4, 0.4, 0.4, x, y - (1 - (x / 10) ** 2) * 2.4, z); }
+  for (let z = z0 + DS + 20; z < z1 - 10; z += 31) { if (NICHE.some(([, nz]) => Math.abs(z - nz) < 14)) continue; const y = 30 + r() * 16; for (let x = -10; x <= 10; x += 2.2) k.box(r() < 0.3 ? cr : red, 0.4, 0.4, 0.4, x, y - (1 - (x / 10) ** 2) * 2.4, z); }
   for (let i = 0; i < 3; i++) { const z = z0 + DS + 30 + i * 70; [-8.5, 8.5].forEach(x => k.geo(tor, new THREE.CylinderGeometry(0.45, 0.55, 15, 12), x, 7.5, z)); k.box(tor, 22, 0.9, 1.1, 0, 15, z); k.box(tor, 19, 0.6, 0.7, 0, 12.6, z); q.anchors.push({ p: V(0, 13, z), c: 0xff3020, i: 70 }); }
   for (let z = z0 + 40; z < z0 + DS; z += 60) q.anchors.push({ p: V(0, gy(z) + 14, z), c: 0xff3020, i: 60 });
   [['ozon corp', DS + 60], ['т-банк', DS + 170]].forEach(([t, dz], i) => cube(q, i % 2 ? 6.5 : -6.5, 0, z0 + dz, t, 'btl', { s: 3.6 }));
-  [['хроники ижоры', DS + 20, -7], ['треснутые', DS + 130, 7]].forEach(([t, dz, x]) => { k.box(B, 8, 1.2, 8, x + Math.sign(x) * 0.5, 44.8, z0 + dz); cube(q, x, 46, z0 + dz, t, 'atl', { s: 3.6, perch: 'slab', plinth: B }); q.anchors.push({ p: V(0, 52, z0 + dz), c: 0xff4030, i: 50 }); });
+  NICHE.forEach(([s, z], i) => { banner(q, s * 11, 49, z, ['хроники ижоры', 'треснутые'][i], { w: 16, turn: 0.42, leg: 'beam', bg: ['#140303', '#3a0608'], accent: '#ff2a1a' }); q.anchors.push({ p: V(s * 4, 54, z - 6), c: 0xff4030, i: 50 }); });   // баннер в нише башни, наверху квартала
   path(q, 'btl', ...[10, 50, 90, 130, 170, 210].map(dz => [0, gy(z0 + dz) + 6.5, z0 + dz]), [1.5, 6, z0 + DS + 30], [-1.5, 6, z0 + DS + 110], [1, 5.5, z0 + DS + 190], [0, 6, z1]);
   path(q, 'atl', [0, ROOF + 26, z0 + 10], ...[70, 130, 190].map(dz => [0, Math.max(50, gy(z0 + dz) + 50), z0 + dz]), [1, 50, z0 + DS + 20], [-1, 50, z0 + DS + 130], [0, 54, z1 - 30], [0, 58, z1]);
   return z1;
@@ -281,7 +313,7 @@ function sport(z0) {
   [[z0, z0 + 40], [z1 - 40, z1]].forEach(([a, b]) => { for (const s of [-1, 1]) k.box(C, 2, 12, b - a, s * 9, 0, (a + b) / 2); k.box(D, 20, 1.6, b - a, 0, 12, (a + b) / 2); q.anchors.push({ p: V(0, 9, (a + b) / 2), c: 0xe8eef4, i: 30 }); });
   [['ironstar', -70], ['шёлковый путь', 0], ['балтика 7', 70]].forEach(([t, dz], i) => cube(q, i % 2 ? 14 : -14, 0, cz + dz, t, 'btl'));
   // наверху чаши, на мачтах: синегривый лев и время авангарда
-  cube(q, 22, 40, cz - 60, 'синегривый лев', 'atl', { perch: 'mast', plinth: D }); cube(q, -22, 40, cz + 50, 'время авангарда', 'atl', { perch: 'mast', plinth: D });
+  banner(q, 21, 42, cz - 60, 'синегривый лев', { w: 24, leg: 'mast', bg: ['#0c1016', '#28323c'], accent: '#7fa8d8' }); banner(q, -21, 42, cz + 50, 'время авангарда', { w: 24, leg: 'mast', bg: ['#0c1016', '#28323c'], accent: '#c8d0d8' });
   path(q, 'btl', [0, 5, z0 + 4], [0, 6, z0 + 50], [1, 8, cz - 80], [-1, 10, cz], [1, 8, cz + 80], [0, 6, z1 - 50], [0, 5, z1]);
   path(q, 'atl', [0, 58, z0 + 10], [0, 52, z0 + 70], [2, 45, cz - 50], [2, 44, cz], [0, 46, cz + 60], [0, 54, z1 - 60], [0, 60, z1 - 10], [0, 58, z1 + 16]);
   return z1;
@@ -329,13 +361,14 @@ function ai(z0) {
   const edges = [];
   for (let i = 0; i < 40; i++) {
     const s = i % 2 ? 1 : -1, x = s * (14 + r() * 90), z = z0 + 10 + r() * (z1 - z0 - 20), w = 1.2 + r() * 1.6, h = 24 + r() * 80, d = 5 + r() * 10, ry = (r() - 0.5) * 0.6;
+    if (Math.abs(x) < 40 && [60, 120, 180, 240].some(dz => z > z0 + dz - 45 && z < z0 + dz + 8)) continue;   // перед баннерами atl — чистый коридор обзора
     k.box(mono, w, h, d, x, 0, z, ry);
     const e = new THREE.EdgesGeometry(new THREE.BoxGeometry(w, h, d)); e.applyMatrix4(new THREE.Matrix4().compose(V(x, h / 2, z), new THREE.Quaternion().setFromEuler(new THREE.Euler(0, ry, 0)), V(1, 1, 1))); edges.push(e);
   }
   q.g.add(new THREE.LineSegments(mergeGeometries(edges), new THREE.LineBasicMaterial({ color: new THREE.Color(CREAM).multiplyScalar(0.28), toneMapped: false })));
   for (let i = 0; i < 8; i++) { const s = i % 2 ? 1 : -1; k.geo(glow(CREAM, 0.6), new THREE.CylinderGeometry(0.12, 0.12, 260, 6), s * (60 + r() * 50), 130, z0 + r() * (z1 - z0)); }
   const blk = matte(0x111111, 0.3, 0.3);
-  [['ai · fonbet', 60], ['ai · mango', 120], ['ai · лавка', 180], ['ai · альфа', 240]].forEach(([t, dz], i) => cube(q, i % 2 ? 7 : -7, 27, z0 + dz, t, 'atl', { float: true, mat: blk }));
+  [['ai · fonbet', 60], ['ai · mango', 120], ['ai · лавка', 180], ['ai · альфа', 240]].forEach(([t, dz], i) => banner(q, i % 2 ? 15 : -15, 29, z0 + dz, t, { w: 20, bg: ['#050505', '#1a1a1a'], accent: '#f40709' }));
   path(q, 'btl', [0, 4.5, z0 + 4], [0, 5, z0 + 150], [0, 4.5, z1]);
   path(q, 'atl', [0, 26, z0 + 4], [1, 30, z0 + 150], [0, 32, z1 - 20], [0, 32, z1]);
   return z1;
@@ -618,7 +651,25 @@ function check() {
   for (const r of ['btl', 'atl']) for (let i = 0; i <= N; i += 10) { const p = R[r].P[i]; for (const d of dirs) { rc.set(p, d); rc.far = d.y < 0 ? 0.6 : 1.5; const h = rc.intersectObjects(meshes, false)[0]; if (h && !(h.object.material.transparent)) { hits.push(`${r} ${i} ${p.toArray().map(v => v.toFixed(0)).join(',')} → ${d.toArray().join('')}`); break; } } }
   console[hits.length ? 'warn' : 'log'](`проверка пути: ${hits.length ? hits.length + ' касаний' : 'чисто'}`, hits.slice(0, 20).join(' | ')); return hits;
 }
-window.__w = { scene, camera, R, Z, go, goZone, check, TRUNK_W, TOTAL, tick: () => { REC.t += 1 / 24; } };
+// проверка баннеров: ни один треугольник мира не заходит в объём баннера (с запасом m) и его опор — баннеры не проваливаются в текстуры
+function bannerCheck(m = 0.4) {
+  const out = [], tri = new THREE.Triangle(), A = V(0, 0, 0), B = V(0, 0, 0), Cc = V(0, 0, 0), M = new THREE.Matrix4(), inv = new THREE.Matrix4(), bb = new THREE.Box3();
+  scene.updateMatrixWorld(true);
+  const world = []; ZL.forEach(q => q.g.traverse(o => { if (o.isMesh && !o.isInstancedMesh && !o.userData.banner && o.material.colorWrite !== false) world.push(o); }));
+  for (const b of BANNERS) {
+    const parts = [[new THREE.Box3(V(-b.W / 2 - m, -b.H / 2 - m, -0.25 - m), V(b.W / 2 + m, b.H / 2 + 0.6 + m, 0.27 + m)), b.g.matrixWorld, 'полотно']];
+    b.g.children.filter(c => c.userData.leg).forEach(c => { c.geometry.computeBoundingBox(); const k = c.geometry.boundingBox.clone(); k.min.y += 0.6; k.expandByVector(V(m * 0.5, 0, m * 0.5)); parts.push([k, c.matrixWorld, 'опора']); });   // низ опоры может стоять на земле
+    for (const [box, mw, name] of parts) { inv.copy(mw).invert(); let hit = 0, who = '';
+      for (const o of world) { M.multiplyMatrices(inv, o.matrixWorld); if (!o.geometry.boundingBox) o.geometry.computeBoundingBox(); if (!bb.copy(o.geometry.boundingBox).applyMatrix4(M).intersectsBox(box)) continue;
+        const pos = o.geometry.attributes.position, idx = o.geometry.index, n = idx ? idx.count : pos.count;
+        for (let i = 0; i < n; i += 3) { const ia = idx ? idx.getX(i) : i, ib = idx ? idx.getX(i + 1) : i + 1, ic = idx ? idx.getX(i + 2) : i + 2;
+          A.fromBufferAttribute(pos, ia).applyMatrix4(M); B.fromBufferAttribute(pos, ib).applyMatrix4(M); Cc.fromBufferAttribute(pos, ic).applyMatrix4(M); tri.set(A, B, Cc);
+          if (box.intersectsTriangle(tri)) { hit++; who = o.material.name || o.material.type; break; } } }
+      if (hit) out.push(`${b.q.k}/${b.title}/${name}: ${hit} меш (${who})`); }
+  }
+  console[out.length ? 'warn' : 'log'](`баннеры: ${out.length ? out.join(' | ') : 'чисто, ' + BANNERS.length + ' шт.'}`); return out;
+}
+window.__w = { scene, camera, R, Z, go, goZone, check, bannerCheck, TRUNK_W, TOTAL, tick: () => { REC.t += 1 / 24; } };
 const AT = new URLSearchParams(location.search).get('at');
 if (AT) { const [k, f, r] = AT.split(':'); goZone(k, +f || 0.3, r || 'btl'); }
 if (location.search.includes('map')) drawMap();
