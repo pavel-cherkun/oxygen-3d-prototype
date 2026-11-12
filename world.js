@@ -11,6 +11,7 @@ import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
 import { GTAOPass } from 'three/addons/postprocessing/GTAOPass.js';
 import { RGBELoader } from 'three/addons/loaders/RGBELoader.js';
 import { Reflector } from 'three/addons/objects/Reflector.js';
+import { Pass, FullScreenQuad } from 'three/addons/postprocessing/Pass.js';
 
 const RED = 0xf40709, CREAM = 0xe1d9cf;
 const V = (x, y, z) => new THREE.Vector3(x, y, z);
@@ -35,22 +36,23 @@ const scene = new THREE.Scene(); scene.background = new THREE.Color(0x000000); s
 const camera = new THREE.PerspectiveCamera(52, innerWidth / innerHeight, 0.3, 700);   // дальняя плоскость 700 м: дальше мир не рисуется вовсе
 const composer = new EffectComposer(renderer, new THREE.WebGLRenderTarget(innerWidth, innerHeight, { type: THREE.HalfFloatType, samples: HQ ? 4 : 0 })); composer.addPass(new RenderPass(scene, camera));
 const gtao = HQ ? new GTAOPass(scene, camera, innerWidth, innerHeight) : null;   // мягкие тени в углах и под предметами
+if (gtao) { const s0 = gtao.setSize.bind(gtao); gtao.setSize = (w, h) => s0(Math.round(w / 2), Math.round(h / 2)); gtao.setSize(innerWidth, innerHeight); }   // затенение углов считаем в половине разрешения
 if (gtao) { gtao.updateGtaoMaterial({ radius: 2.2, distanceExponent: 1.6, thickness: 1.2, scale: 1, samples: 12 }); gtao.blendIntensity = 0.85; composer.addPass(gtao); const r0 = gtao.render.bind(gtao); gtao.render = (...a) => { const v = WETS.map(o => o.m.visible); WETS.forEach(o => { o.m.visible = false; }); r0(...a); WETS.forEach((o, i) => { o.m.visible = v[i]; }); }; }   // зеркала не пересчитываются ради затенения
-const bloom = new UnrealBloomPass(new THREE.Vector2(innerWidth / 2, innerHeight / 2), 0.6, 0.5, 0.86); composer.addPass(bloom); composer.addPass(new OutputPass());
+const bloom = new UnrealBloomPass(new THREE.Vector2(innerWidth / 2, innerHeight / 2), 0.6, 0.5, 0.86); { const s0 = bloom.setSize.bind(bloom); bloom.setSize = (w, h) => s0(Math.round(w / 2), Math.round(h / 2)); }   // свечение — в половине разрешения, на вид то же
+composer.addPass(bloom); composer.addPass(new OutputPass());
 // плёнка: зерно, виньетка, лёгкая хроматическая аберрация по краям и мягкий контраст
 // фильтр камеры: у каждой локации свой грейдинг — насыщенность, оттенок, контраст, зерно, виньетка, аберрация;
 // red — сколько красного сохранять при обесцвечивании (в ai кадр чёрно-белый, а искра остаётся красной)
 const GRADE0 = { sat: 1, con: 0.18, grain: 0.045, vig: 0.55, ca: 1, red: 0, tint: [1, 1, 1], rays: 0, streak: 0, rain: 0 };
-const film = new ShaderPass({ uniforms: { tDiffuse: { value: null }, uT: { value: 0 }, uSat: { value: 1 }, uCon: { value: 0.18 }, uGrain: { value: 0.045 }, uVig: { value: 0.55 }, uCA: { value: 1 }, uRed: { value: 0 }, uTint: { value: new THREE.Vector3(1, 1, 1) }, uSunUV: { value: new THREE.Vector2(0.5, 0.5) }, uRays: { value: 0 }, uStreak: { value: 0 }, uRain: { value: 0 }, uAspect: { value: innerWidth / innerHeight } },
+const film = new ShaderPass({ uniforms: { tDiffuse: { value: null }, uT: { value: 0 }, uSat: { value: 1 }, uCon: { value: 0.18 }, uGrain: { value: 0.045 }, uVig: { value: 0.55 }, uCA: { value: 1 }, uRed: { value: 0 }, uTint: { value: new THREE.Vector3(1, 1, 1) }, uSunUV: { value: new THREE.Vector2(0.5, 0.5) }, uRays: { value: 0 }, uStreak: { value: 0 }, uRain: { value: 0 }, uAspect: { value: innerWidth / innerHeight }, tGlare: { value: null } },
   vertexShader: 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
-  fragmentShader: `uniform sampler2D tDiffuse; uniform float uT, uSat, uCon, uGrain, uVig, uCA, uRed, uRays, uStreak, uRain, uAspect; uniform vec3 uTint; uniform vec2 uSunUV; varying vec2 vUv;
+  fragmentShader: `uniform sampler2D tDiffuse, tGlare; uniform float uT, uSat, uCon, uGrain, uVig, uCA, uRed, uRays, uStreak, uRain, uAspect; uniform vec3 uTint; uniform vec2 uSunUV; varying vec2 vUv;
     vec3 hi(vec2 p){ vec3 t = texture2D(tDiffuse, p).rgb; return max(t - 0.72, 0.0) * 3.0; }
     float h(vec2 p){ return fract(sin(dot(p, vec2(12.9898, 78.233))) * 43758.5453); }
     void main(){ vec2 d = vUv - 0.5; float r2 = dot(d, d); vec2 ca = d * 0.0035 * r2 * 4.0 * uCA;
       vec3 c = vec3(texture2D(tDiffuse, vUv + ca).r, texture2D(tDiffuse, vUv).g, texture2D(tDiffuse, vUv - ca).b);
       // лучи: яркое тянется к солнцу (рассеяние в воздухе); анаморфный блик: яркое растягивается по горизонтали
-      if (uRays > 0.001) { vec2 st = (uSunUV - vUv) / 28.0; vec2 p = vUv; float w = 1.0; vec3 acc = vec3(0.0); for (int i = 0; i < 28; i++) { p += st; acc += hi(p) * w; w *= 0.93; } c += acc / 28.0 * uRays * 2.2; }
-      if (uStreak > 0.001) { vec3 acc = vec3(0.0); for (int i = 1; i <= 12; i++) { float o = float(i) * 0.012, w = 1.0 - float(i) / 13.0; acc += (hi(vUv + vec2(o, 0.0)) + hi(vUv - vec2(o, 0.0))) * w; } c += acc / 12.0 * uStreak * vec3(0.95, 0.97, 1.05); }
+      c += texture2D(tGlare, vUv).rgb * (1.0 - 0.85 * smoothstep(0.22, 0.45, c.r - max(c.g, c.b)));   // лучи и анаморфный блик — посчитаны заранее в четверти разрешения; на красный бренда не ложатся, искра остаётся красной
       // дождь по кадру: косые струи в два слоя
       if (uRain > 0.001) { float r = 0.0; for (int k = 0; k < 2; k++) { float sc = k == 0 ? 120.0 : 60.0, sp = k == 0 ? 1.9 : 1.2; vec2 q = vec2((vUv.x + vUv.y * 0.08) * sc * uAspect, vUv.y); float col = floor(q.x), rnd = h(vec2(col, float(k) * 7.0));
           float y = fract(q.y * (0.8 + rnd) + uT / 60.0 * sp * (0.9 + rnd) + rnd * 13.0); float x = abs(fract(q.x) - 0.5);
@@ -63,6 +65,22 @@ const film = new ShaderPass({ uniforms: { tDiffuse: { value: null }, uT: { value
       c *= 1.0 - smoothstep(0.18, 0.85, r2 * 1.6) * uVig;                // виньетка
       c += (h(vUv * 1000.0 + uT) - 0.5) * uGrain;                        // зерно
       gl_FragColor = vec4(c, 1.0); }` });
+// лучи к солнцу и анаморфный блик: дорогие (десятки выборок на пиксель), поэтому считаются в четверти разрешения и подмешиваются в плёнку одной выборкой
+class GlarePass extends Pass {
+  constructor() { super(); this.needsSwap = false; this.rt = new THREE.WebGLRenderTarget(1, 1, { type: THREE.HalfFloatType });
+    const u = film.uniforms; this.mat = new THREE.ShaderMaterial({ uniforms: { tDiffuse: { value: null }, uSunUV: u.uSunUV, uRays: u.uRays, uStreak: u.uStreak },
+      vertexShader: 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = vec4(position.xy, 0.0, 1.0); }',
+      fragmentShader: `uniform sampler2D tDiffuse; uniform float uRays, uStreak; uniform vec2 uSunUV; varying vec2 vUv;
+        vec3 hi(vec2 p){ vec3 t = texture2D(tDiffuse, p).rgb; return max(t - 0.72, 0.0) * 3.0; }
+        void main(){ vec3 c = vec3(0.0);
+          if (uRays > 0.001) { vec2 st = (uSunUV - vUv) / 24.0; vec2 p = vUv; float w = 1.0; vec3 acc = vec3(0.0); for (int i = 0; i < 24; i++) { p += st; acc += hi(p) * w; w *= 0.92; } c += acc / 24.0 * uRays * 2.4; }
+          if (uStreak > 0.001) { vec3 acc = vec3(0.0); for (int i = 1; i <= 10; i++) { float o = float(i) * 0.0144, w = 1.0 - float(i) / 11.0; acc += (hi(vUv + vec2(o, 0.0)) + hi(vUv - vec2(o, 0.0))) * w; } c += acc / 10.0 * uStreak * vec3(0.95, 0.97, 1.05); }
+          gl_FragColor = vec4(c, 1.0); }` });
+    this.fs = new FullScreenQuad(this.mat); u.tGlare.value = this.rt.texture; }
+  setSize(w, h) { this.rt.setSize(Math.max(1, Math.round(w / 4)), Math.max(1, Math.round(h / 4))); }
+  render(renderer, writeBuffer, readBuffer) { this.mat.uniforms.tDiffuse.value = readBuffer.texture; renderer.setRenderTarget(this.rt); this.fs.render(renderer); }
+}
+const glare = new GlarePass(); glare.setSize(innerWidth * renderer.getPixelRatio(), innerHeight * renderer.getPixelRatio()); composer.addPass(glare);
 composer.addPass(film);
 
 // свет: небо-полусфера, ключевой с тенью (ездит за камерой), искра и три «лампы зоны» — их число постоянно, шейдеры не пересобираются
@@ -513,7 +531,7 @@ for (const [r, raw] of Object.entries(ROUTES)) {
   for (let it = 0; it < 4; it++) { const c = ys.slice(); for (let i = 0; i < ys.length; i++) { let a = 0, n = 0; for (let j = -6; j <= 6; j++) { const k = Math.min(ys.length - 1, Math.max(0, i + j)); a += c[k]; n++; } ys[i] = a / n; } }
   const curve = new THREE.CatmullRomCurve3(raw0.map((p, i) => V(0, ys[i], p.z)), false, 'catmullrom', 0.5), P = curve.getSpacedPoints(N), C = [0], cubes = ZL.flatMap(q => q.cubes).filter(c => !c.r || c.r === r);
   // у кубов своего маршрута скролл тянется дольше — камера как бы присаживается
-  for (let i = 1; i <= N; i++) { const p = P[i], dn = Math.min(...cubes.map(c => Math.hypot(c.p.x - p.x, c.p.z - p.z, (c.p.y - p.y) * 0.5))); C.push(C[i - 1] + P[i].distanceTo(P[i - 1]) * (1 + 1.1 * Math.exp(-((dn / 16) ** 2)))); }
+  for (let i = 1; i <= N; i++) { const p = P[i], dn = Math.min(...cubes.map(c => Math.hypot(c.p.x - p.x, c.p.z - p.z, (c.p.y - p.y) * 0.5))); C.push(C[i - 1] + P[i].distanceTo(P[i - 1]) * (1 + 2.2 * Math.exp(-((dn / 22) ** 2)))); }
   const iF = P.findIndex(p => p.z >= Z.fork.trunk[2].z);
   R[r] = { curve, P, C, cubes, iF, trunkW: C[iF], restW: C[N] - C[iF] };
 }
@@ -525,6 +543,16 @@ function uAt(r, s) {
   return clamp01((lo + (target - o.C[lo]) / ((o.C[hi] - o.C[lo]) || 1)) / N);
 }
 let route = null;
+// остановки: точка на рельсах, откуда кейс виден лучше всего (у баннера — за 40 м, у куба — за 18 м). Скролл замер рядом — камера доводится сюда
+const w2s = (o, w) => w <= o.trunkW ? w / o.trunkW * TRUNK_W : TRUNK_W + (w - o.trunkW) / o.restW * REST_W;
+const STOPS = {}; for (const r of ['btl', 'atl']) { const o = R[r]; STOPS[r] = o.cubes.filter(c => c.r === r).map(c => { const i = Math.max(0, o.P.findIndex(p => p.z >= c.p.z - (c.banner ? 40 : 18))); return w2s(o, o.C[i]); }).sort((a, b) => a - b); }
+const MAG = { range: 55, idle: 260, last: 0, done: true };   // range — в метрах скролла: насколько далеко магнит дотягивается; idle — через сколько мс тишины срабатывает
+for (const ev of ['wheel', 'touchmove', 'keydown', 'pointerdown']) addEventListener(ev, () => { MAG.last = performance.now(); MAG.done = false; }, { passive: true });
+function magnet(s) {
+  if (!route || MAG.done || performance.now() - MAG.last < MAG.idle || s <= TRUNK_W) return; MAG.done = true;
+  let best = null; for (const st of STOPS[route]) if (Math.abs(st - s) < MAG.range && (best === null || Math.abs(st - s) < Math.abs(best - s))) best = st;
+  if (best !== null && Math.abs(best - s) > 0.5) scrollTo(0, best * PX);
+}
 
 // ---------- зоны по положению камеры: небо, свет, отсечение ----------
 const rectD = (q, x, z) => Math.min(...q.rects.map(([x0, x1, z0, z1]) => Math.hypot(Math.max(0, x0 - x, x - x1), Math.max(0, z0 - z, z - z1))));
@@ -552,7 +580,8 @@ function updateZones(dawn) {
   WETS.forEach(o => { const U = o.m.material.uniforms; U.uT.value = performance.now() / 1000; U.uDrops.value = o.drops * RAIN.k; }); WETS.forEach(o => { const cy = camera.position.y; o.m.visible = (o.q.g.visible || !!o.also?.g.visible) && !(o.below && cy > o.below) && !(o.above && cy < o.above); });   // в мерче — только пол своего этажа
   if (SKYLINE.mesh) { SKYLINE.mesh.position.set(camera.position.x, ROOF - 30, camera.position.z); SKYLINE.mesh.material.opacity = clamp01(hd * 1.4) * D; SKYLINE.mesh.visible = hd > 0.02; }
   // ролики превью: включаются в 160 м от баннера, выключаются дальше 200 м; кадр подменяется видео, когда оно реально пошло
-  VIDS.forEach(v => { v.g.getWorldPosition(tmpL); const d = tmpL.distanceTo(camera.position);
+  let vNear = null, vD = 130; VIDS.forEach(v => { v.g.getWorldPosition(tmpL); v.d = tmpL.distanceTo(camera.position); if (v.d < vD) { vD = v.d; vNear = v; } });   // играет только ближайший ролик
+  VIDS.forEach(v => { const d = v === vNear ? 0 : 1e9;
     if (d < 160 && !v.el) { const el = v.el = document.createElement('video'); Object.assign(el, { src: v.src, muted: true, loop: true, playsInline: true, preload: 'auto', crossOrigin: 'anonymous' }); el.addEventListener('playing', () => { if (!v.tex) { v.tex = new THREE.VideoTexture(el); v.tex.colorSpace = THREE.SRGBColorSpace; coverFit(v.tex, el.videoWidth, el.videoHeight); } v.mat.map = v.tex; v.mat.color.setScalar(v.lum); v.mat.needsUpdate = true; }); }
     if (v.el) { if (d < 160 && v.el.paused) v.el.play().catch(() => {}); else if (d > 200 && !v.el.paused) v.el.pause(); } });
   LABELS.forEach(l => { l.getWorldPosition(tmpL); l.material.opacity = smooth(clamp01((tmpL.distanceTo(camera.position) - 15) / 12)); });
@@ -572,6 +601,21 @@ const forkEl = document.getElementById('fork'), routeBtn = document.getElementBy
 forkEl.addEventListener('click', e => { const b = e.target.closest('[data-r]'); if (!b) return; route = b.dataset.r; forkEl.classList.remove('on'); scrollTo({ top: (TRUNK_W + 30) * PX, behavior: 'smooth' }); });
 routeBtn.addEventListener('click', () => { route = null; scrollTo({ top: (TRUNK_W - 6) * PX, behavior: 'smooth' }); });
 
+// ---------- качество: если кадров меньше 50 в секунду, по шагу снимаем дорогое (затенение углов → разрешение зеркал и экрана → тени). ?q=0…3 — задать вручную
+const QL = { lvl: 0, t0: 0, n: 0, start: performance.now() };
+function setQuality(l) {
+  QL.lvl = l; if (gtao) gtao.enabled = l < 1; if (spark) spark.children[0].visible = !(gtao && gtao.enabled);   // ореол искры мешает только затенению углов
+  const pr = Math.min(devicePixelRatio, HQ ? 1.5 : 1.25) * [1, 1, 0.8, 0.66][l]; renderer.setPixelRatio(pr); composer.setPixelRatio(pr); composer.setSize(innerWidth, innerHeight);
+  const rs = [0.6, 0.6, 0.4, 0.28][l]; WETS.forEach(o => o.m.getRenderTarget().setSize(Math.round(innerWidth * rs), Math.round(innerHeight * rs)));
+  key.shadow.mapSize.setScalar(l >= 3 ? 1024 : 2048); if (key.shadow.map) { key.shadow.map.dispose(); key.shadow.map = null; }
+  console.log('качество', l);
+}
+function govern() {
+  const now = performance.now(); if (now - QL.start < 4000 || document.hidden || QL.lvl >= 3 || QL.fixed) { QL.t0 = now; QL.n = 0; return; }
+  if (!QL.t0) QL.t0 = now; QL.n++;
+  if (now - QL.t0 > 1500) { const fps = QL.n * 1000 / (now - QL.t0); QL.t0 = now; QL.n = 0; if (fps < 50) setQuality(QL.lvl + 1); }
+}
+{ const qp = new URLSearchParams(location.search).get('q'); if (qp !== null) { QL.fixed = true; setQuality(+qp); } else setQuality(1); }   // по умолчанию без затенения углов: оно самое дорогое, а на глаз почти незаметно; ?q=0 — включить
 // ---------- цикл ----------
 let sSm = 0, mouse = new THREE.Vector2(), mSm = new THREE.Vector2(), lastZone = '';
 addEventListener('pointermove', e => mouse.set(e.clientX / innerWidth - 0.5, e.clientY / innerHeight - 0.5));
@@ -586,6 +630,7 @@ function frame() {
   let s = scrollY / PX;
   if (!route && s > TRUNK_W) { s = TRUNK_W; scrollTo(0, TRUNK_W * PX); }
   forkEl.classList.toggle('on', !route && s > TRUNK_W - 14);
+  if (!REC_) magnet(s);
   // движение: скролл задаёт только цель, камера догоняет её пружиной с пределом скорости и ускорения — без рывков
   if (!REC_) {
     // без пружины: целевая скорость сама гаснет к цели (кривая торможения), поэтому перелёта и качелей нет.
@@ -617,7 +662,7 @@ function frame() {
   spark.lookAt(camera.position); spark.rotateZ(time * 0.6 * (1 - dock));
   // в финале искра летит в вырез логотипа, растёт до его размера и разворачивается вместе с ним; логотип загорается
   if (dock > 0) { spark.position.lerp(LOGO.slot, dock); spark.scale.setScalar(1 + (LOGO.k - 1) * dock); spark.quaternion.slerp(DOCKQ, dock); } else spark.scale.setScalar(1);
-  spark.children[0].material.opacity = 1 - dock; spark.material.emissiveIntensity = (HQ ? 3.2 : 2.2) * (1 - landed) + 1.2 * landed;   // на десктопе ореол искры делает bloom
+  spark.children[0].material.opacity = 1 - dock; spark.material.emissiveIntensity = (gtao && gtao.enabled ? 3.2 : 2.2) * (1 - landed) + 1.2 * landed;   // на десктопе ореол искры делает bloom
   LOGO.mat.emissiveIntensity = landed * 0.75; LOGO.glow.intensity = landed * 220;
   sparkLight.distance = 30 + 70 * smooth(clamp01((150 - dLogo) / 70));   // на подлёте искра выхватывает чёрный логотип из темноты
   endEl.classList.toggle('on', landed > 0.6);
@@ -632,7 +677,7 @@ function frame() {
   pct.textContent = String(Math.round(sSm / TOTAL * 100)).padStart(3, '0') + '%';
   hint.style.opacity = sSm < 10 ? 0.6 : 0;
   routeBtn.style.display = route ? 'block' : 'none'; routeBtn.textContent = `маршрут ${route} · сменить ↺`;
-  film.uniforms.uT.value = (time * 60) % 1000; composer.render(); requestAnimationFrame(frame);
+  film.uniforms.uT.value = (time * 60) % 1000; composer.render(); if (!REC_) govern(); requestAnimationFrame(frame);
 }
 addEventListener('resize', () => { camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix(); renderer.setSize(innerWidth, innerHeight); composer.setSize(innerWidth, innerHeight); film.uniforms.uAspect.value = innerWidth / innerHeight; gtao?.setSize(innerWidth, innerHeight); });
 
@@ -689,7 +734,7 @@ function bannerCheck(m = 0.4) {
   }
   console[out.length ? 'warn' : 'log'](`баннеры: ${out.length ? out.join(' | ') : 'чисто, ' + BANNERS.length + ' шт.'}`); return out;
 }
-window.__w = { scene, camera, R, Z, go, goZone, check, bannerCheck, TRUNK_W, TOTAL, tick: () => { REC.t += 1 / 24; } };
+window.__w = { scene, camera, renderer, composer, bloom, film, gtao, key, WETS, R, Z, go, goZone, check, bannerCheck, setQuality, QL, STOPS, TRUNK_W, TOTAL, tick: () => { REC.t += 1 / 24; } };
 const AT = new URLSearchParams(location.search).get('at');
 if (AT) { const [k, f, r] = AT.split(':'); goZone(k, +f || 0.3, r || 'btl'); }
 if (location.search.includes('map')) drawMap();
