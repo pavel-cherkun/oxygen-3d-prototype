@@ -522,10 +522,10 @@ routeBtn.addEventListener('click', () => { route = null; scrollTo({ top: (TRUNK_
 // ---------- цикл ----------
 let sSm = 0, mouse = new THREE.Vector2(), mSm = new THREE.Vector2(), lastZone = '';
 addEventListener('pointermove', e => mouse.set(e.clientX / innerWidth - 0.5, e.clientY / innerHeight - 0.5));
-let lookInit = false, pitch = 0, wP = 0, vS = 0;
-// настройки камеры: vmax — предел скорости (м/с по пути), amax — предел ускорения; pk/pc — пружина наклона, wmax — предел угловой скорости
-let boostSm = 1, accS = 0;
-const CAMK = { k: 7, c: 5.3, vmax: 38, amax: 32, boostLag: 60, boostMax: 3, boostRate: 0.8, jerk: 45, pk: 5, pc: 4.5, wmax: 0.35 };   // boostLag — на сколько метров отставания пределы удваиваются; boostMax — во сколько раз максимум
+let lookInit = false, pitch = 0, vS = 0, accS = 0, boostSm = 1;
+// настройки камеры: vmax — предел скорости (м/с по пути), amax — предел разгона, dec — торможение, на которое рассчитана кривая подхода (меньше amax, с запасом — поэтому камера не проскакивает цель и не качается назад);
+// near — у самой цели скорость = near × расстояние (мягкий доезд без перелёта); jerk — как быстро нарастает разгон; prate — скорость доводки наклона (без пружины, без перелёта); wmax — предел угловой скорости
+const CAMK = { vmax: 38, amax: 32, dec: 18, near: 2.2, boostLag: 60, boostMax: 3, boostRate: 0.8, jerk: 45, prate: 2.2, wmax: 0.35 };
 const clock = new THREE.Clock(), look = V(0, 0, 0), tmp = V(0, 0, 0), ahead = V(0, 0, 0), DOCKQ = new THREE.Quaternion().setFromEuler(new THREE.Euler(0, Math.PI, 0)), endEl = document.getElementById('end');
 const REC = { on: /rec/.test(location.search), t: 0 };
 function frame() {
@@ -535,11 +535,17 @@ function frame() {
   forkEl.classList.toggle('on', !route && s > TRUNK_W - 14);
   // движение: скролл задаёт только цель, камера догоняет её пружиной с пределом скорости и ускорения — без рывков
   if (!REC_) {
-    // чем сильнее отстаём от скролла, тем выше пределы — но сам множитель растёт медленно (boostRate в секунду), а ускорение меняется не резче jerk
-    const bT = Math.min(CAMK.boostMax, 1 + Math.abs(s - sSm) / CAMK.boostLag); boostSm += Math.max(-CAMK.boostRate * dt, Math.min(CAMK.boostRate * dt, bT - boostSm));
+    // без пружины: целевая скорость сама гаснет к цели (кривая торможения), поэтому перелёта и качелей нет.
+    // чем сильнее отстаём, тем выше предел скорости, но множитель растёт медленно; разгон нарастает не резче jerk, тормозить можно сразу
+    const err = s - sSm, dist = Math.abs(err), dir = Math.sign(err);
+    const bT = Math.min(CAMK.boostMax, 1 + dist / CAMK.boostLag); boostSm += Math.max(-CAMK.boostRate * dt, Math.min(CAMK.boostRate * dt, bT - boostSm));
     const am = CAMK.amax * boostSm, vm = CAMK.vmax * boostSm;
-    let accT = CAMK.k * (s - sSm) - CAMK.c * vS; accT = Math.max(-am, Math.min(am, accT));
-    accS += Math.max(-CAMK.jerk * dt, Math.min(CAMK.jerk * dt, accT - accS)); vS = Math.max(-vm, Math.min(vm, vS + accS * dt)); sSm += vS * dt; if (Math.abs(s - sSm) < 0.01 && Math.abs(vS) < 0.05) { sSm = s; vS = 0; accS = 0; } }
+    const vT = dir * Math.min(vm, Math.sqrt(2 * CAMK.dec * boostSm * dist), CAMK.near * dist);
+    const dv = vT - vS, speedUp = Math.abs(vT) > Math.abs(vS) && vT * vS >= 0;
+    if (speedUp) { accS = Math.min(am, accS + CAMK.jerk * dt); vS += Math.sign(dv) * Math.min(Math.abs(dv), accS * dt); }
+    else { accS = Math.max(0, accS - CAMK.jerk * dt); vS += Math.sign(dv) * Math.min(Math.abs(dv), am * 1.5 * dt); }
+    let step = vS * dt; if (step * dir > dist) step = err;   // никогда не проезжаем цель
+    sSm += step; if (dist < 0.02 && Math.abs(vS) < 0.1) { sSm = s; vS = 0; accS = 0; } }
   const r = route || 'btl', o = R[r], len = o.curve.getLength(), u = uAt(r, sSm), du = 14 / len;
   o.curve.getPointAt(u, camera.position);
   // взгляд всегда вперёд по ходу; наклон — по уклону рельсов на 40 м вперёд, доводится пружиной с пределом угловой скорости
@@ -547,7 +553,7 @@ function frame() {
   const dLogo = camera.position.distanceTo(FIN.logoAt), dock = smooth(clamp01((72 - dLogo) / 24)), landed = clamp01((dock - 0.92) / 0.08);
   let pT = Math.max(-0.42, Math.min(0.3, Math.atan2(tmp.y - camera.position.y, 40)));
   const toLogo = Math.atan2(FIN.logoAt.y - camera.position.y, Math.max(8, FIN.logoAt.z - camera.position.z)); pT += (toLogo - pT) * smooth(clamp01((140 - dLogo) / 70));
-  if (REC_ || !lookInit) { pitch = pT; wP = 0; lookInit = true; } else { let a = CAMK.pk * (pT - pitch) - CAMK.pc * wP; wP = Math.max(-CAMK.wmax, Math.min(CAMK.wmax, wP + a * dt)); pitch += wP * dt; }
+  if (REC_ || !lookInit) { pitch = pT; lookInit = true; } else { const dp = (pT - pitch) * (1 - Math.exp(-dt * CAMK.prate)); pitch += Math.max(-CAMK.wmax * dt, Math.min(CAMK.wmax * dt, dp)); }   // наклон доводится экспонентой: без перелёта
   // мышь: лёгкий сдвиг и чуть-чуть поворот головы, медленно
   mSm.lerp(mouse, REC_ ? 0 : 1 - Math.exp(-dt * 1.6)); camera.position.x += mSm.x * 0.7; camera.position.y -= mSm.y * 0.45;
   camera.rotation.set(pitch - mSm.y * 0.035, Math.PI - mSm.x * 0.05, 0, 'YXZ');
