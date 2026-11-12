@@ -106,7 +106,27 @@ const U = {
   uSY: { value: Array.from({ length: NS }, () => new THREE.Vector2(-1e4, -1e4)) },         // пол под шахтой, верх шахты
   uL: { value: 0 }, uAmb: { value: new THREE.Vector3(0.026, 0.028, 0.036) },
   uHaze: { value: new THREE.Vector3(0, 0, 0) }, uHazeK: { value: 0 }, uT: { value: 0 }, uBake: { value: 1 },
+  // три ближайших проектора: позиция и сила, центр картинки и ширина, нормаль стены и высота, масштаб «cover», сама картинка
+  uJp: { value: [0, 1, 2].map(() => new THREE.Vector4(0, 0, 0, 0)) }, uJc: { value: [0, 1, 2].map(() => new THREE.Vector4(0, 0, -1, 1)) },
+  uJn: { value: [0, 1, 2].map(() => new THREE.Vector4(0, 0, 1, 1)) }, uJs: { value: [0, 1, 2].map(() => new THREE.Vector2(1, 1)) },
+  tJ0: { value: null }, tJ1: { value: null }, tJ2: { value: null },
 };
+{ const blk = new THREE.DataTexture(new Uint8Array([0, 0, 0, 255]), 1, 1); blk.needsUpdate = true; U.tJ0.value = U.tJ1.value = U.tJ2.value = blk; }
+// проекция: луч от проектора через точку поверхности попадает в плоскость картинки — так картинка ложится без трапеции
+// и на стену, и на изогнутый бетон, и на всё, что стоит в луче; за плоскостью стены и позади проектора света нет
+const PROJ = /* glsl */`uniform vec4 uJp[3]; uniform vec4 uJc[3]; uniform vec4 uJn[3]; uniform vec2 uJs[3]; uniform sampler2D tJ0, tJ1, tJ2;
+  vec3 projOne(sampler2D tI, vec4 P, vec4 C, vec4 Nn, vec2 sc, vec3 N, vec3 w) {
+    if (P.w <= 0.0) return vec3(0.0);
+    vec3 n = Nn.xyz, d = w - P.xyz; float dn = dot(d, n); if (dn >= -1e-3) return vec3(0.0);
+    float t = dot(C.xyz - P.xyz, n) / dn; if (t < 0.985) return vec3(0.0);
+    vec3 h = P.xyz + d * t - C.xyz, T = normalize(cross(-n, vec3(0.0, 1.0, 0.0))), B = cross(T, -n);
+    vec2 uv = vec2(dot(h, T) / C.w, dot(h, B) / Nn.w) + 0.5;
+    vec2 e = smoothstep(0.0, 0.004, uv) * smoothstep(0.0, 0.004, 1.0 - uv); float m = e.x * e.y; if (m <= 0.0) return vec3(0.0);
+    vec3 img = texture2D(tI, (uv - 0.5) * sc + 0.5).rgb;
+    float lam = max(dot(N, -normalize(d)), 0.0), vig = 1.0 - 0.45 * dot(uv - 0.5, uv - 0.5) * 2.0, scan = 0.94 + 0.06 * sin(uv.y * Nn.w * 1.3);
+    return img * m * P.w * (0.2 + 0.8 * lam) * vig * scan;
+  }
+  vec3 projAll(vec3 N, vec3 w) { return projOne(tJ0, uJp[0], uJc[0], uJn[0], uJs[0], N, w) + projOne(tJ1, uJp[1], uJc[1], uJn[1], uJs[1], N, w) + projOne(tJ2, uJp[2], uJc[2], uJn[2], uJs[2], N, w); }`;
 const HAZE = /* glsl */`uniform vec3 uHaze; uniform float uHazeK;
   vec3 haze(vec3 c, vec3 w) { float f = 1.0 - exp(-length(w - cameraPosition) * uHazeK); return mix(c, uHaze, f); }`;
 const LIGHT = /* glsl */`uniform vec4 uP[${NP}]; uniform vec3 uC[${NP}]; uniform vec4 uS[${NS}]; uniform vec2 uSY[${NS}]; uniform float uL; uniform vec3 uAmb;
@@ -174,6 +194,7 @@ function litMat({ flat = false, glow = 0, side = THREE.DoubleSide, baked = null,
         uniform sampler2D tLM; uniform float uCK; varying vec2 vLM; varying float vA;
       #endif
       ${LIGHT}
+      ${PROJ}
       ${HAZE}
       varying vec3 vW; varying vec3 vN; varying vec3 vC;
       void main() {
@@ -211,6 +232,7 @@ function litMat({ flat = false, glow = 0, side = THREE.DoubleSide, baked = null,
         #ifdef GLOW
           L += vec3(GLOW);
         #endif
+        L += projAll(N, vW) * uL;
         vec3 c = haze(alb * L, vW);
         gl_FragColor = vec4(c, 1.0);
         #include <tonemapping_fragment>
@@ -248,7 +270,7 @@ const VENT = { x: 110, h: 220, cy: -160 + 110, r: 100 };
 const ZN = { hyp: -1500, asia: -2100, asiaR: 260, ret0: -2420, ret1: -3320, ai0: -3420, ai1: -4440, st1: -5160, fan: -6420 };
 // кейсы по локациям: n — нормаль к пути (куда смотрит кадр), w — ширина кадра, img — обложка из портфолио
 const KX = (id, img, x, y, z, n, w = 80, loc = '') => ({ id, img, p: V(x, LOW + y, z), n: n.normalize(), w, loc });
-const CASEPOS = [
+const OLDPOS = [   // прежние места билбордов — только для разметки скорости финала (чтобы финал остался прежним)
   // гипостиль — ивенты
   KX('baltikaPlant', 'cases/baltika-plant-1', -195, 34, -790, V(1, 0, 0), 80, 'ивенты'),
   KX('megafon', 'cases/megafon-1', -195, 34, -985, V(1, 0, 0), 80, 'ивенты'),
@@ -281,6 +303,105 @@ const CASEPOS = [
   KX('baltika7', 'cases/baltika7-1', 112, 34, -4920, V(-1, 0, 0), 80, 'спорт'),
   KX('avangard', 'cases/avangard-1', -112, 34, -5050, V(1, 0, 0), 80, 'спорт'),
 ];
+// ===== кейсы = проекции: проектор бросает огромное превью кейса прямо на стену локации =====
+// C — центр картинки на стене, n — нормаль стены в зал, W — ширина картинки (кадр 16:9, обложка вписывается «cover»)
+const ZP = {   // высота камеры над полом; потолок для подвеса проектора; расстояние от стены до проектора и его высота
+  hyp: { yc: 52, ceil: LOW + 420, pd: 380, py: LOW + 330 },
+  shaft: { yc: 26, ceil: null, pd: 270, py: LOW + 70 },
+  asia: { yc: 46, ceil: null, pd: 505, py: LOW + 236 },
+  ret: { yc: 60, ceil: null, pd: 340, py: LOW + 432 },
+  ai: { yc: 70, ceil: LOW + 1100, pd: 400, py: LOW + 400 },
+  sport: { yc: 60, ceil: LOW + 1000, pd: 560, py: LOW + 400 },
+};
+const SHC = V(0, 0, (ZN.hyp - 12 + ZN.asia + ZN.asiaR) / 2);
+const wallPt = (x, y, z, nx) => ({ C: V(x, LOW + y, z), n: V(nx, 0, 0) });
+const cylPt = (c, R, deg, y) => { const a = THREE.MathUtils.degToRad(deg), si = Math.sin(a), co = Math.cos(a); return { C: V(c.x + R * si, LOW + y, c.z + R * co), n: V(-si, 0, -co) }; };
+const PJ = (id, img, loc, zone, w, W) => ({ id, img, loc, zone, C: w.C, n: w.n, W, H: W * 9 / 16, sc: new THREE.Vector2(1, 1) });
+const SHOTS = [
+  PJ('baltikaPlant', 'cases/baltika-plant-1', 'ивенты', 'hyp', wallPt(-699.5, 150, -780, 1), 240),
+  PJ('megafon', 'cases/megafon-1', 'ивенты', 'hyp', wallPt(-699.5, 150, -1060, 1), 240),
+  PJ('mice', 'cases/mice-1', 'ивенты', 'hyp', wallPt(699.5, 150, -1150, -1), 240),
+  PJ('megafonTravel', 'cases/megafon-travel-1', 'ивенты', 'hyp', wallPt(699.5, 150, -1380, -1), 220),
+  PJ('derbent', 'cases/derbent-1', 'города', 'shaft', cylPt(SHC, 149.5, -105, -20), 130),
+  PJ('tevredens', 'cases/tevredens-1', 'города', 'shaft', cylPt(SHC, 149.5, 115, -20), 130),
+  PJ('izhora', 'cases/izhora-48-1', 'азия', 'asia', cylPt(V(0, 0, ZN.asia), 259.5, -60, 80), 170),
+  PJ('fandom', 'cases/ozon-fandom-kv-1', 'азия', 'asia', cylPt(V(0, 0, ZN.asia), 259.5, -120, 80), 170),
+  PJ('tbank', 'cases/tbank-zone-1', 'азия', 'asia', cylPt(V(0, 0, ZN.asia), 259.5, 105, 80), 170),
+  PJ('treschnutye', 'cases/treschnutye-1', 'азия', 'asia', cylPt(V(0, 0, ZN.asia), 259.5, 145, 80), 170),
+  PJ('selekt', 'cases/ozon-select-1', 'ритейл', 'ret', wallPt(-169.4, 170, -2600, 1), 200),
+  PJ('zaklinateli', 'cases/zaklinateli-kv-1', 'ритейл', 'ret', wallPt(169.4, 170, -2600, -1), 200),
+  PJ('dino', 'cases/dino-1', 'ритейл', 'ret', wallPt(-169.4, 170, -2870, 1), 200),
+  PJ('gdriveMerch', 'cases/gdrive-capsule-1', 'мерч', 'ret', wallPt(169.4, 170, -2870, -1), 200),
+  PJ('oxygenSet', 'cases/oxygen-set-1', 'мерч', 'ret', wallPt(-169.4, 170, -3140, 1), 200),
+  PJ('lionMerch', 'dp/lion-cover', 'мерч', 'ret', wallPt(169.4, 170, -3140, -1), 200),
+  PJ('aiFonbet', 'cases/ai-fonbet', 'ai-продакшн', 'ai', wallPt(-699.5, 200, -3600, 1), 300),
+  PJ('aiMango', 'cases/ai-mango', 'ai-продакшн', 'ai', wallPt(699.5, 200, -3760, -1), 300),
+  PJ('aiLavka', 'cases/ai-lavka', 'ai-продакшн', 'ai', wallPt(-699.5, 200, -4100, 1), 300),
+  PJ('aiAlfa', 'cases/ai-alfa', 'ai-продакшн', 'ai', wallPt(699.5, 200, -4280, -1), 300),
+  PJ('lion', 'dp/lion-2', 'спорт', 'sport', wallPt(-319.5, 170, -4570, 1), 200),
+  PJ('ironstar', 'cases/gdrive-ironstar-1', 'спорт', 'sport', wallPt(319.5, 170, -4700, -1), 200),
+  PJ('gdrive', 'cases/gdrive-silk-1', 'спорт', 'sport', wallPt(-319.5, 170, -4840, 1), 200),
+  PJ('baltika7', 'cases/baltika7-1', 'спорт', 'sport', wallPt(319.5, 170, -4970, -1), 200),
+  PJ('avangard', 'cases/avangard-1', 'спорт', 'sport', wallPt(-319.5, 170, -5065, 1), 160),
+];
+SHOTS.forEach(c => { const z = ZP[c.zone]; c.P = c.C.clone().addScaledVector(c.n, z.pd); c.P.y = z.py; });
+// кадр кейса: камера смотрит на стену под углом 30° вперёд по ходу; картинка занимает половину экрана —
+// слева, если стена слева от хода, и справа, если справа; на другой половине — подпись и кнопка
+const SOLVE_A = THREE.MathUtils.degToRad(30);
+function solveShot(sh, aspect) {
+  const up = V(0, 1, 0), T0 = sh.n.clone().negate().cross(up).normalize(), f = T0.z < 0 ? T0.clone() : T0.clone().negate(), s = -Math.sign(f.dot(T0));
+  const wide = aspect >= 1, tx = wide ? s * 0.47 : 0, ty = wide ? 0.03 : 0.34, tw = wide ? 0.9 : 1.84, th = wide ? 1.5 : 0.62;
+  const cam = new THREE.PerspectiveCamera(50, aspect, 1, 9000);
+  const corners = [[-1, -1], [1, -1], [1, 1], [-1, 1]].map(([a, b]) => sh.C.clone().addScaledVector(T0, a * sh.W / 2).addScaledVector(up, b * sh.H / 2));
+  const dh = sh.n.clone().negate().multiplyScalar(Math.cos(SOLVE_A)).addScaledVector(f, Math.sin(SOLVE_A)).normalize(), right = dh.clone().cross(up).normalize();
+  let D = sh.W * 1.3, lat = -tx * D * 0.6, pitch = 0; const yc = LOW + ZP[sh.zone].yc;
+  for (let it = 0; it < 80; it++) {
+    const pos = sh.C.clone().addScaledVector(dh, -D).addScaledVector(right, lat); pos.y = yc;
+    const dir = dh.clone(); dir.y = Math.tan(pitch); dir.normalize();
+    cam.position.copy(pos); cam.lookAt(pos.clone().add(dir)); cam.updateMatrixWorld();
+    let x0 = 1e9, x1 = -1e9, y0 = 1e9, y1 = -1e9;
+    corners.forEach(c => { const q = c.clone().project(cam); x0 = Math.min(x0, q.x); x1 = Math.max(x1, q.x); y0 = Math.min(y0, q.y); y1 = Math.max(y1, q.y); });
+    sh.cam = { pos, dir, s, f, D };
+    D *= Math.pow(Math.max((x1 - x0) / tw, (y1 - y0) / th), 0.6);
+    lat += ((x0 + x1) / 2 - tx) * D * 0.3; pitch += ((y0 + y1) / 2 - ty) * 0.2;
+  }
+}
+SHOTS.forEach(c => solveShot(c, innerWidth / innerHeight));
+// проходы между локациями: камера идёт через проёмы по оси
+const DOORS = { 'hyp>shaft': [V(0, LOW + 42, -1440), V(0, LOW + 40, -1570)], 'shaft>asia': [V(0, LOW + 40, -1790), V(0, LOW + 42, -1890)], 'asia>ret': [V(0, LOW + 36, -2330), V(0, LOW + 36, -2460)],
+  'ret>ai': [V(0, LOW + 56, -3290), V(0, LOW + 60, -3460)], 'ai>sport': [V(0, LOW + 64, -4400), V(0, LOW + 64, -4490)] };
+const CAM0 = { pos: V(104, 34, -236), look: V(90, -120, -900) };   // кадр на парапете — отсюда начинается путь по кейсам
+function camKeys(endKeys) {
+  const K = [{ pos: CAM0.pos.clone(), dir: CAM0.look.clone().sub(CAM0.pos).normalize() }, { pos: V(40, 6, -400) }];
+  SHOTS.forEach((c, i) => {
+    const pr = SHOTS[i - 1]; if (pr && pr.zone !== c.zone) DOORS[`${pr.zone}>${c.zone}`].forEach(p => K.push({ pos: p.clone() }));
+    const h = c.cam.dir.clone().setY(0).normalize();
+    K.push({ pos: c.cam.pos.clone().addScaledVector(h, -5), dir: c.cam.dir, shot: c, hold: 'A' }, { pos: c.cam.pos.clone().addScaledVector(h, 5), dir: c.cam.dir, shot: c, hold: 'B' });
+  });
+  K.push({ pos: V(0, LOW + 60, -5080) }, { pos: V(0, LOW + 58, -5150) });   // к проёму в вентшахту — по оси
+  return K.concat(endKeys);
+}
+function camPath(K) {
+  const curve = new THREE.CatmullRomCurve3(K.map(k => k.pos), false, 'centripetal'), per = 160, n = (K.length - 1) * per, pos = [], arc = [0];
+  for (let i = 0; i <= n; i++) { pos.push(curve.getPoint(i / n)); if (i) arc.push(arc[i - 1] + pos[i].distanceTo(pos[i - 1])); }
+  K.forEach((k, i) => { k.j = i * per; k.arc = arc[k.j]; });
+  return { pos, arc, n };
+}
+// зона, которую нельзя застраивать: путь камеры и взгляд на каждую картинку — колонны, балки и товары здесь не ставим
+const KEEP = [];
+{ const pp = camPath(camKeys([{ pos: V(0, LOW + 42, -5200) }])).pos;
+  for (let i = 0; i < pp.length - 6; i += 6) KEEP.push({ a: pp[i], b: pp[i + 6], r: 24 });
+  SHOTS.forEach(c => { const T0 = c.n.clone().negate().cross(V(0, 1, 0)).normalize();
+    for (let a = -2; a <= 2; a++) for (let b = -1; b <= 1; b++) { const g = c.C.clone().addScaledVector(T0, a * c.W / 4.4).add(V(0, b * c.H / 2.2, 0)); KEEP.push({ a: c.cam.pos, b: g, r: 5 }, { a: c.P, b: g, r: 5 }); } });
+  KEEP.forEach(k => { k.a2 = k.a.clone().setY(0); k.b2 = k.b.clone().setY(0); }); }
+function segD(px, py, pz, a, b) { const bx = b.x - a.x, by = b.y - a.y, bz = b.z - a.z; let t = ((px - a.x) * bx + (py - a.y) * by + (pz - a.z) * bz) / ((bx * bx + by * by + bz * bz) || 1); t = t < 0 ? 0 : t > 1 ? 1 : t;
+  const dx = a.x + bx * t - px, dy = a.y + by * t - py, dz = a.z + bz * t - pz; return Math.sqrt(dx * dx + dy * dy + dz * dz); }
+// весь луч проектора (в плане) — тоже без колонн, иначе картинка ложится на колонну перед стеной
+const inBeam2 = (x, z, r) => SHOTS.some(c => { const T0 = c.n.clone().negate().cross(V(0, 1, 0)).normalize(), A = c.P, B = c.C.clone().addScaledVector(T0, -c.W / 2), C2 = c.C.clone().addScaledVector(T0, c.W / 2);
+  const sd = (p, q) => (q.x - p.x) * (z - p.z) - (q.z - p.z) * (x - p.x), d1 = sd(A, B), d2 = sd(B, C2), d3 = sd(C2, A);
+  return (!((d1 < 0 || d2 < 0 || d3 < 0) && (d1 > 0 || d2 > 0 || d3 > 0))) || segD(x, 0, z, A.clone().setY(0), B.clone().setY(0)) < r || segD(x, 0, z, A.clone().setY(0), C2.clone().setY(0)) < r; });
+const kept2 = (x, z, r) => KEEP.some(k => segD(x, 0, z, k.a2, k.b2) < r + k.r) || inBeam2(x, z, r);
+const kept3 = (p, r) => KEEP.some(k => segD(p.x, p.y, p.z, k.a, k.b) < r + k.r);
 const SHAFTS = [];   // { x, z, r, k, floor, top }
 const LAMPS = [];    // точечные источники локаций: { p, r, c } — к камере подсаживаются ближайшие 8
 const ZONES = [      // дымка и общий свет по локациям (по z камеры)
@@ -354,7 +475,7 @@ function buildWorld(slot) {
   box(-HX, -320, LOW, HY, -310, -300); box(320, HX, LOW, HY, -310, -300);
   const lampGlow = [];
   for (let x = -630; x <= 630; x += 140) for (let zz = -400; zz >= -1440; zz -= 140) {
-    if (nearPath(x, zz, 50) || CASEPOS.some(c => Math.hypot(x - c.p.x, zz - c.p.z) < 75) || (x > 30 && x < 160 && zz > -660)) continue;
+    if (nearPath(x, zz, 50) || kept2(x, zz, 22) || (x > 30 && x < 160 && zz > -660)) continue;
     box(x - 15, x + 15, LOW, HY, zz - 15, zz + 15, 0.9 + rnd() * 0.15);
     const lx = x + 70, lz = zz - 70; lampGlow.push(V(lx, HY - 4, lz));
     if (((x + 630) / 140 + (zz + 400) / 140) % 2 === 0) LAMPS.push({ p: V(lx, HY - 30, lz), r: 60, c: V(1, 0.9, 0.78).multiplyScalar(0.55) });
@@ -421,7 +542,7 @@ function buildWorld(slot) {
   for (let i = 0, n = 0; n < 64 && i < 600; i++) {
     const c = V((rf() - 0.5) * 600, LOW + 60 + rf() * 900, ZN.ai1 - 30 - rf() * (ZN.ai1 - ZN.st1 - 60)), L = 260 + rf() * 620, t = 14 + rf() * 26;
     const e = new THREE.Euler(rf() * Math.PI, rf() * Math.PI, rf() * Math.PI), dir = V(0, 1, 0).applyEuler(e);
-    let bad = false; for (let k = -1; k <= 1.001; k += 0.1) { const pnt = c.clone().addScaledVector(dir, k * L / 2); if ((Math.abs(pnt.x) < 40 + t && pnt.y < LOW + 110 + t && pnt.z < ZN.ai1 + 20 && pnt.z > ZN.st1 - 20) || CASEPOS.some(c => c.p.distanceTo(pnt) < 75 + t)) { bad = true; break; } }
+    let bad = false; for (let k = -1; k <= 1.001; k += 0.1) { const pnt = c.clone().addScaledVector(dir, k * L / 2); if ((Math.abs(pnt.x) < 40 + t && pnt.y < LOW + 110 + t && pnt.z < ZN.ai1 + 20 && pnt.z > ZN.st1 - 20) || kept3(pnt, t + 4)) { bad = true; break; } }
     if (bad) continue;
     boxR(c, V(t, L, t * (0.8 + rf() * 0.6)), [e.x, e.y, e.z], 0.8 + rf() * 0.3); n++;
   }
@@ -490,15 +611,22 @@ function buildShelves(RX, RY) {
   const r = mulberry(31), goods = [], cans = [];
   const pal = [[0.72, 0.7, 0.66], [0.62, 0.06, 0.05], [0.72, 0.52, 0.07], [0.08, 0.17, 0.5], [0.1, 0.36, 0.13], [0.75, 0.28, 0.05], [0.35, 0.22, 0.13], [0.55, 0.56, 0.58], [0.85, 0.82, 0.74]];
   const segs = [[ZN.ret0 - 60, -2720], [-2760, -2980], [-3020, ZN.ret1 + 60]];
-  [-70, 70, -210, 210, -350, 350].forEach(cx => segs.forEach(([za, zb]) => {
+  [-170, 170, -310, 310].forEach(cx => segs.forEach(([za, zb]) => {
     box(cx - 0.5, cx + 0.5, LOW, LOW + 424, zb, za, 0.75);                                       // задняя стенка
-    for (let zz = za; zz >= zb - 1; zz -= 60) box(cx - 13, cx + 13, LOW, LOW + 424, zz - 1.5, zz + 1.5, 0.8);   // стойки
-    for (let k = 0; k <= 6; k++) box(cx - 13, cx + 13, LOW + 3 + k * 70, LOW + 5 + k * 70, zb, za, 0.85);      // полки
+    // там, куда бьёт проектор, стеллаж со стороны прохода разобран: на задней стенке чистый экран
+    const scr = SHOTS.find(s => s.zone === 'ret' && Math.abs(s.C.x - cx) < 2 && s.C.z < za && s.C.z > zb), fs = -Math.sign(cx);
+    const inScr = (z0, z1, y) => scr && z1 > scr.C.z - scr.W / 2 - 6 && z0 < scr.C.z + scr.W / 2 + 6 && Math.abs(y - scr.C.y) < scr.H / 2 + 26;
+    const half = (y0, y1, z0, z1, t) => { if (fs > 0) box(cx + 0.5, cx + 13, y0, y1, z0, z1, t); else box(cx - 13, cx - 0.5, y0, y1, z0, z1, t); };
+    const back = (y0, y1, z0, z1, t) => { if (fs > 0) box(cx - 13, cx + 0.5, y0, y1, z0, z1, t); else box(cx - 0.5, cx + 13, y0, y1, z0, z1, t); };
+    for (let zz = za; zz >= zb - 1; zz -= 60) { back(LOW, LOW + 424, zz - 1.5, zz + 1.5, 0.8); if (!inScr(zz - 1.5, zz + 1.5, scr ? scr.C.y : 0)) half(LOW, LOW + 424, zz - 1.5, zz + 1.5, 0.8); else { half(LOW, scr.C.y - scr.H / 2 - 26, zz - 1.5, zz + 1.5, 0.8); half(scr.C.y + scr.H / 2 + 26, LOW + 424, zz - 1.5, zz + 1.5, 0.8); } }   // стойки
+    for (let k = 0; k <= 6; k++) { const y = LOW + 4 + k * 70; back(y - 1, y + 1, zb, za, 0.85);
+      if (inScr(zb, za, y)) { half(y - 1, y + 1, scr.C.z + scr.W / 2 + 6, za, 0.85); half(y - 1, y + 1, zb, scr.C.z - scr.W / 2 - 6, 0.85); } else half(y - 1, y + 1, zb, za, 0.85); }   // полки
     for (let k = 0; k < 6; k++) [-1, 1].forEach(face => {
       let zz = za - 2, col = pal[Math.floor(r() * pal.length)];
       while (zz > zb + 4) {
         if (r() < 0.18) col = pal[Math.floor(r() * pal.length)];
         const w = 4 + r() * 9, h = 12 + r() * 44, d = 9 + r() * 3, y0 = LOW + 5 + k * 70, x = cx + face * (13 - d / 2 - 0.5), c = new THREE.Color(...col).lerp(new THREE.Color(0.42, 0.42, 0.4), 0.45).multiplyScalar(0.75 + r() * 0.3);
+        if (face === fs && inScr(zz - w, zz, y0 + h / 2)) { zz -= w + 0.6; continue; }   // под проекцией полки пустые
         if (r() < 0.22) cans.push({ m: M(V(x, y0 + h * 0.35, zz - w / 2), [0, 0, 0], V(w * 0.45, h * 0.7, w * 0.45)), c });
         else goods.push({ m: M(V(x, y0 + h / 2, zz - w / 2), [0, 0, 0], V(d, h, w)), c });
         zz -= w + 0.6;
@@ -571,19 +699,39 @@ function buildLight() {
   const back = new THREE.Mesh(new THREE.CircleGeometry(300, 96), basic(cold, 2.8)); back.position.set(0, LOW + 430, -4350); scene.add(back); FX.glows.push(back);   // кадр 7
   FX.slitsSt.forEach(o => slab(o.w, 600, V(o.x, LOW + 560, ZN.st1 + 0.6), 2.4));                             // кадр 8
   for (let zz = ZN.st1 - 64; zz > ZN.st1 - 520; zz -= 48) [-1, 1].forEach(sd => { const m = slab(3, 180, V(sd * (VENT.x - 0.6), LOW + 100, zz), 2.6); m.rotation.y = -sd * Math.PI / 2; });   // кадр 9: щели
-  // кадры кейсов: обложка светится в темноте, под ней — красная неоновая черта, сзади — бетонная рама
-  const frames = [];
-  CASEPOS.forEach((c, i) => {
-    const h0 = c.w * 9 / 16, ry = Math.atan2(c.n.x, c.n.z);
-    const m = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), new THREE.MeshBasicMaterial({ color: new THREE.Color(0.8, 0.8, 0.8), toneMapped: true }));
-    m.position.copy(c.p); m.rotation.y = ry; m.scale.set(c.w, h0, 1); scene.add(m);
-    texL.load(`assets/${c.img}.jpg`, t => { t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 8; m.material.map = t; m.material.needsUpdate = true; const a = t.image.width / t.image.height; m.scale.set(a >= 1 ? c.w : h0 * a, a >= 1 ? c.w / a : h0, 1); c.h = m.scale.y; c.ww = m.scale.x; });
-    frames.push({ m: M(c.p.clone().addScaledVector(c.n, -1.2), [0, ry, 0], V(c.w + 6, h0 + 6, 2)), c: new THREE.Color(0.7, 0.7, 0.7) });
-    const bar = new THREE.Mesh(new THREE.BoxGeometry(c.w * 0.5, 0.7, 0.4), basic(RED, 2.2)); bar.position.copy(c.p).add(V(0, -h0 / 2 - 5, 0)).addScaledVector(c.n, 0.6); bar.rotation.y = ry; scene.add(bar);
-    LAMPS.push({ p: c.p.clone().addScaledVector(c.n, 30), r: 70, c: V(0.9, 0.88, 0.85).multiplyScalar(0.35) });
-    FX.cubes.push({ m, bar });
+  // проекторы: корпус на подвесе (или на галерее / на стеллаже), линза, луч в дымке; картинка — в шейдере бетона
+  const bodies = [], rods = [], dark = new THREE.Color(0.045, 0.045, 0.05);
+  SHOTS.forEach(c => {
+    const z = ZP[c.zone], P = c.P, dir = c.C.clone().sub(P).normalize(), q = new THREE.Quaternion().setFromUnitVectors(V(0, 0, 1), dir);
+    bodies.push({ m: new THREE.Matrix4().compose(P.clone().addScaledVector(dir, -7), q, V(11, 7, 15)), c: dark });
+    if (z.ceil) rods.push({ m: beam(P.clone().addScaledVector(dir, -7), V(P.x, z.ceil, P.z).addScaledVector(dir, -7), 0.8), c: dark });
+    else bodies.push({ m: M(P.clone().addScaledVector(dir, -7).add(V(0, -6, 0)), [0, 0, 0], V(5, 6, 5)), c: dark });
+    c.tex = texL.load(`assets/${c.img}.jpg`, t => { const a = t.image.width / t.image.height, fa = 16 / 9; c.sc.set(a > fa ? fa / a : 1, a > fa ? 1 : a / fa); });
+    c.tex.colorSpace = THREE.SRGBColorSpace; c.tex.anisotropy = 8;
+    const lens = new THREE.Sprite(new THREE.SpriteMaterial({ map: softDot, color: new THREE.Color(1, 0.95, 0.88).multiplyScalar(4), blending: THREE.AdditiveBlending, depthWrite: false, toneMapped: false }));
+    lens.scale.setScalar(16); lens.position.copy(P).addScaledVector(dir, 1); scene.add(lens); FX.glows.push(lens);
+    // луч: стороны пирамиды и два сечения внутри; цвет — из картинки (размытой), гуще у линзы
+    const T0 = c.n.clone().negate().cross(V(0, 1, 0)).normalize(), cr = (a, b) => c.C.clone().addScaledVector(T0, a * c.W / 2).add(V(0, b * c.H / 2, 0));
+    const pts = [[-1, -1, 1, -1], [1, -1, 1, 1], [1, 1, -1, 1], [-1, 1, -1, -1], [-1, 0, 1, 0], [0, -1, 0, 1], [-1, -1, 1, 1], [1, -1, -1, 1]], pos = [];
+    pts.forEach(([a, b, e, d]) => { const A = cr(a, b), B = cr(e, d); pos.push(P.x, P.y, P.z, A.x, A.y, A.z, B.x, B.y, B.z); });
+    const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+    const bm = new THREE.Mesh(g, new THREE.ShaderMaterial({ transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide,
+      uniforms: { tI: { value: c.tex }, uP: { value: P }, uC: { value: c.C }, uN: { value: c.n }, uW: { value: new THREE.Vector2(c.W, c.H) }, uSc: { value: c.sc }, uK: { value: 0 }, uT: U.uT },
+      vertexShader: 'varying vec3 vW; void main(){ vec4 w = modelMatrix * vec4(position, 1.); vW = w.xyz; gl_Position = projectionMatrix * viewMatrix * w; }',
+      fragmentShader: `uniform sampler2D tI; uniform vec3 uP, uC, uN; uniform vec2 uW, uSc; uniform float uK, uT; varying vec3 vW;
+        void main(){
+          vec3 d = vW - uP; float t = dot(uC - uP, uN) / min(dot(d, uN), -1e-3);
+          vec3 h = uP + d * t - uC, T = normalize(cross(-uN, vec3(0., 1., 0.))), B = cross(T, -uN);
+          vec2 uv = clamp(vec2(dot(h, T) / uW.x, dot(h, B) / uW.y) + 0.5, 0.0, 1.0);
+          vec3 img = texture2D(tI, (uv - 0.5) * uSc + 0.5, 5.0).rgb;
+          float f = clamp(1.0 / t, 0.0, 1.0), dust = 0.7 + 0.3 * sin(dot(vW, vec3(0.043, 0.09, 0.061)) + uT * 0.5);
+          float a = uK * pow(1.0 - f, 1.4) * (1.0 - smoothstep(0.7, 1.0, f)) * smoothstep(10.0, 80.0, length(vW - cameraPosition)) * dust;
+          gl_FragColor = vec4((img + 0.06) * a, 1.0);
+        }` }));
+    bm.frustumCulled = false; scene.add(bm); c.beam = bm;
   });
-  inst(new THREE.BoxGeometry(1, 1, 1), concrete, frames);
+  inst(new THREE.BoxGeometry(1, 1, 1), flatMat, bodies);
+  if (rods.length) inst(new THREE.CylinderGeometry(0.5, 0.5, 1, 6), flatMat, rods);
   // крошечные люди
   const people = [V(30, 0, -290), V(36, 0, -292), V(-150, 0, -40), V(80, LOW, -660), V(-60, LOW, -1300), V(-40, LOW, -1700), V(-200, LOW, -2160), V(10, LOW, -3000), V(-40, LOW, -3800), V(30, LOW, -4400), V(-4, LOW, -6230)];
   const pg = new THREE.CapsuleGeometry(0.32, 1.1, 3, 8); pg.translate(0, 0.87, 0);
@@ -671,7 +819,8 @@ function buildReel() {
 // ---------- таймлайн ----------
 // p 0…0.17 — Искра в темноте летит к стене и встаёт в лого; дальше всё движение привязано к голове ленты.
 const P_LINE = 0.19, P_END = 0.962;
-let CAMK = [], ISK = [], SMAP = [], STOPS = [];
+let CAMK = [], ISK = [], SMAP = [], STOPS = [], P_A = 0.58, P_B = 0.93;
+const CP = { p: [], pos: [], dir: [], s: [] };   // путь камеры по кейсам: по p — позиция, взгляд, голова ленты
 const RIG = { pos: [], look: [], s0: 0, step: 4 };
 function buildTimeline() {
   const s = slot, L0 = LOGO, rc = REEL.c, sl = iskra.userData.S;
@@ -681,7 +830,7 @@ function buildTimeline() {
   // p ↔ длина ленты: стена неторопливо, дальше — по локациям, на каждой своё время
   SMAP = [[P_LINE, 0], [0.25, sv[1]], [0.36, sv[4]], [0.42, sv[6]], [0.53, sv[7]], [0.58, sv[8]], [0.62, sv[9]]];
   // остановки у кейсов: кадр слева, подпись справа; камера на пути ленты
-  STOPS = CASEPOS.map(c => {
+  STOPS = OLDPOS.map(c => {
     const sp = sAt(V(c.p.x, LOW + 0.25, c.p.z).addScaledVector(c.n, Math.abs(c.n.z) > 0.5 ? 0 : 60));
     const near = ['derbent', 'tevredens', 'izhora', 'treschnutye'].includes(c.id);
     return { c, s: sp - (near ? 18 + c.w * 0.25 : 60 + c.w * 0.9) };   // голова ленты здесь — камера на ~60 м позади, кадр впереди по диагонали
@@ -747,7 +896,49 @@ function buildTimeline() {
   RIG.pos = Ps; RIG.look = Ps.map((p, i) => p.clone().addScaledVector(D2[i], 220)); RIG.s0 = s0; RIG.step = STEP;
   // финальный кадр 11: камера подходит к вентилятору, пока он раскручивается
   RIG.finPos = V(0, LOW + 30, -6160); RIG.finLook = V(0, LOW + 116, ZN.fan);
-  CAMK.sort((a, b) => a.p - b.p);  CAMK.sort((a, b) => a.p - b.p);
+  // ===== с парапета до вентшахты: камера от кадра к кадру =====
+  // позиция — плавная кривая через точки съёмки кейсов и проёмы между локациями; у каждого кадра камера почти замирает и чуть наезжает,
+  // между кадрами разгоняется; взгляд плавно переходит от кадра к движению вперёд и к следующему кадру
+  {
+  P_A = pOf(sv[8]);
+  const sJoin = sAt(V(0, LOW + 0.25, -5262)); P_B = pOf(sJoin);
+  const oldAt = x => { const f = (x - s0) / STEP, i0 = Math.max(0, Math.min(n - 2, Math.floor(f))), w = clamp01(f - i0); const p = RIG.pos[i0].clone().lerp(RIG.pos[i0 + 1], w), l = RIG.look[i0].clone().lerp(RIG.look[i0 + 1], w); return { pos: p, dir: l.sub(p).normalize() }; };
+  const e1 = oldAt(sJoin - 50), e2 = oldAt(sJoin);
+  const KK = camKeys([{ pos: e1.pos }, { pos: e2.pos, dir: e2.dir }]), path = camPath(KK), N = path.n, arc = path.arc, cp = path.pos;
+  const sm = t => t * t * t * (t * (t * 6 - 15) + 10);
+  const slerpV = (a, b, t) => { const ang = a.angleTo(b); if (ang < 1e-4) return a.clone(); let ax = a.clone().cross(b); if (ax.lengthSq() < 1e-8) ax = V(0, 1, 0); return a.clone().applyAxisAngle(ax.normalize(), ang * t); };
+  const tan = cp.map((p, j) => { const d = cp[Math.min(N, j + 6)].clone().sub(cp[Math.max(0, j - 6)]); d.y = Math.max(-0.2, Math.min(0.2, d.y / (Math.hypot(d.x, d.z) || 1))) * Math.hypot(d.x, d.z); return d.normalize(); });
+  const tanS = tan.map((_, j) => { const a = V(0, 0, 0); for (let k = -40; k <= 40; k += 4) a.add(tan[Math.min(N, Math.max(0, j + k))]); return a.normalize(); });
+  const anc = KK.filter(k => k.dir), RT = 150, dirs = [];
+  for (let j = 0, ai = 0; j <= N; j++) {
+    while (ai < anc.length - 2 && anc[ai + 1].j <= j) ai++;
+    const a = anc[ai], b = anc[ai + 1];
+    if (a.shot && a.shot === b.shot) { dirs.push(a.dir.clone()); continue; }
+    const d1 = arc[j] - a.arc, d2 = b.arc - arc[j], L = d1 + d2;
+    if (L < 2 * RT) dirs.push(slerpV(a.dir, b.dir, sm(clamp01(d1 / (L || 1)))));
+    else dirs.push(slerpV(slerpV(tanS[j], a.dir, sm(clamp01(1 - d1 / RT))), b.dir, sm(clamp01(1 - d2 / RT))));
+  }
+  // скорость: у кадра — едва движется (наезд 10 м занимает заметный кусок скролла), разгон и торможение плавные
+  const holds = KK.filter(k => k.hold === 'A').map(k => [k.arc, KK[KK.indexOf(k) + 1].arc]);
+  const vel = x => { let d = 1e9; holds.forEach(([a, b]) => { d = Math.min(d, x < a ? a - x : x > b ? x - b : 0); }); return 0.03 + 0.97 * sm(clamp01(d / 120)); };
+  const cum = [0]; for (let j = 1; j <= N; j++) cum.push(cum[j - 1] + (arc[j] - arc[j - 1]) / vel((arc[j] + arc[j - 1]) / 2));
+  // голова ленты: ближайшая к камере точка ленты, только вперёд, с запасом
+  let sh = sv[9];
+  CP.p = []; CP.pos = cp; CP.dir = dirs; CP.s = [];
+  for (let j = 0; j <= N; j++) {
+    CP.p.push(P_A + (P_B - P_A) * cum[j] / cum[N]);
+    let best = sh, bd = 1e9; for (let x = sh - 100; x <= sh + 900; x += 4) { const d = hd(x).distanceTo(cp[j]); if (d < bd) { bd = d; best = x; } }
+    sh = Math.max(sh, best);
+    let sv_ = Math.min(sJoin, sh + 40); sv_ = sv[8] + (sv_ - sv[8]) * sm(clamp01(arc[j] / 260)); sv_ += (sJoin - sv_) * sm(clamp01((j - (N - 600)) / 600));
+    CP.s.push(j ? Math.max(CP.s[j - 1], sv_) : sv_);
+  }
+  // предел скорости поворота по скроллу: не больше 14° на 0,0005 p (примерно один щелчок колеса) — проход вперёд и назад, затем среднее
+  { const MR = THREE.MathUtils.degToRad(14) / 0.0005, lim = (from, to, st) => { const o = dirs.map(d => d.clone()); for (let j = from + st; j !== to; j += st) { const al = MR * Math.abs(CP.p[j] - CP.p[j - st]), ang = o[j - st].angleTo(o[j]); if (ang > al) o[j] = slerpV(o[j - st], o[j], al / ang); } return o; };
+    const fw = lim(0, N + 1, 1), bw = lim(N, -1, -1); for (let j = 0; j <= N; j++) dirs[j] = slerpV(fw[j], bw[j], 0.5).normalize(); }
+  const pAtArc = x => { let j = 0; while (j < N && arc[j] < x) j++; return CP.p[j]; };
+  KK.filter(k => k.hold === 'A').forEach(k => { const c = k.shot, b = KK[KK.indexOf(k) + 1]; c.p0 = pAtArc(k.arc - 30); c.p1 = pAtArc(b.arc + 30); c.pMid = pAtArc((k.arc + b.arc) / 2); });
+  }
+  CAMK.sort((a, b) => a.p - b.p);
   CAMK.pos = new THREE.CatmullRomCurve3(CAMK.map(k => k.pos), false, 'centripetal');
   CAMK.look = new THREE.CatmullRomCurve3(CAMK.map(k => k.look), false, 'centripetal');
   const hero = narrow ? 1.6 : 2.4;
@@ -760,7 +951,9 @@ function buildTimeline() {
     { p: 1.00, pos: s.clone(), sc: sl, spin: 4 * Math.PI },
   ];
 }
-const sOfP = p => { if (p <= SMAP[0][0]) return 0; if (p >= SMAP[SMAP.length - 1][0]) return S_TOTAL;
+const cpIdx = p => { let lo = 0, hi = CP.p.length - 1; while (hi - lo > 1) { const m = (lo + hi) >> 1; if (CP.p[m] < p) lo = m; else hi = m; } return [lo, clamp01((p - CP.p[lo]) / ((CP.p[hi] - CP.p[lo]) || 1))]; };
+const sOfP = p => { if (p > P_A && p < P_B && CP.p.length) { const [i, w] = cpIdx(p); return CP.s[i] + (CP.s[i + 1] - CP.s[i]) * w; }
+  if (p <= SMAP[0][0]) return 0; if (p >= SMAP[SMAP.length - 1][0]) return S_TOTAL;
   let lo = 0, hi = SMAP.length - 1; while (hi - lo > 1) { const m = (lo + hi) >> 1; if (SMAP[m][0] < p) lo = m; else hi = m; }
   return SMAP[lo][1] + (SMAP[hi][1] - SMAP[lo][1]) * (p - SMAP[lo][0]) / (SMAP[hi][0] - SMAP[lo][0] || 1); };
 
@@ -796,7 +989,10 @@ const camT = V(0, 0, 0), rigPos = V(0, 0, 0), rigQ = new THREE.Quaternion(), _qT
 let snapCam = true;
 // цель камеры: интро — по ключам; дальше — по таблице траектории (по длине ленты)
 function camTarget(q) {
-  if (q < 0.62) {
+  if (q > P_A && q < P_B && CP.p.length) {
+    const [i, w] = cpIdx(q); camT.lerpVectors(CP.pos[i], CP.pos[i + 1], w); look.copy(CP.dir[i]).lerp(CP.dir[i + 1], w).normalize().multiplyScalar(200).add(camT); return;
+  }
+  if (q <= P_A) {
     const k = CAMK; let i = 0; while (i < k.length - 2 && q > k[i + 1].p) i++;
     const u = (i + clamp01((q - k[i].p) / (k[i + 1].p - k[i].p))) / (k.length - 1);
     k.pos.getPoint(Math.min(u, 1), camT); k.look.getPoint(Math.min(u, 1), look);
@@ -806,17 +1002,17 @@ function camTarget(q) {
     if (q > P_END) { const e = smooth(clamp01((q - P_END) / (1 - P_END))); camT.lerp(RIG.finPos, e); look.lerp(RIG.finLook, e); }
   }
 }
-const RAW_A = 0.18;   // доля скролла на интро (до низа лестницы) — дальше скролл отдан кейсам
-const toP = r => r < RAW_A ? r * 0.62 / RAW_A : 0.62 + (r - RAW_A) * 0.38 / (1 - RAW_A);
-const toRaw = p => p < 0.62 ? p * RAW_A / 0.62 : RAW_A + (p - 0.62) * (1 - RAW_A) / 0.38;
+const RAW_A = 0.1684;   // доля скролла на интро (до парапета) — дальше скролл отдан кейсам
+const toP = r => r < RAW_A ? r * P_A / RAW_A : P_A + (r - RAW_A) * (1 - P_A) / (1 - RAW_A);
+const toRaw = p => p < P_A ? p * RAW_A / P_A : RAW_A + (p - P_A) * (1 - RAW_A) / (1 - P_A);
 const capEl = document.getElementById('case');
 let capId = null;
 function caption(p) {
-  const sc = sOfP(p), t = p >= 0.62 ? STOPS.find(t => Math.abs(sc - t.s) < 20) : null;
+  const k = SHOTS.findIndex(c => p >= c.p0 && p <= c.p1), t = SHOTS[k];
   if (!t) { capEl.classList.remove('on'); capId = null; return; }
-  if (capId !== t.c.id) { capId = t.c.id; const c = CASES[t.c.id] || {}, ps = c.pass || {};
-    capEl.innerHTML = `<span class="t">{${String(STOPS.indexOf(t) + 1).padStart(2, '0')}} ${t.c.loc}</span><h2>${c.title || ''}</h2><p class="m">${[ps.клиент, ps.год].filter(x => x && x !== '—').join(' · ')}</p><p>${c.idea || c.task || ''}</p>`; }
-  _sp.copy(t.c.p).project(camera); capEl.classList.toggle('left', _sp.x > 0.05);   // подпись — на стороне, противоположной кадру
+  if (capId !== t.id) { capId = t.id; const c = CASES[t.id] || {}, ps = c.pass || {};
+    capEl.innerHTML = `<span class="t">{${String(k + 1).padStart(2, '0')}} ${t.loc}</span><h2>${c.title || ''}</h2><p class="m">${[ps.клиент, ps.год].filter(x => x && x !== '—').join(' · ')}</p><p>${c.idea || c.task || ''}</p><a class="btn" href="#case/${t.id}">читать кейс</a>`;
+    capEl.classList.toggle('left', t.cam.s > 0); }   // подпись — на свободной половине кадра
   capEl.classList.add('on');
 }
 function frame() {
@@ -858,7 +1054,11 @@ function frame() {
   const zn = zoneAt(cp.z); U.uHaze.value.fromArray(zn.haze); U.uHazeK.value = zn.k * Lh; U.uAmb.value.fromArray(zn.amb);
   FX.beams.forEach(o => { o.b.material.uniforms.uK.value = 0.03 * o.k * Lh; });
   FX.glows.forEach(g => { g.visible = Lh > 0.01; });
-  FX.cubes.forEach(c => { c.m.visible = c.bar.visible = Lh > 0.01; });
+  // проекторы: в шейдер — три ближайших; лучи видны только у ближних
+  const pj = SHOTS.map(c => [c, cp.distanceTo(c.cam.pos)]).sort((a, b) => a[1] - b[1]);
+  for (let n = 0; n < 3; n++) { const c = pj[n][0], fl = 0.97 + 0.03 * Math.sin(time * 31 + n * 2) * Math.sin(time * 17.3);
+    U.uJp.value[n].set(c.P.x, c.P.y, c.P.z, 4.2 * fl * Lh * (0.28 + 0.72 * Math.exp(-pj[n][1] / 140)));   /* чужие кадры приглушены, свой — в полную силу */ U.uJc.value[n].set(c.C.x, c.C.y, c.C.z, c.W); U.uJn.value[n].set(c.n.x, c.n.y, c.n.z, c.H); U.uJs.value[n].copy(c.sc); U[`tJ${n}`].value = c.tex; }
+  pj.forEach(([c, d], n) => { c.beam.visible = n < 4 && Lh > 0.01; c.beam.material.uniforms.uK.value = 0.03 * Lh; });
   FX.petals.material.uniforms.uO.value = 0.85 * clamp01((-cp.z - 1700) / 150) * clamp01((2600 + cp.z) / 150);
   // вентилятор: на подходе к шахте раскручивается, гонит пыль на зрителя
   const F = FX.fan, spin = smooth(clamp01((pSm - 0.93) / 0.05));
@@ -920,6 +1120,24 @@ function buildWetFloor() {
   scene.add(w);
 }
 
+// страница кейса поверх мегаструктуры: открывается по кнопке «читать кейс», закрывается крестиком или Esc
+const pageEl = document.getElementById('page');
+function openCase() {
+  const id = (location.hash.match(/^#case\/(\w+)/) || [])[1], c = id && CASES[id];
+  if (!c) { pageEl.classList.remove('on'); document.documentElement.classList.remove('lock'); return; }
+  const sh = SHOTS.find(t => t.id === id) || {}, ps = c.pass || {};
+  pageEl.querySelector('.in').innerHTML = `<span class="t" style="color:var(--red)">${sh.loc || ''}</span><h1>${c.title || ''}</h1>
+    <div class="ps">${Object.entries(ps).map(([k, v]) => `<div><b>${k}</b>${v}</div>`).join('')}${(c.awards || []).length ? `<div><b>награды</b>${c.awards.join('<br>')}</div>` : ''}</div>
+    ${c.task ? `<h3>задача</h3><p class="big">${c.task}</p>` : ''}${c.idea ? `<h3>идея</h3><p class="big">${c.idea}</p>` : ''}
+    ${(c.how || []).length ? `<h3>как сделали</h3>${c.how.map(([src, a, b]) => `<figure><img src="${src}" alt="" loading="lazy"><figcaption><b>${a || ''}</b>${b ? ' — ' + b : ''}</figcaption></figure>`).join('')}` : ''}
+    ${(c.result || []).length ? `<h3>результат</h3><div class="res">${c.result.map(([a, b]) => `<div><b>${a}</b>${b}</div>`).join('')}</div>` : ''}
+    <a class="btn" href="#">хочу так же</a>`;
+  pageEl.scrollTop = 0; pageEl.classList.add('on'); document.documentElement.classList.add('lock');
+}
+addEventListener('hashchange', openCase);
+pageEl.querySelector('.x').addEventListener('click', () => { history.pushState('', '', location.pathname + location.search); openCase(); });
+addEventListener('keydown', e => { if (e.key === 'Escape' && pageEl.classList.contains('on')) pageEl.querySelector('.x').click(); });
+
 // ---------- старт ----------
 history.scrollRestoration = 'manual'; scrollTo(0, 0);
 await document.fonts.load('520 64px TT').catch(() => {});
@@ -927,8 +1145,8 @@ await buildLogo();
 buildWorld(slot); buildLight(); buildNeon(); buildReel(); buildWetFloor(); buildTimeline();
 if (!new URLSearchParams(location.search).has('live')) await loadBaked();
 renderer.compile(scene, camera);
-window.__mega = { cam: camera, composer, bloom, fanMesh: FX.fan.bi, LAMPS, SHAFTS, glows: FX.glows, U, rigAt: q => { camTarget(q); return [camT.toArray(), look.toArray()]; }, go: p => { scrollTo(0, toRaw(p) * (document.documentElement.scrollHeight - innerHeight)); pSm = p; snapCam = true; }, STOPS: () => STOPS.map(t => [t.c.id, +t.pS.toFixed(4)]), renderer, scene };
+window.__mega = { cam: camera, composer, bloom, fanMesh: FX.fan.bi, LAMPS, SHAFTS, glows: FX.glows, U, rigAt: q => { camTarget(q); return [camT.toArray(), look.toArray()]; }, go: p => { scrollTo(0, toRaw(p) * (document.documentElement.scrollHeight - innerHeight)); pSm = p; snapCam = true; }, STOPS: () => SHOTS.map(c => [c.id, +c.pMid.toFixed(4)]), SHOTS, CP, renderer, scene };
 const AT = new URLSearchParams(location.search).get('p'); if (AT) window.__mega.go(+AT);
 frame();
 await new Promise(res => { const t0 = performance.now(); let calm = 0; const tick = () => { calm = LOAD.total === LOAD.loaded ? calm + 1 : 0; if (calm > 3 || performance.now() - t0 > 30000) return res(); setTimeout(tick, 150); }; tick(); });
-document.getElementById('loader').classList.add('done'); document.documentElement.classList.remove('lock');
+document.getElementById('loader').classList.add('done'); document.documentElement.classList.remove('lock'); openCase();

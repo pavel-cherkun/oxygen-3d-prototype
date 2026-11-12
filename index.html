@@ -15,7 +15,7 @@ html,body{background:var(--bg);color:var(--cream)}
 html.lock,html.lock body{overflow:hidden}
 body{font:400 17px/1.45 "TT",system-ui,sans-serif;font-variation-settings:"opsz" 36,"wdth" 100;overflow-x:hidden}
 canvas#gl{position:fixed;inset:0;width:100vw;height:100vh;display:block;z-index:0}
-#scroll{height:5200vh;position:relative;z-index:-1}
+#scroll{height:5700vh;position:relative;z-index:-1}
 .t{font-family:"AP",monospace;font-size:13px;letter-spacing:.04em}
 header{position:fixed;top:0;left:0;right:0;z-index:5;display:flex;align-items:center;justify-content:space-between;padding:22px 28px}
 header img{height:22px}
@@ -28,7 +28,16 @@ header a.cta{border:1px solid var(--red);padding:8px 16px;border-radius:40px}
 .ov p{margin-top:14px;font-size:18px;max-width:34ch}
 .ov .t{color:var(--red)}
 .c{left:50%;top:50%;transform:translate(-50%,-50%);text-align:center;max-width:none;transition:opacity 1.6s}.c h1{font-size:clamp(48px,6.4vw,112px);color:#140606;mix-blend-mode:multiply}.c .t{display:block;margin-bottom:16px}
-#case{position:fixed;right:28px;bottom:12vh;z-index:4;max-width:420px;opacity:0;transform:translateY(12px);transition:opacity .5s,transform .5s;pointer-events:none}#case.on{opacity:1;transform:none}#case.left{right:auto;left:28px}#case h2{font-weight:520;font-size:clamp(34px,3.4vw,56px);line-height:.95;margin-top:8px}#case .t{color:var(--red)}#case .m{margin-top:10px;color:var(--mute);font-family:"AP",monospace;font-size:13px}#case p{margin-top:10px;font-size:16px}
+#case{position:fixed;right:6vw;top:50%;z-index:4;width:min(440px,36vw);opacity:0;transform:translateY(calc(-50% + 14px));transition:opacity .5s,transform .5s;pointer-events:none}#case.on{opacity:1;transform:translateY(-50%);pointer-events:auto}#case.left{right:auto;left:6vw}#case::before{content:'';position:absolute;inset:-90px -140px;background:radial-gradient(closest-side,rgba(1,1,1,.62),rgba(1,1,1,0));z-index:-1}
+#case .btn,#page .btn{display:inline-block;margin-top:24px;border:1px solid var(--red);color:var(--cream);text-decoration:none;padding:11px 22px;border-radius:40px;font-size:15px;transition:background .3s}#case .btn:hover,#page .btn:hover{background:var(--red)}
+#page{position:fixed;inset:0;z-index:20;background:rgba(1,1,1,.96);overflow-y:auto;opacity:0;pointer-events:none;transition:opacity .4s}#page.on{opacity:1;pointer-events:auto}
+#page .in{max-width:1100px;margin:0 auto;padding:110px 28px 120px}#page h1{font-weight:520;font-size:clamp(48px,7vw,112px);line-height:.9;letter-spacing:-.02em;margin:14px 0 26px}
+#page .x{position:fixed;top:22px;right:28px;z-index:21;color:var(--cream);background:none;border:1px solid var(--mute);border-radius:40px;padding:8px 16px;font:14px "TT",sans-serif;cursor:pointer}
+#page .ps{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:18px 28px;border-top:1px solid #2a2724;padding-top:18px;margin-bottom:44px}#page .ps b{display:block;color:var(--mute);font:13px "AP",monospace;font-weight:400;margin-bottom:4px}
+#page h3{font:13px "AP",monospace;color:var(--red);font-weight:400;margin:40px 0 10px}#page p.big{font-size:clamp(20px,2vw,28px);line-height:1.25;max-width:40ch}
+#page figure{margin-top:28px}#page figure img{width:100%;display:block}#page figcaption{margin-top:8px;color:var(--mute);font-size:15px}#page figcaption b{color:var(--cream);font-weight:520}
+#page .res{display:flex;flex-wrap:wrap;gap:28px 56px;margin-top:10px}#page .res div{font-size:15px;color:var(--mute)}#page .res b{display:block;color:var(--cream);font-size:clamp(40px,4.4vw,72px);font-weight:520;line-height:1}
+@media(max-width:760px){#case{top:auto;bottom:7vh;left:16px;right:16px;width:auto;transform:translateY(14px)}#case.on{transform:none}#case.left{left:16px}}#case h2{font-weight:520;font-size:clamp(34px,3.4vw,56px);line-height:.95;margin-top:8px}#case .t{color:var(--red)}#case .m{margin-top:10px;color:var(--mute);font-family:"AP",monospace;font-size:13px}#case p{margin-top:10px;font-size:16px}
 .l{left:28px;bottom:12vh}.r{right:28px;bottom:12vh;text-align:right}.r p{margin-left:auto}
 #pct{position:fixed;right:28px;bottom:22px;z-index:5;color:var(--mute)}
 #loader{position:fixed;inset:0;z-index:10;background:var(--bg);display:flex;align-items:center;justify-content:center;transition:opacity 1.4s ease-out}
@@ -63,7 +72,7 @@ header a.cta{border:1px solid var(--red);padding:8px 16px;border-radius:40px}
   <span class="t">{02} шоурил</span>
   <h2 style="margin-top:10px">фильм бренда</h2>
 </section>
-<section class="ov r" data-a="0.53" data-b="0.605">
+<section class="ov r" data-a="0.53" data-b="0.578">
   <span class="t">{03} мегаструктура</span>
   <h2 style="margin-top:10px">всё, что мы<br>построили</h2>
   <p>кампании, зоны, ивенты и продакшн — в одном пространстве</p>
@@ -73,6 +82,7 @@ header a.cta{border:1px solid var(--red);padding:8px 16px;border-radius:40px}
   <h1>сколько кислорода<br>нужно вашему огню</h1>
 </section>
 <aside id="case"></aside>
+<div id="page"><button class="x">закрыть</button><div class="in"></div></div>
 <div id="pct" class="t">000% · 20_26</div>
 <div id="scroll"></div>
 <script type="module" src="main.js"></script>
