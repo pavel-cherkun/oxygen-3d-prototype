@@ -122,7 +122,7 @@ const PROJ = /* glsl */`uniform vec4 uJp[3]; uniform vec4 uJc[3]; uniform vec4 u
     vec3 h = P.xyz + d * t - C.xyz, T = normalize(cross(-n, vec3(0.0, 1.0, 0.0))), B = cross(T, -n);
     vec2 uv = vec2(dot(h, T) / C.w, dot(h, B) / Nn.w) + 0.5;
     vec2 e = smoothstep(0.0, 0.004, uv) * smoothstep(0.0, 0.004, 1.0 - uv); float m = e.x * e.y; if (m <= 0.0) return vec3(0.0);
-    vec3 img = texture2D(tI, (uv - 0.5) * sc + 0.5).rgb;
+    vec3 img = texture2D(tI, (uv - 0.5) * sc + 0.5).rgb + 0.035;   // у проектора нет чистого чёрного — рамка кадра видна и на тёмном ролике
     float lam = max(dot(N, -normalize(d)), 0.0), vig = 1.0 - 0.45 * dot(uv - 0.5, uv - 0.5) * 2.0, scan = 0.94 + 0.06 * sin(uv.y * Nn.w * 1.3);
     return img * m * P.w * (0.2 + 0.8 * lam) * vig * scan;
   }
@@ -308,7 +308,7 @@ const OLDPOS = [   // прежние места билбордов — толь�
 const ZP = {   // высота камеры над полом; потолок для подвеса проектора; расстояние от стены до проектора и его высота
   hyp: { yc: 52, ceil: LOW + 420, pd: 380, py: LOW + 330 },
   shaft: { yc: 26, ceil: null, pd: 270, py: LOW + 70 },
-  asia: { yc: 46, ceil: null, pd: 505, py: LOW + 236 },
+  asia: { yc: 46, ceil: null, pd: 505, py: LOW + 236, a: 58 },
   ret: { yc: 60, ceil: null, pd: 340, py: LOW + 432 },
   ai: { yc: 70, ceil: LOW + 1100, pd: 400, py: LOW + 400 },
   sport: { yc: 60, ceil: LOW + 1000, pd: 560, py: LOW + 400 },
@@ -316,7 +316,8 @@ const ZP = {   // высота камеры над полом; потолок д
 const SHC = V(0, 0, (ZN.hyp - 12 + ZN.asia + ZN.asiaR) / 2);
 const wallPt = (x, y, z, nx) => ({ C: V(x, LOW + y, z), n: V(nx, 0, 0) });
 const cylPt = (c, R, deg, y) => { const a = THREE.MathUtils.degToRad(deg), si = Math.sin(a), co = Math.cos(a); return { C: V(c.x + R * si, LOW + y, c.z + R * co), n: V(-si, 0, -co) }; };
-const PJ = (id, img, loc, zone, w, W) => ({ id, img, loc, zone, C: w.C, n: w.n, W, H: W * 9 / 16, sc: new THREE.Vector2(1, 1) });
+const VIDS = { aiFonbet: 'ai-fonbet', aiMango: 'ai-mango', aiLavka: 'ai-lavka', aiAlfa: 'ai-alfa', tevredens: 'tevredens', zaklinateli: 'zaklinateli' };   // где есть ролик — проектор крутит ролик
+const PJ = (id, img, loc, zone, w, W) => ({ id, img, loc, zone, C: w.C, n: w.n, W, H: W * 9 / 16, sc: new THREE.Vector2(1, 1), vid: VIDS[id] });
 const SHOTS = [
   PJ('baltikaPlant', 'cases/baltika-plant-1', 'ивенты', 'hyp', wallPt(-699.5, 150, -780, 1), 240),
   PJ('megafon', 'cases/megafon-1', 'ивенты', 'hyp', wallPt(-699.5, 150, -1060, 1), 240),
@@ -353,7 +354,7 @@ function solveShot(sh, aspect) {
   const wide = aspect >= 1, tx = wide ? s * 0.47 : 0, ty = wide ? 0.03 : 0.34, tw = wide ? 0.9 : 1.84, th = wide ? 1.5 : 0.62;
   const cam = new THREE.PerspectiveCamera(50, aspect, 1, 9000);
   const corners = [[-1, -1], [1, -1], [1, 1], [-1, 1]].map(([a, b]) => sh.C.clone().addScaledVector(T0, a * sh.W / 2).addScaledVector(up, b * sh.H / 2));
-  const dh = sh.n.clone().negate().multiplyScalar(Math.cos(SOLVE_A)).addScaledVector(f, Math.sin(SOLVE_A)).normalize(), right = dh.clone().cross(up).normalize();
+  const yaw = ZP[sh.zone].a ? THREE.MathUtils.degToRad(ZP[sh.zone].a) : SOLVE_A, dh = sh.n.clone().negate().multiplyScalar(Math.cos(yaw)).addScaledVector(f, Math.sin(yaw)).normalize(), right = dh.clone().cross(up).normalize();
   let D = sh.W * 1.3, lat = -tx * D * 0.6, pitch = 0; const yc = LOW + ZP[sh.zone].yc;
   for (let it = 0; it < 80; it++) {
     const pos = sh.C.clone().addScaledVector(dh, -D).addScaledVector(right, lat); pos.y = yc;
@@ -370,20 +371,35 @@ SHOTS.forEach(c => solveShot(c, innerWidth / innerHeight));
 // проходы между локациями: камера идёт через проёмы по оси
 const DOORS = { 'hyp>shaft': [V(0, LOW + 42, -1440), V(0, LOW + 40, -1570)], 'shaft>asia': [V(0, LOW + 40, -1790), V(0, LOW + 42, -1890)], 'asia>ret': [V(0, LOW + 36, -2330), V(0, LOW + 36, -2460)],
   'ret>ai': [V(0, LOW + 56, -3290), V(0, LOW + 60, -3460)], 'ai>sport': [V(0, LOW + 64, -4400), V(0, LOW + 64, -4490)] };
+const ZR = { hyp: [-330, -1480], shaft: [-1590, -1810], asia: [-1905, -2330], ret: [-2485, -3290], ai: [-3485, -4420], sport: [-4505, -5130] };   // куда камере можно в каждой локации (по z)
+// взгляд, прикованный к кадру: направление на центр картинки, повёрнутое так, чтобы картинка стояла на своей половине экрана
+function lockDir(c, pos, aspect = innerWidth / innerHeight) {
+  const wide = aspect >= 1, tanH = Math.tan(THREE.MathUtils.degToRad(25)) * aspect, d = c.C.clone().sub(pos), hz = Math.hypot(d.x, d.z);
+  const yaw = wide ? c.cam.s * Math.atan(0.42 * tanH) : 0, pitch = Math.atan2(c.C.y - pos.y, hz) - Math.atan((wide ? 0.03 : 0.34) * Math.tan(THREE.MathUtils.degToRad(25)));
+  const h = V(d.x / hz, 0, d.z / hz).applyAxisAngle(V(0, 1, 0), yaw);
+  return h.multiplyScalar(Math.cos(pitch)).setY(Math.sin(pitch)).normalize();
+}
 const CAM0 = { pos: V(104, 34, -236), look: V(90, -120, -900) };   // кадр на парапете — отсюда начинается путь по кейсам
 function camKeys(endKeys) {
   const K = [{ pos: CAM0.pos.clone(), dir: CAM0.look.clone().sub(CAM0.pos).normalize() }, { pos: V(40, 6, -400) }];
   SHOTS.forEach((c, i) => {
-    const pr = SHOTS[i - 1]; if (pr && pr.zone !== c.zone) DOORS[`${pr.zone}>${c.zone}`].forEach(p => K.push({ pos: p.clone() }));
-    const h = c.cam.dir.clone().setY(0).normalize();
-    K.push({ pos: c.cam.pos.clone().addScaledVector(h, -5), dir: c.cam.dir, shot: c, hold: 'A' }, { pos: c.cam.pos.clone().addScaledVector(h, 5), dir: c.cam.dir, shot: c, hold: 'B' });
+    // проход мимо кадра: камера едет вдоль стены (по ходу), взгляд всё это время прикован к картинке
+    const zr = ZR[c.zone], L = c.cam.D * (c.zone === 'sport' ? 0.3 : 0.5), cz = z => Math.min(zr[0], Math.max(zr[1], z));
+    const A = c.cam.pos.clone().addScaledVector(c.cam.f, -L / 2), B = c.cam.pos.clone().addScaledVector(c.cam.f, L / 2); A.z = cz(A.z); B.z = cz(B.z);
+    const pr = SHOTS[i - 1]; if (pr && pr.zone !== c.zone) DOORS[`${pr.zone}>${c.zone}`].forEach(p => { if (p.z > A.z + 5) K.push({ pos: p.clone() }); });
+    K.push({ pos: A, dir: lockDir(c, A), shot: c, hold: 'A' }, { pos: B, dir: lockDir(c, B), shot: c, hold: 'B' });
   });
   K.push({ pos: V(0, LOW + 60, -5080) }, { pos: V(0, LOW + 58, -5150) });   // к проёму в вентшахту — по оси
   return K.concat(endKeys);
 }
 function camPath(K) {
   const curve = new THREE.CatmullRomCurve3(K.map(k => k.pos), false, 'centripetal'), per = 160, n = (K.length - 1) * per, pos = [], arc = [0];
-  for (let i = 0; i <= n; i++) { pos.push(curve.getPoint(i / n)); if (i) arc.push(arc[i - 1] + pos[i].distanceTo(pos[i - 1])); }
+  for (let i = 0; i <= n; i++) {
+    const p = curve.getPoint(i / n);
+    const dx = p.x, dz = p.z - ZN.asia, r = Math.hypot(dx, dz); if (r < 95 && p.y < LOW + 150) { p.x = dx / (r || 1) * 95; p.z = ZN.asia + dz / (r || 1) * 95; }   // в обход ствола сакуры
+    if (p.z < -2470 && p.z > -3300) p.x = Math.max(-136, Math.min(136, p.x));                                                                  // в продуктовом — только по проходу
+    pos.push(p); if (i) arc.push(arc[i - 1] + pos[i].distanceTo(pos[i - 1]));
+  }
   K.forEach((k, i) => { k.j = i * per; k.arc = arc[k.j]; });
   return { pos, arc, n };
 }
@@ -706,7 +722,11 @@ function buildLight() {
     bodies.push({ m: new THREE.Matrix4().compose(P.clone().addScaledVector(dir, -7), q, V(11, 7, 15)), c: dark });
     if (z.ceil) rods.push({ m: beam(P.clone().addScaledVector(dir, -7), V(P.x, z.ceil, P.z).addScaledVector(dir, -7), 0.8), c: dark });
     else bodies.push({ m: M(P.clone().addScaledVector(dir, -7).add(V(0, -6, 0)), [0, 0, 0], V(5, 6, 5)), c: dark });
-    c.tex = texL.load(`assets/${c.img}.jpg`, t => { const a = t.image.width / t.image.height, fa = 16 / 9; c.sc.set(a > fa ? fa / a : 1, a > fa ? 1 : a / fa); });
+    const cover = a => { const fa = 16 / 9; c.sc.set(a > fa ? fa / a : 1, a > fa ? 1 : a / fa); };
+    if (c.vid) {
+      const v = Object.assign(document.createElement('video'), { src: `assets/${c.vid}.mp4`, muted: true, loop: true, playsInline: true, crossOrigin: 'anonymous', preload: 'auto' });
+      v.addEventListener('loadedmetadata', () => cover(v.videoWidth / v.videoHeight)); c.video = v; c.tex = new THREE.VideoTexture(v);
+    } else c.tex = texL.load(`assets/${c.img}.jpg`, t => cover(t.image.width / t.image.height));
     c.tex.colorSpace = THREE.SRGBColorSpace; c.tex.anisotropy = 8;
     const lens = new THREE.Sprite(new THREE.SpriteMaterial({ map: softDot, color: new THREE.Color(1, 0.95, 0.88).multiplyScalar(4), blending: THREE.AdditiveBlending, depthWrite: false, toneMapped: false }));
     lens.scale.setScalar(16); lens.position.copy(P).addScaledVector(dir, 1); scene.add(lens); FX.glows.push(lens);
@@ -913,15 +933,20 @@ function buildTimeline() {
   for (let j = 0, ai = 0; j <= N; j++) {
     while (ai < anc.length - 2 && anc[ai + 1].j <= j) ai++;
     const a = anc[ai], b = anc[ai + 1];
-    if (a.shot && a.shot === b.shot) { dirs.push(a.dir.clone()); continue; }
+    if (a.shot && a.shot === b.shot) { dirs.push(lockDir(a.shot, cp[j])); continue; }
     const d1 = arc[j] - a.arc, d2 = b.arc - arc[j], L = d1 + d2;
     if (L < 2 * RT) dirs.push(slerpV(a.dir, b.dir, sm(clamp01(d1 / (L || 1)))));
     else dirs.push(slerpV(slerpV(tanS[j], a.dir, sm(clamp01(1 - d1 / RT))), b.dir, sm(clamp01(1 - d2 / RT))));
   }
   // скорость: у кадра — едва движется (наезд 10 м занимает заметный кусок скролла), разгон и торможение плавные
   const holds = KK.filter(k => k.hold === 'A').map(k => [k.arc, KK[KK.indexOf(k) + 1].arc]);
-  const vel = x => { let d = 1e9; holds.forEach(([a, b]) => { d = Math.min(d, x < a ? a - x : x > b ? x - b : 0); }); return 0.03 + 0.97 * sm(clamp01(d / 120)); };
-  const cum = [0]; for (let j = 1; j <= N; j++) cum.push(cum[j - 1] + (arc[j] - arc[j - 1]) / vel((arc[j] + arc[j - 1]) / 2));
+  const vel = x => { let d = 1e9; holds.forEach(([a, b]) => { d = Math.min(d, x < a ? a - x : x > b ? x - b : 0); }); return 0.1 + 0.9 * sm(clamp01(d / 140)); };
+  const w0 = arc.map((_, j) => j ? (arc[j] - arc[j - 1]) / vel((arc[j] + arc[j - 1]) / 2) : 0);
+  // переходу между кадрами — столько скролла, сколько нужно на разворот без спешки (≤ 11° на 0,0005 p)
+  const trs = KK.filter(k => k.hold === 'B').map(k => { const nx = KK.slice(KK.indexOf(k) + 1).find(q => q.hold === 'A') || KK[KK.length - 1]; let ang = 0; for (let j = k.j + 1; j <= nx.j; j++) ang += dirs[j].angleTo(dirs[j - 1]); return [k.j, nx.j, ang * 57.3]; });   // весь поворот на переходе (через «вперёд»)
+  for (let it = 0; it < 4; it++) { const U = w0.reduce((a, b) => a + b, 0), ppu = (P_B - P_A) / U;
+    trs.forEach(([a, b, ang]) => { let u = 0; for (let j = a + 1; j <= b; j++) u += w0[j]; const need = ang / 9 * 0.0005 / ppu; if (u < need && b > a) { const add = (need - u) / (b - a); for (let j = a + 1; j <= b; j++) w0[j] += add; } }); }
+  const cum = [0]; for (let j = 1; j <= N; j++) cum.push(cum[j - 1] + w0[j]);
   // голова ленты: ближайшая к камере точка ленты, только вперёд, с запасом
   let sh = sv[9];
   CP.p = []; CP.pos = cp; CP.dir = dirs; CP.s = [];
@@ -932,11 +957,15 @@ function buildTimeline() {
     let sv_ = Math.min(sJoin, sh + 40); sv_ = sv[8] + (sv_ - sv[8]) * sm(clamp01(arc[j] / 260)); sv_ += (sJoin - sv_) * sm(clamp01((j - (N - 600)) / 600));
     CP.s.push(j ? Math.max(CP.s[j - 1], sv_) : sv_);
   }
-  // предел скорости поворота по скроллу: не больше 14° на 0,0005 p (примерно один щелчок колеса) — проход вперёд и назад, затем среднее
-  { const MR = THREE.MathUtils.degToRad(14) / 0.0005, lim = (from, to, st) => { const o = dirs.map(d => d.clone()); for (let j = from + st; j !== to; j += st) { const al = MR * Math.abs(CP.p[j] - CP.p[j - st]), ang = o[j - st].angleTo(o[j]); if (ang > al) o[j] = slerpV(o[j - st], o[j], al / ang); } return o; };
-    const fw = lim(0, N + 1, 1), bw = lim(N, -1, -1); for (let j = 0; j <= N; j++) dirs[j] = slerpV(fw[j], bw[j], 0.5).normalize(); }
+  // предел скорости поворота по скроллу (14° на 0,0005 p): на проходе у кадра взгляд не трогаем — весь разворот идёт между кадрами;
+  // вперёд от прошлого кадра и назад от следующего, затем смесь по доле пути перехода — без скачков на стыках
+  { const inH = arc.map(x => holds.some(([a, b]) => x >= a && x <= b)), MR = THREE.MathUtils.degToRad(14) / 0.0005;
+    const lim = (from, to, st) => { const o = dirs.map(d => d.clone()); for (let j = from + st; j !== to; j += st) { if (inH[j]) continue; const al = MR * Math.abs(CP.p[j] - CP.p[j - st]), ang = o[j - st].angleTo(o[j]); if (ang > al) o[j] = slerpV(o[j - st], o[j], al / ang); } return o; };
+    const fw = lim(0, N + 1, 1), bw = lim(N, -1, -1);
+    for (let j = 0, a = 0; j <= N; j++) { if (inH[j]) { a = j; continue; } let b = j; while (b < N && !inH[b]) b++; const t = sm(clamp01((CP.p[j] - CP.p[a]) / ((CP.p[b] - CP.p[a]) || 1)));
+      dirs[j] = slerpV(fw[j], bw[j], t).normalize(); } }
   const pAtArc = x => { let j = 0; while (j < N && arc[j] < x) j++; return CP.p[j]; };
-  KK.filter(k => k.hold === 'A').forEach(k => { const c = k.shot, b = KK[KK.indexOf(k) + 1]; c.p0 = pAtArc(k.arc - 30); c.p1 = pAtArc(b.arc + 30); c.pMid = pAtArc((k.arc + b.arc) / 2); });
+  KK.filter(k => k.hold === 'A').forEach(k => { const c = k.shot, b = KK[KK.indexOf(k) + 1]; c.p0 = pAtArc(k.arc - 25); c.p1 = pAtArc(b.arc + 5); c.pMid = pAtArc((k.arc + b.arc) / 2); });
   }
   CAMK.sort((a, b) => a.p - b.p);
   CAMK.pos = new THREE.CatmullRomCurve3(CAMK.map(k => k.pos), false, 'centripetal');
@@ -1002,9 +1031,10 @@ function camTarget(q) {
     if (q > P_END) { const e = smooth(clamp01((q - P_END) / (1 - P_END))); camT.lerp(RIG.finPos, e); look.lerp(RIG.finLook, e); }
   }
 }
-const RAW_A = 0.1684;   // доля скролла на интро (до парапета) — дальше скролл отдан кейсам
-const toP = r => r < RAW_A ? r * P_A / RAW_A : P_A + (r - RAW_A) * (1 - P_A) / (1 - RAW_A);
-const toRaw = p => p < P_A ? p * RAW_A / P_A : RAW_A + (p - P_A) * (1 - RAW_A) / (1 - P_A);
+// скролл 7500vh: интро (до парапета) — прежние 960vh, финал после кейсов — прежние ~11286vh на единицу p, всё остальное — кейсам
+const VH = 7500, RAW_A = 960 / VH, rawB = () => 1 - (1 - P_B) * 11286 / VH;
+const toP = r => { const B = rawB(); return r < RAW_A ? r * P_A / RAW_A : r < B ? P_A + (r - RAW_A) * (P_B - P_A) / (B - RAW_A) : P_B + (r - B) * (1 - P_B) / (1 - B); };
+const toRaw = p => { const B = rawB(); return p < P_A ? p * RAW_A / P_A : p < P_B ? RAW_A + (p - P_A) * (B - RAW_A) / (P_B - P_A) : B + (p - P_B) * (1 - B) / (1 - P_B); };
 const capEl = document.getElementById('case');
 let capId = null;
 function caption(p) {
@@ -1058,7 +1088,7 @@ function frame() {
   const pj = SHOTS.map(c => [c, cp.distanceTo(c.cam.pos)]).sort((a, b) => a[1] - b[1]);
   for (let n = 0; n < 3; n++) { const c = pj[n][0], fl = 0.97 + 0.03 * Math.sin(time * 31 + n * 2) * Math.sin(time * 17.3);
     U.uJp.value[n].set(c.P.x, c.P.y, c.P.z, 4.2 * fl * Lh * (0.28 + 0.72 * Math.exp(-pj[n][1] / 140)));   /* чужие кадры приглушены, свой — в полную силу */ U.uJc.value[n].set(c.C.x, c.C.y, c.C.z, c.W); U.uJn.value[n].set(c.n.x, c.n.y, c.n.z, c.H); U.uJs.value[n].copy(c.sc); U[`tJ${n}`].value = c.tex; }
-  pj.forEach(([c, d], n) => { c.beam.visible = n < 4 && Lh > 0.01; c.beam.material.uniforms.uK.value = 0.03 * Lh; });
+  pj.forEach(([c, d], n) => { if (c.video) { const on = n < 3 && Lh > 0.01; if (on && c.video.paused) c.video.play().catch(() => {}); else if (!on && !c.video.paused) c.video.pause(); } c.beam.visible = n < 4 && Lh > 0.01; c.beam.material.uniforms.uK.value = 0.03 * Lh; });
   FX.petals.material.uniforms.uO.value = 0.85 * clamp01((-cp.z - 1700) / 150) * clamp01((2600 + cp.z) / 150);
   // вентилятор: на подходе к шахте раскручивается, гонит пыль на зрителя
   const F = FX.fan, spin = smooth(clamp01((pSm - 0.93) / 0.05));
