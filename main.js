@@ -15,7 +15,7 @@ import { CASES } from './cases.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 import { DRACOLoader } from 'three/addons/loaders/DRACOLoader.js';
-import { buildRobozoneGen, buildTdojoGen, buildOzonCorpAlley } from './zones/zones.js';
+import { buildRobozoneGen, buildTdojoGen, buildOzonCorpAlley, buildOzonCorpGen, buildSelectGen } from './zones/zones.js';
 
 const RED = 0xf40709, CREAM = 0xe1d9cf;
 const V = (x, y, z) => new THREE.Vector3(x, y, z);
@@ -326,7 +326,8 @@ const AS = V(0, 0, ZN.asia), wallZ = (x, y, z) => ({ C: V(x, LOW + y, z), n: V(0
 // 3D-зоны кейсов (модуль zones/zones.js): локальные метры, фасад в +z — ставим в залы с масштабом S, у каждой свой свет
 const ZONES3 = {
   robo: { build: buildRobozoneGen, gen: true, pos: V(300, LOW, -1240), rotY: 0, S: 6, size: { w: 15, d: 12, h: 6.5 } },
-  corp: { build: buildOzonCorpAlley, pos: V(-220, LOW, -1260), rotY: 0, S: 6, size: { w: 10, d: 22, h: 6 } },
+  corp: { build: buildOzonCorpAlley, pos: V(-220, LOW, -1260), rotY: 0, S: 6, size: { w: 16, d: 26, h: 6 } },
+  sel: { build: buildSelectGen, gen: true, pos: V(-138, LOW, -2600), rotY: Math.PI / 2, S: 6, size: { w: 18, d: 4.6, h: 4.1 } },
   dojo: { build: buildTdojoGen, gen: true, pos: V(130, LOW, -2150), rotY: 0, S: 4, size: { w: 32, d: 40, h: 14.2 } },
 };
 // кадр зоны: «картинка» — фасад зоны (центр по фасаду, ширина ~ ширина зоны)
@@ -346,7 +347,7 @@ const SHOTS = [
   PJ('izhora', 'cases/izhora-48-1', 'азия', 'asia', cylPt(AS, 259.5, -45, 80), 150),
   PJ('treschnutye', 'cases/treschnutye-1', 'азия', 'asia', cylPt(AS, 259.5, -105, 80), 150),
   ZS('tbank', 'т-банк · 3d-зона', 'asia', 'dojo', 0.55, { a: -20, yc: 30 }),
-  PJ('selekt', 'cases/ozon-select-1', 'ритейл', 'ret', wallPt(-169.4, 150, -2600, 1), 200),
+  ZS('selekt', 'ozon селект · 3d-зона', 'ret', 'sel', 0.85, { yc: 24 }),
   PJ('zaklinateli', 'cases/zaklinateli-kv-1', 'ритейл', 'ret', wallPt(-169.4, 150, -2870, 1), 200),
   PJ('dino', 'cases/dino-1', 'ритейл', 'ret', wallPt(-169.4, 150, -3140, 1), 200),
   PJ('gdriveMerch', 'cases/gdrive-capsule-1', 'мерч', 'ret', wallPt(169.4, 150, -3140, -1), 190),
@@ -1175,7 +1176,7 @@ function buildZones() {
   const gltfZ = new GLTFLoader().setDRACOLoader(new DRACOLoader().setDecoderPath('https://cdn.jsdelivr.net/npm/three@0.169.0/examples/jsm/libs/draco/gltf/'));   // модели зон (Higgsfield → Блендер) сжаты Draco
   const envOn = (root) => root.traverse(m => { if (m.isMesh && m.material) [].concat(m.material).forEach(mt => { if (mt.isMeshStandardMaterial) { mt.envMap = env; mt.envMapIntensity = 0.35; } }); });
   Object.entries(ZONES3).forEach(([k, Z]) => {
-    const o = Z.gen ? Z.build(THREE, gltfZ) : Z.build(THREE, { kv: 'assets/cases/ozon-fandom-kv-1.jpg' }), g = o.group;
+    const o = Z.gen ? Z.build(THREE, gltfZ) : Z.build(THREE, { kv: 'assets/cases/ozon-fandom-kv-1.jpg', width: 15, length: 26 }), g = o.group;
     g.scale.setScalar(Z.S); g.position.copy(Z.pos); g.rotation.y = Z.rotY; scene.add(g); Z.obj = o;
     g.traverse(m => {
       if (m.isLight) { if (m.distance) m.distance *= Z.S; m.intensity *= Math.pow(Z.S, m.decay || 2); }
@@ -1185,11 +1186,10 @@ function buildZones() {
     const key = new THREE.SpotLight(0xfff0dc, 2.2 * Math.pow(H * 2.4, 2), H * 6, 0.62, 0.55, 2); key.position.set(W * 0.25, H * 2.4, D * 0.9); key.target.position.set(0, H * 0.3, 0);
     const rim = new THREE.SpotLight(0xc8d6ff, 3.2 * Math.pow(H * 2.2, 2), H * 7, 0.7, 0.6, 2); rim.position.set(-W * 0.3, H * 1.8, -D * 1.3); rim.target.position.set(0, H * 0.4, 0);
     [key, rim].forEach(l => { l.position.multiplyScalar(1 / Z.S); l.target.position.multiplyScalar(1 / Z.S); g.add(l, l.target); });   // позиции — в локальных метрах зоны, дальность и сила — мировые
-    if (k === 'corp') new GLTFLoader().loadAsync('assets/models/ozon-corp.min.glb').then(gl => {   // модель зоны Ozon Corp — внутри переулка
-      const m = gl.scene; m.traverse(x => { if (x.isMesh) { x.material.side = THREE.DoubleSide; x.material.envMap = env; x.material.envMapIntensity = 0.3; } });
-      const b = new THREE.Box3().setFromObject(m), sz = b.getSize(V(0, 0, 0)); m.scale.setScalar(7 / Math.max(sz.x, sz.z)); b.setFromObject(m); const c = b.getCenter(V(0, 0, 0));
-      m.position.set(-c.x, -b.min.y, -c.z - 2); g.add(m);
-    }).catch(() => {});
+    if (k === 'corp') {   // модель зоны Ozon Corp (Higgsfield по 3D-макету) — в глубине переулка, фасадом к входу
+      const m = buildOzonCorpGen(THREE, gltfZ); m.group.position.set(0, 0, -5); g.add(m.group); const up = o.update; o.update = (t, I, cp) => { up(t, I, cp); m.update(t, I); };
+      m.group.traverse(l => { if (l.isLight) { if (l.distance) l.distance *= Z.S; l.intensity *= Math.pow(Z.S, l.decay || 2); } }); m.ready.then(() => envOn(g));
+    }
   });
 }
 
