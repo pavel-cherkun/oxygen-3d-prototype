@@ -14,7 +14,8 @@ import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
 import { CASES } from './cases.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
-import { buildRobozone, buildTdojo, buildOzonCorpAlley } from './zones/zones.js';
+import { DRACOLoader } from 'three/addons/loaders/DRACOLoader.js';
+import { buildRobozoneGen, buildTdojoGen, buildOzonCorpAlley } from './zones/zones.js';
 
 const RED = 0xf40709, CREAM = 0xe1d9cf;
 const V = (x, y, z) => new THREE.Vector3(x, y, z);
@@ -324,9 +325,9 @@ const PJ = (id, img, loc, zone, w, W, o = {}) => Object.assign({ id, img, loc, z
 const AS = V(0, 0, ZN.asia), wallZ = (x, y, z) => ({ C: V(x, LOW + y, z), n: V(0, 0, 1) });
 // 3D-зоны кейсов (модуль zones/zones.js): локальные метры, фасад в +z — ставим в залы с масштабом S, у каждой свой свет
 const ZONES3 = {
-  robo: { build: buildRobozone, pos: V(300, LOW, -1240), rotY: 0, S: 6, size: { w: 20, d: 11, h: 8.3 } },
+  robo: { build: buildRobozoneGen, gen: true, pos: V(300, LOW, -1240), rotY: 0, S: 6, size: { w: 15, d: 12, h: 6.5 } },
   corp: { build: buildOzonCorpAlley, pos: V(-220, LOW, -1260), rotY: 0, S: 6, size: { w: 10, d: 22, h: 6 } },
-  dojo: { build: buildTdojo, pos: V(130, LOW, -2150), rotY: 0, S: 4, size: { w: 32, d: 40, h: 14.2 } },
+  dojo: { build: buildTdojoGen, gen: true, pos: V(130, LOW, -2150), rotY: 0, S: 4, size: { w: 32, d: 40, h: 14.2 } },
 };
 // кадр зоны: «картинка» — фасад зоны (центр по фасаду, ширина ~ ширина зоны)
 const zoneShot = (k, kW, o = {}) => { const z = ZONES3[k], n = V(Math.sin(z.rotY), 0, Math.cos(z.rotY)), C = z.pos.clone().addScaledVector(n, z.size.d * z.S / 2); C.y = LOW + z.size.h * z.S * 0.42; return { C, n, _W: z.size.w * z.S * kW, z3: k, ...o }; };
@@ -336,7 +337,7 @@ const SHOTS = [
   PJ('megafon', 'cases/megafon-1', 'ивенты', 'hyp', wallPt(-699.5, 115, -990, 1), 220),
   PJ('megafonTravel', 'cases/megafon-travel-1', 'ивенты', 'hyp', wallPt(-699.5, 115, -1250, 1), 220),
   ZS('fandom', 'ozon corp · 3d-зона', 'hyp', 'corp', 0.95, { yc: 22, a: 8 }),
-  ZS('robozone', 'ozon tech · 3d-зона', 'hyp', 'robo', 0.62, { yc: 30 }),
+  ZS('robozone', 'ozon tech · 3d-зона', 'hyp', 'robo', 1.0, { yc: 26 }),
   PJ('mice', 'cases/mice-1', 'ивенты', 'hyp', wallPt(699.5, 115, -1420, -1), 140),
   PJ('avangard', 'cases/avangard-1', 'спорт', 'hyp', wallZ(0, 250, -1499.4), 240, { pd: 420 }),
   PJ('derbent', 'cases/derbent-1', 'города', 'shaft', cylPt(SHC, 149.5, -65, -10), 130),
@@ -1171,13 +1172,15 @@ async function loadBaked() {
 // тёплый ключ сверху и контровой свет сзади — как у всего в мегаструктуре; бетон вокруг остаётся своим
 function buildZones() {
   const env = new THREE.PMREMGenerator(renderer).fromScene(new RoomEnvironment(), 0.04).texture;
+  const gltfZ = new GLTFLoader().setDRACOLoader(new DRACOLoader().setDecoderPath('https://cdn.jsdelivr.net/npm/three@0.169.0/examples/jsm/libs/draco/gltf/'));   // модели зон (Higgsfield → Блендер) сжаты Draco
+  const envOn = (root) => root.traverse(m => { if (m.isMesh && m.material) [].concat(m.material).forEach(mt => { if (mt.isMeshStandardMaterial) { mt.envMap = env; mt.envMapIntensity = 0.35; } }); });
   Object.entries(ZONES3).forEach(([k, Z]) => {
-    const o = Z.build(THREE, k === 'corp' ? { kv: 'assets/cases/ozon-fandom-kv-1.jpg' } : {}), g = o.group;
+    const o = Z.gen ? Z.build(THREE, gltfZ) : Z.build(THREE, { kv: 'assets/cases/ozon-fandom-kv-1.jpg' }), g = o.group;
     g.scale.setScalar(Z.S); g.position.copy(Z.pos); g.rotation.y = Z.rotY; scene.add(g); Z.obj = o;
     g.traverse(m => {
       if (m.isLight) { if (m.distance) m.distance *= Z.S; m.intensity *= Math.pow(Z.S, m.decay || 2); }
-      if (m.isMesh && m.material) [].concat(m.material).forEach(mt => { if (mt.isMeshStandardMaterial) { mt.envMap = env; mt.envMapIntensity = 0.35; } });
     });
+    envOn(g); if (o.ready) o.ready.then(() => envOn(g));
     const W = Z.size.w * Z.S, D = Z.size.d * Z.S, H = Z.size.h * Z.S;
     const key = new THREE.SpotLight(0xfff0dc, 2.2 * Math.pow(H * 2.4, 2), H * 6, 0.62, 0.55, 2); key.position.set(W * 0.25, H * 2.4, D * 0.9); key.target.position.set(0, H * 0.3, 0);
     const rim = new THREE.SpotLight(0xc8d6ff, 3.2 * Math.pow(H * 2.2, 2), H * 7, 0.7, 0.6, 2); rim.position.set(-W * 0.3, H * 1.8, -D * 1.3); rim.target.position.set(0, H * 0.4, 0);
