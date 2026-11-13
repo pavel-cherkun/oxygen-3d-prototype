@@ -206,8 +206,11 @@ export function buildTdojo(THREE, opts = {}) {
       c.fillStyle = '#fff'; c.font = 'bold 54px Arial'; c.fillText('ОБРАЗОВАНИЕ', x0 + 80, 66);
     }
   });
-  const band = new THREE.Mesh(new THREE.CylinderGeometry(R + 0.25, R + 0.25, 1.2, 96, 1, true), new THREE.MeshStandardMaterial({ map: bandTex, roughness: 0.6, side: THREE.DoubleSide }));
+  const band = new THREE.Mesh(new THREE.CylinderGeometry(R + 0.25, R + 0.25, 1.2, 96, 1, true), new THREE.MeshStandardMaterial({ map: bandTex, roughness: 0.6 }));
   band.position.y = ringY; g.add(band);
+  const bandIn = bandTex.clone(); bandIn.wrapS = THREE.RepeatWrapping; bandIn.repeat.x = -1; bandIn.needsUpdate = true;   // изнутри надпись читается не зеркально
+  const band2 = new THREE.Mesh(new THREE.CylinderGeometry(R + 0.22, R + 0.22, 1.2, 96, 1, true), new THREE.MeshStandardMaterial({ map: bandIn, roughness: 0.6, side: THREE.BackSide }));
+  band2.position.y = ringY; g.add(band2);
   // конус шатра + мачта с выносами
   const cone = new THREE.Mesh(new THREE.ConeGeometry(R - 0.2, 5.5, 64, 1, true), canvasMat); cone.position.y = ringY + 0.6 + 2.75; cone.castShadow = true; g.add(cone);
   K.truss(new THREE.Vector3(0, 0.2, 0), new THREE.Vector3(0, ringY + 7.5, 0), 0.4);
@@ -232,6 +235,7 @@ export function buildTdojo(THREE, opts = {}) {
     p.lookAt(Math.cos(a) * 40, ringY - 1.3, Math.sin(a) * 40);
   }
 
+  g.userData.shell = g.children.length;                                // всё, что выше, — оболочка шатра
   // тории перед входом (+z)
   const torii = new THREE.Group(); torii.position.set(0, 0, R + 7); g.add(torii);
   for (const s of [-1, 1]) {
@@ -459,4 +463,59 @@ export function buildOzonCorpAlley(THREE, opts = {}) {
       pm.intensity = 14 * I; pc.intensity = 14 * I;
     },
   };
+}
+
+// ───────────────────────── ЗОНЫ ИЗ СГЕНЕРИРОВАННЫХ МОДЕЛЕЙ (Higgsfield → Блендер) ─────────────────────────
+// Модели по рендерам из презентаций: assets/zones/models/*.glb (Draco, метры, низ в y=0, фасад в +z).
+// buildTdojoGen(THREE, gltfLoader) и buildRobozoneGen(THREE, gltfLoader) возвращают тот же интерфейс,
+// что процедурные: { group, update, solids, size, ready: Promise }. gltfLoader должен иметь DRACOLoader.
+const MODELS = 'assets/zones/models/';
+function loadInto(loader, url, parent, place) {
+  return new Promise((res) => loader.load(url, (g) => {
+    const o = g.scene; o.traverse((m) => { if (m.isMesh) { m.castShadow = m.receiveShadow = true; } });
+    place(o); parent.add(o); res(o);
+  }, undefined, () => res(null)));
+}
+export function buildTdojoGen(THREE, loader, opts = {}) {
+  const base = opts.models || MODELS;
+  const shell = buildTdojo(THREE, opts);                                    // чёткая оболочка шатра из кода
+  const g = shell.group; g.name = 'tdojoGen';
+  g.children.slice(g.userData.shell).forEach((c) => { if (!c.isLight && !c.isInstancedMesh && !(c.target && c.target.isObject3D)) g.remove(c); });
+  const R = 12;
+  const at = (x, z, ry = 0, s = 1) => (o) => { o.position.set(x, 0, z); o.rotation.y = ry; o.scale.setScalar(s); };
+  const jobs = [
+    loadInto(loader, base + 'torii.glb', g, at(0, R + 6)),
+    loadInto(loader, base + 'booth.glb', g, at(-6.2, R - 4.2, 0.45)),
+    loadInto(loader, base + 'bar.glb', g, at(6.4, R - 4.4, -0.5)),
+    loadInto(loader, base + 'dano.glb', g, at(-8.4, -3.5, 1.2)),
+    loadInto(loader, base + 'dano.glb', g, at(8.4, -3.8, -1.2)),
+  ];
+  [0.15, 0.65, 1.15, 1.65].forEach((k) => { const a = Math.PI * k; jobs.push(loadInto(loader, base + 'table.glb', g, at(Math.cos(a) * 6.3, Math.sin(a) * 6.3, -a + Math.PI / 2))); });
+  [0.05, 0.55, 1.05, 1.5].forEach((k) => { const a = Math.PI * k; jobs.push(loadInto(loader, base + 'shtender.glb', g, at(Math.cos(a) * 9.6, Math.sin(a) * 9.6, -a - Math.PI / 2))); });
+  // поля го — процедурно (в презентации это плоский мат на полу)
+  const goTex = (() => { const c = document.createElement('canvas'); c.width = c.height = 512; const x = c.getContext('2d');
+    x.fillStyle = '#f5c400'; x.fillRect(0, 0, 512, 512); x.strokeStyle = '#fff'; x.lineWidth = 14;
+    for (const k of [1, 2]) { x.beginPath(); x.moveTo(k * 512 / 3, 30); x.lineTo(k * 512 / 3, 482); x.stroke(); x.beginPath(); x.moveTo(30, k * 512 / 3); x.lineTo(482, k * 512 / 3); x.stroke(); }
+    const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; return t; })();
+  for (const [gx, gz] of [[-2.7, 0.9], [2.5, -2.1]]) {
+    const mat = new THREE.Mesh(new THREE.BoxGeometry(3.2, 0.05, 3.2), new THREE.MeshStandardMaterial({ map: goTex, roughness: 0.5 })); mat.position.set(gx, 0.025, gz); mat.receiveShadow = true; g.add(mat);
+    [[0, 0, 1], [1, 0, 0], [2, 0, 1], [1, 1, 1], [2, 1, 0], [2, 2, 0], [0, 2, 1]].forEach(([i, j, b]) => {
+      const st = new THREE.Mesh(new THREE.SphereGeometry(0.42, 24, 12), new THREE.MeshStandardMaterial({ color: b ? 0x161616 : 0xf2f2f2, roughness: 0.3 }));
+      st.scale.y = 0.38; st.position.set(gx - 1.07 + i * 1.07, 0.2, gz - 1.07 + j * 1.07); st.castShadow = true; g.add(st);
+    });
+  }
+  return { group: g, size: shell.size, ready: Promise.all(jobs),
+    solids: [{ x: 0, z: 0, w: 2 * R + 1, d: 2 * R + 1, h: 9 }, { x: 0, z: R + 6, w: 5.5, d: 1.4, h: 3.6 }],
+    update(t, I = 1) { shell.update(t, I); } };
+}
+export function buildRobozoneGen(THREE, loader, opts = {}) {
+  const base = opts.models || MODELS;
+  const g = new THREE.Group(); g.name = 'robozoneGen';
+  const job = loadInto(loader, base + 'robozone.glb', g, (o) => { o.position.set(0, 0, 0); });
+  const lights = [];
+  for (let i = 0; i < 4; i++) { const s = new THREE.SpotLight(0xffffff, 14, 10, 0.7, 0.5, 1.5); s.position.set(-4.5 + i * 3, 3.9, 1.5); s.target.position.set(-4.5 + i * 3, 0, -1.5); g.add(s, s.target); lights.push(s); }
+  const fill = new THREE.PointLight(0x6fa0ff, 8, 16, 1.5); fill.position.set(0, 2.5, 4); g.add(fill);
+  return { group: g, size: { w: 15, d: 12, h: 6.5 }, ready: job,
+    solids: [{ x: 0, z: 0, w: 14.2, d: 11.4, h: 6.5 }],
+    update(t, I = 1) { fill.intensity = 8 * I; lights.forEach((l) => (l.intensity = 14 * I)); } };
 }
