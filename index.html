@@ -62,22 +62,40 @@ html.lock,html.lock body{overflow:hidden}
 #card button{all:unset;cursor:pointer;margin-top:20px;display:inline-block;border:1px solid var(--red);border-radius:40px;padding:12px 22px;color:var(--cream)}
 #card button:hover{background:var(--red)}
 /* страница кейса поверх мира */
-#modal{position:fixed;inset:0;z-index:20;background:rgba(10,10,10,.96);overflow:auto;overscroll-behavior:contain;display:none}
+#modal{position:fixed;inset:0;z-index:20;background:#0d0d0d;overflow:auto;overscroll-behavior:contain;display:none}
 #modal.on{display:block}
-#modal .wrap{max-width:1100px;margin:0 auto;padding:90px 28px 80px}
-#modal h1{font-weight:520;font-size:clamp(48px,7vw,104px);line-height:.92;margin:12px 0 16px;text-transform:lowercase}
-#modal .tags a{color:var(--cream);border:1px solid #444;border-radius:30px;padding:5px 12px;margin-right:6px;text-decoration:none;font-size:14px}
-#modal .pass{display:flex;gap:28px;flex-wrap:wrap;margin:26px 0;padding:14px 0;border-top:1px solid #2a2a2a;border-bottom:1px solid #2a2a2a}
-#modal .ti{display:grid;grid-template-columns:1fr 1fr;gap:32px;margin:28px 0}
-#modal .ti p{font-size:22px;line-height:1.25}
-#modal .gal{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:14px;margin:18px 0 30px}
-#modal .gal figure img{width:100%;display:block;aspect-ratio:16/10;object-fit:cover}
-#modal figcaption{margin-top:6px;font-size:15px}
-#modal .res{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:18px;margin:18px 0 34px}
-#modal .res b{display:block;font-weight:520;font-size:clamp(44px,5vw,72px);line-height:1;color:var(--red)}
+#modal .wrap{max-width:1180px;margin:0 auto;padding:96px 40px 96px}
+#modal .t{color:var(--red)}
+#modal .ch{padding-bottom:28px;border-bottom:1px solid #262626}
+#modal h1{font-weight:520;font-size:clamp(52px,8vw,128px);line-height:.9;margin:14px 0 18px;text-transform:lowercase;letter-spacing:-.02em;text-wrap:balance;max-width:14ch}
+#modal .tags{display:flex;flex-wrap:wrap;gap:8px}
+#modal .tags span{font:400 13px/1 "AP",monospace;border:1px solid #3a3a3a;border-radius:30px;padding:7px 12px;color:var(--cream)}
+#modal .pass{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:20px 32px;margin:0;padding:26px 0;border-bottom:1px solid #262626}
+#modal .pass dd{margin:6px 0 0;font-size:18px;line-height:1.3}
+#modal .ti{display:grid;grid-template-columns:1fr 1fr;gap:48px;margin:44px 0 52px}
+#modal .ti p{font-size:clamp(22px,2.2vw,30px);line-height:1.2;margin-top:12px;text-wrap:pretty}
+#modal section{margin:0 0 56px}
+#modal .gal{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:12px;margin:0 0 56px}
+#modal .gal figure img{width:100%;display:block;aspect-ratio:16/10;object-fit:cover;background:#1a1a1a}
+#modal figcaption{margin-top:8px;font-size:15px}
+#modal .steps{list-style:none;margin:16px 0 0;padding:0;border-top:1px solid #262626}
+#modal .steps li{display:grid;grid-template-columns:110px minmax(180px,1fr) 2fr;gap:24px;align-items:baseline;padding:20px 0;border-bottom:1px solid #262626}
+#modal .steps .n{font-size:13px}
+#modal .steps b{font-weight:520;font-size:22px;line-height:1.15;text-transform:lowercase}
+#modal .steps p{font-size:18px;line-height:1.4;opacity:.82;text-wrap:pretty}
+#modal .res{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:32px 28px;margin-top:20px}
+#modal .res b{display:block;font-weight:520;font-size:clamp(56px,6.4vw,96px);line-height:.9;letter-spacing:-.02em;color:var(--red);margin-bottom:12px;white-space:nowrap}
+#modal .res span{display:block;font-size:17px;line-height:1.35;max-width:26ch;opacity:.86}
+#modal .q{margin:0 0 56px;padding:36px 0 0;border-top:1px solid var(--red);max-width:900px}
+#modal .q p{font-size:clamp(24px,2.6vw,36px);line-height:1.2;text-wrap:pretty}
+#modal .q cite{display:block;margin-top:18px;font-style:normal}
+#modal .note{margin:-24px 0 48px;opacity:.7}
+#modal .cta{padding-top:36px;border-top:1px solid #262626}
+#modal .cta p{font-size:26px;margin-bottom:4px}
 #modal .btn{display:inline-flex;align-items:center;gap:10px;margin:16px 8px 0 0;background:var(--red);color:#111;border:0;font:520 16px "TT",sans-serif;padding:12px 18px;border-radius:40px;cursor:pointer}
 #modal .btn.ghost{background:transparent;color:var(--cream);border:1px solid #444}
-#modal .close{position:fixed;top:20px;right:28px;z-index:21;all:unset;position:fixed;top:22px;right:28px;cursor:pointer;color:var(--cream);border:1px solid #444;border-radius:40px;padding:8px 16px}
+#modal .close{all:unset;position:fixed;top:22px;right:28px;z-index:21;cursor:pointer;color:var(--cream);border:1px solid #444;border-radius:40px;padding:8px 16px;background:#0d0d0d}
+@media(max-width:760px){#modal .steps li{grid-template-columns:1fr;gap:6px}#modal .ti{grid-template-columns:1fr;gap:28px}#modal .wrap{padding:80px 16px}}
 @media(max-width:760px){#card{left:16px;right:16px;top:auto;bottom:18vh;translate:none;width:auto}#card.left{left:16px}#modal .ti{grid-template-columns:1fr}#modal .wrap{padding:80px 16px}}
 @media(max-width:760px){#logo,#zone{left:16px}#pct,#route{right:16px}#fork{grid-template-columns:1fr;grid-template-rows:1fr 1fr}#fork button+button{border-left:0;border-top:1px solid rgba(225,217,207,.16)}}
 </style>

@@ -13,6 +13,9 @@ import { RGBELoader } from 'three/addons/loaders/RGBELoader.js';
 import { Reflector } from 'three/addons/objects/Reflector.js';
 import { Pass, FullScreenQuad } from 'three/addons/postprocessing/Pass.js';
 import { CASES, renderCase } from './cases.js';
+import { buildRobozone, buildTdojo, buildOzonCorpAlley } from './zones/zones.js';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { DRACOLoader } from 'three/addons/loaders/DRACOLoader.js';
 
 const RED = 0xf40709, CREAM = 0xe1d9cf;
 const V = (x, y, z) => new THREE.Vector3(x, y, z);
@@ -298,6 +301,48 @@ function neutral(z0) {
   return z1;
 }
 
+// 3D-зоны btl-кейсов во дворах азии: модуль zones/zones.js (по визуализациям проектов). свои лампы зон выключены —
+// каждый лишний источник света дорожает для всего мира; зону освещает квартал и её собственные светящиеся материалы
+const ZONES = [], GLTF = new GLTFLoader().setDRACOLoader(new DRACOLoader().setDecoderPath('https://cdn.jsdelivr.net/npm/three@0.169.0/examples/jsm/libs/draco/gltf/'));
+function caseZone(q, s, zc, half, kind) {
+  const k = q.kit, back = 41, floor = pbr('floor', 0x231e1e, 0.9, THREE.FrontSide, 0.1);
+  k.box(floor, back - 11, 0.3, half * 2, s * (11 + (back - 11) / 2), -0.3, zc);   // пол двора
+  k.box(pbr('wall', 0x2a2828, 0.8, THREE.FrontSide, 0.12), 1, ROOF, half * 2, s * (back + 0.5), 0, zc);   // задняя стена двора
+  const Zn = kind === 'robo' ? buildRobozone(THREE) : kind === 'dojo' ? buildTdojo(THREE) : buildOzonCorpAlley(THREE, { kv: 'assets/cases/ozon-fandom-kv-1.jpg', length: 27, width: 10 });
+  const g = Zn.group; g.traverse(o => { if (o.isLight) o.visible = false; });
+  let title, p, corners;
+  if (kind === 'robo') {   // стенд фасадом к улице
+    const sc = 1.15; g.scale.setScalar(sc); g.rotation.y = -s * Math.PI / 2; g.position.set(s * (12.5 + Zn.size.d * sc / 2), 0, zc);
+    title = 'робозон'; p = V(s * 20, 4.5, zc); corners = [[13, 0], [16, Zn.size.h * sc]].flatMap(([x, y]) => [-1, 1].map(b => V(s * x, y, zc + b * Zn.size.w * sc / 2)));
+  } else if (kind === 'dojo') {   // шатёр в глубине, тории у улицы
+    const sc = 0.72; g.scale.setScalar(sc); g.rotation.y = -s * Math.PI / 2; g.position.set(s * (12 + 20 * sc), 0, zc);
+    title = 'т-банк'; p = V(s * 25, 4, zc); corners = [[12, 0], [20, 12 * sc]].flatMap(([x, y]) => [-1, 1].map(b => V(s * x, y, zc + b * 13 * sc)));
+  } else {   // переулок уходит от улицы вглубь квартала; в конце — модель зоны и стена ретро-телевизоров
+    g.rotation.y = Math.PI / 2; g.position.set(s * (11.5 + 27 / 2), 0, zc);
+    // сторона переулка, обращённая к подлетающей камере, открыта: иначе с улицы видна только глухая стена (локальный x>0 → мир z<середины)
+    g.children.forEach(o => { if (o.position.x > 4.6 && (o.geometry?.type === 'BoxGeometry' || o.geometry?.type === 'PlaneGeometry') && o.position.y > 0.05 && (o.scale.z > 5 || o.geometry.parameters?.depth > 5 || o.geometry.parameters?.width > 5)) o.visible = false; });
+    title = 'ozon corp'; p = V(s * 22, 3.5, zc); corners = [[12, 0], [12, 7.5]].flatMap(([x, y]) => [-1, 1].map(b => V(s * x, y, zc + b * 6)));
+    GLTF.loadAsync('assets/models/ozon-corp.min.glb').then(gl => {
+      const m = gl.scene; m.traverse(o => { if (o.isMesh) { o.material.side = THREE.DoubleSide; o.material.envMapIntensity = 0.4; o.castShadow = o.receiveShadow = true; } });
+      const bb = new THREE.Box3().setFromObject(m), sz = bb.getSize(V(0, 0, 0)); if (sz.z > sz.x) m.rotation.y = Math.PI / 2;   // длинной стороной вдоль переулка
+      m.scale.setScalar(7.5 / Math.max(sz.x, sz.z)); m.updateMatrixWorld(true); bb.setFromObject(m); const c = bb.getCenter(V(0, 0, 0));
+      m.position.set(s * 27 - c.x, -bb.min.y + 0.4, zc - c.z); q.g.add(m);
+      k.box(matte(0x060607, 0.1, 0.8), 9, 0.4, 6, s * 27, 0, zc);   // зеркальный подиум
+    }).catch(() => {});
+    const imgs = ['ozon-fandom-real-1', 'ozon-fandom-3d-1', 'ozon-fandom-real-2', 'ozon-fandom-kv-1', 'ozon-fandom-real-3', 'ozon-fandom-3d-2', 'ozon-fandom-real-2', 'ozon-fandom-kv-1', 'ozon-fandom-real-1'];
+    imgs.forEach((f, i) => { const col = i % 3, row = (i / 3) | 0, x = s * (11.5 + 27 - 0.4), z = zc + (col - 1) * 2.7, y = 1.2 + row * 2.05;
+      k.box(matte(0x161616, 0.5), 0.9, 1.95, 2.55, x + s * 0.5, y - 0.97, z);
+      const scr = new THREE.Mesh(new THREE.PlaneGeometry(2.2, 1.6), new THREE.MeshBasicMaterial({ color: new THREE.Color(i === 4 ? 0xb8ffc8 : 0xd8e8ff).multiplyScalar(0.8), toneMapped: false }));
+      TXL.load(`assets/cases/${f}.jpg`, t => { t.colorSpace = THREE.SRGBColorSpace; scr.material.map = t; scr.material.needsUpdate = true; });
+      scr.position.set(x - s * 0.02, y, z); scr.rotation.y = -s * Math.PI / 2; q.g.add(scr); Zn.tvs ||= []; Zn.tvs.push(scr); });   // ретро-телевизоры: в центре «живая камера» с зелёным оттенком
+  }
+  q.g.add(g); ZONES.push({ Zn, q, at: V(g.position.x, 3, zc) });
+  // свет двора: тёплые софиты перед зоной — берут лампы из общего пула (их число постоянно, шейдеры не пересобираются), у зон приоритет перед фонарями улицы
+  if (kind === 'corp') q.anchors.push({ p: V(s * 17, 6.5, zc - 2), c: 0xffffff, i: 70, d: 26, pr: 6 }, { p: V(s * 31, 5, zc), c: 0xbfd8ff, i: 50, d: 18, pr: 6 });
+  else q.anchors.push({ p: V(s * 15, 13, zc - half * 0.45), c: 0xfff1de, i: 90, d: 30, pr: 6 }, { p: V(s * 15, 13, zc + half * 0.45), c: 0xfff1de, i: 90, d: 30, pr: 6 });
+  q.cubes.push({ p, title, r: 'btl', s: 6, corners, zone: true, half: 0.62 });
+}
+
 // {02} азия — прорезь в поверхности города: крыши башен вровень с нейтральной поверхностью, переулок уходит вниз.
 // btl спускается по монументальной лестнице на улицу, atl ныряет в прорезь и идёт по уровню зданий
 function asia(z0) {
@@ -311,18 +356,21 @@ function asia(z0) {
   q.wet.push({ w: 22, d: z1 - z0 - DS, x: 0, y: 0.03, z: (z0 + DS + z1) / 2, k: 0.75 });   // мокрая улица: в лужах красные вывески
   for (const sd of [-1, 1]) k.box(S, 180, 2, z1 - z0, sd * 130, ROOF - 2, (z0 + z1) / 2);   // поверхность города продолжается над кварталом
   const NICHE = [[-1, z0 + DS + 20], [1, z0 + DS + 130]];   // ниши в башнях под баннеры atl: башни здесь расступаются
+  // дворы btl-кейсов: башни расступаются до самой земли, во дворе стоит 3D-зона кейса. [сторона, середина, полудлина]
+  const COURT = [[-1, z0 + DS + 62, 15, 'corp'], [-1, z0 + DS + 120, 14, 'robo'], [1, z0 + DS + 192, 19, 'dojo']];
   for (const s of [-1, 1]) for (let z = z0; z < z1;) {
     const L = 9 + r() * 10, d = 30, x = s * (11 + d / 2), zc = z + L / 2, g0 = gy(z + L);
-    if (NICHE.some(([ns, nz]) => ns === s && z < nz + 11 && z + L > nz - 11)) { z += L + 1.4 + r() * 2; continue; }
+    if (NICHE.some(([ns, nz]) => ns === s && z < nz + 11 && z + L > nz - 11) || COURT.some(([ns, nz, h]) => ns === s && z < nz + h && z + L > nz - h)) { z += L + 1.4 + r() * 2; continue; }
     k.box(B, d, ROOF, L, x, 0, zc);   // башни: крыши вровень с поверхностью
     for (let i = 0, n = g0 > ROOF - 24 ? 0 : 1 + (r() * 4 | 0); i < n; i++) { const hh = 5 + r() * Math.min(12, ROOF - g0 - 14), y = g0 + 4 + r() * Math.max(0, ROOF - g0 - hh - 8); k.box(r() < 0.8 ? red : cr, 0.5, hh, 2.6, s * 9.4, y, z + 1 + r() * (L - 2)); }
     z += L + 1.4 + r() * 2;   // щели между башнями — красные прорези света, видны и сверху, с поверхности
   }
   for (let z = z0 + 30; z < z1 - 10; z += 13) { if (gy(z) > ROOF - 26) continue; const y = gy(z) + 9 + r() * 8; for (let x = -10; x <= 10; x += 1.6) { const sag = (1 - (x / 10) ** 2) * 1.6; k.box(red, 0.55, 0.7, 0.55, x, y - sag, z); } }
   for (let z = z0 + DS + 20; z < z1 - 10; z += 31) { if (NICHE.some(([, nz]) => Math.abs(z - nz) < 14)) continue; const y = 30 + r() * 16; for (let x = -10; x <= 10; x += 2.2) k.box(r() < 0.3 ? cr : red, 0.4, 0.4, 0.4, x, y - (1 - (x / 10) ** 2) * 2.4, z); }
-  for (let i = 0; i < 3; i++) { const z = z0 + DS + 30 + i * 70; [-8.5, 8.5].forEach(x => k.geo(tor, new THREE.CylinderGeometry(0.45, 0.55, 15, 12), x, 7.5, z)); k.box(tor, 22, 0.9, 1.1, 0, 15, z); k.box(tor, 19, 0.6, 0.7, 0, 12.6, z); q.anchors.push({ p: V(0, 13, z), c: 0xff3020, i: 70 }); }
+  for (const z of [z0 + DS + 30, z0 + DS + 222]) {   // тории на улице: в начале и в конце квартала — у дворов с зонами улица открыта
+    [-8.5, 8.5].forEach(x => k.geo(tor, new THREE.CylinderGeometry(0.45, 0.55, 15, 12), x, 7.5, z)); k.box(tor, 22, 0.9, 1.1, 0, 15, z); k.box(tor, 19, 0.6, 0.7, 0, 12.6, z); q.anchors.push({ p: V(0, 13, z), c: 0xff3020, i: 70 }); }
   for (let z = z0 + 40; z < z0 + DS; z += 60) q.anchors.push({ p: V(0, gy(z) + 14, z), c: 0xff3020, i: 60 });
-  [['ozon corp', DS + 60], ['т-банк', DS + 170]].forEach(([t, dz], i) => cube(q, i % 2 ? 6.5 : -6.5, 0, z0 + dz, t, 'btl', { s: 3.6 }));
+  COURT.forEach(([s, z, h, k]) => caseZone(q, s, z, h, k));
   NICHE.forEach(([s, z], i) => { banner(q, s * 11, 49, z, ['хроники ижоры', 'треснутые'][i], { w: 16, turn: 0.42, leg: 'beam', img: ['cases/izhora-48-1.jpg', 'cases/treschnutye-1.jpg'][i] }); q.anchors.push({ p: V(s * 4, 54, z - 6), c: 0xff4030, i: 50 }); });   // баннер в нише башни, наверху квартала
   path(q, 'btl', ...[10, 50, 90, 130, 170, 210].map(dz => [0, gy(z0 + dz) + 6.5, z0 + dz]), [1.5, 6, z0 + DS + 30], [-1.5, 6, z0 + DS + 110], [1, 5.5, z0 + DS + 190], [0, 6, z1]);
   path(q, 'atl', [0, ROOF + 26, z0 + 10], ...[70, 130, 190].map(dz => [0, ROOF + 26 - (ROOF + 26 - 50) * (dz - 10) / (DS + 10), z0 + dz]), [1, 50, z0 + DS + 20], [-1, 50, z0 + DS + 130], [0, 54, z1 - 30], [0, 58, z1]);
@@ -551,7 +599,7 @@ let route = null;
 // кейсы: id страницы кейса по подписи в мире
 const CASE_ID = { 'дербент': 'derbent', 'tevredens': 'tevredens', 'заклинатели': 'zaklinateli', 'дино': 'dino', 'хроники ижоры': 'izhora', 'треснутые': 'treschnutye', 'синегривый лев': 'lion', 'время авангарда': 'avangard',
   'ai · fonbet': 'aiFonbet', 'ai · mango': 'aiMango', 'ai · лавка': 'aiLavka', 'ai · альфа': 'aiAlfa',
-  'ozon селект': 'selekt', 'золотые ворота': 'megafon', 'белград': 'mice', 'связь есть везде': 'megafonTravel', 'гусь на заводе': 'baltikaPlant', 'ozon corp': 'fandom', 'т-банк': 'tbank',
+  'ozon селект': 'selekt', 'золотые ворота': 'megafon', 'белград': 'mice', 'связь есть везде': 'megafonTravel', 'гусь на заводе': 'baltikaPlant', 'ozon corp': 'fandom', 'т-банк': 'tbank', 'робозон': 'robozon',
   'ironstar': 'ironstar', 'шёлковый путь': 'gdrive', 'балтика 7': 'baltika7', 'мерч g-drive': 'gdriveMerch', 'набор креатора': 'oxygenSet', 'мерч льва': 'lionMerch' };
 // остановка у кейса: камера поворачивает голову к нему, кейс встаёт в одну половину кадра целиком, в другой — карточка с текстом.
 // точка остановки — ближайшая к кейсу точка рельсов, откуда он в повёрнутом взгляде целиком помещается в свою половину кадра
@@ -572,7 +620,7 @@ function fits(pos, c) {
   cam.position.copy(pos); cam.rotation.set(fa.pitch, Math.PI + fa.yaw, 0, 'YXZ'); cam.updateMatrixWorld(true);
   const [xo, yo] = focusSide(c), mob = innerWidth / innerHeight < 1;
   for (const k of c.corners) { const p = k.clone().applyMatrix4(cam.matrixWorldInverse); if (p.z > -1) return false; p.applyMatrix4(cam.projectionMatrix);
-    if (Math.abs(p.x - xo) > (mob ? 0.92 : FOC.half) || Math.abs(p.y - yo) > (mob ? 0.5 : 0.82)) return false; }
+    if (Math.abs(p.x - xo) > (mob ? 0.92 : c.half || FOC.half) || Math.abs(p.y - yo) > (mob ? 0.5 : 0.82)) return false; }
   return true;
 }
 const w2s = (o, w) => w <= o.trunkW ? w / o.trunkW * TRUNK_W : TRUNK_W + (w - o.trunkW) / o.restW * REST_W;
@@ -631,8 +679,8 @@ function updateZones(dawn) {
     f.uSunUV.value.set(sp.x * 0.5 + 0.5, sp.y * 0.5 + 0.5); f.uRays.value = front ? gr.rays * D * (1 - smooth(clamp01(Math.hypot(sp.x, sp.y) / 2.2))) : 0; RAIN.k = gr.rain; }
   renderer.toneMappingExposure = ex; bloom.strength = 0.6 * bl; sparkLight.intensity = sp * (0.9 + 0.1 * Math.sin(performance.now() / 140)) * (0.35 + 0.65 * D) + (1 - D) * 25;
   // лампы зоны: три ближайшие точки света из всех видимых зон
-  const an = ZL.filter(q => q.g.visible).flatMap(q => q.anchors).map(a => [a, a.p.distanceToSquared(camera.position)]).sort((a, b) => a[1] - b[1]);
-  lamps.forEach((l, i) => { const a = an[i]?.[0]; if (!a) { l.intensity = 0; return; } l.position.copy(a.p); l.color.set(a.c); l.intensity = a.i * D; l.distance = 50; });
+  const an = ZL.filter(q => q.g.visible).flatMap(q => q.anchors).map(a => [a, a.p.distanceToSquared(camera.position) / (a.pr || 1)]).sort((a, b) => a[1] - b[1]);
+  lamps.forEach((l, i) => { const a = an[i]?.[0]; if (!a) { l.intensity = 0; return; } l.position.copy(a.p); l.color.set(a.c); l.intensity = a.i * D; l.distance = a.d || 50; });
 }
 
 // ---------- HUD ----------
@@ -753,11 +801,13 @@ function frame() {
     N.sun[0].copy(N.key[2]).setY(0.16).normalize();
     if (N.g.visible) { N.clouds.forEach((c, i) => { N.cloudDm.position.set(((c.x + time * 7 + 260) % 520 + 520) % 520 - 260, 72, c.z); N.cloudDm.scale.set(c.w, 2, c.d); N.cloudDm.updateMatrix(); N.cloudMesh.setMatrixAt(i, N.cloudDm.matrix); }); N.cloudMesh.instanceMatrix.needsUpdate = true; } }
   updateZones(dawn);
+  if (focC?.zone) { const k = focW * 0.75; scene.fog.density *= 1 - k; const f = film.uniforms; f.uTint.value.lerp(V(1, 1, 1), k); f.uSat.value += (0.95 - f.uSat.value) * k; f.uVig.value *= 1 - 0.4 * k; }   // у 3D-зоны квартал расступается: туман и красный фильтр слабеют, зона читается в своих цветах
   if (curZone && curZone.k !== lastZone) { lastZone = curZone.k; zoneN.textContent = `{${curZone.n}} ${route ? (route === 'btl' ? 'btl · на земле' : 'atl · над городом') : 'вход'}`; zoneT.textContent = curZone.t; }
   pct.textContent = String(Math.round(sSm / TOTAL * 100)).padStart(3, '0') + '%';
   hint.style.opacity = sSm < 10 ? 0.6 : 0;
   routeBtn.style.display = route ? 'block' : 'none'; routeBtn.textContent = `маршрут ${route} · сменить ↺`;
   updateCard(); if (!REC_) updateHover(dt);
+  for (const z of ZONES) if (z.q.g.visible && z.at.distanceTo(camera.position) < 160) { z.Zn.update(time, 1, camera.position); z.Zn.tvs?.forEach((t, i) => { if (i !== 4) t.material.color.setScalar(0.55 + 0.3 * Math.sin(time * 9 + i * 3) ** 8); }); }
   film.uniforms.uT.value = (time * 60) % 1000; composer.render(); if (!REC_) govern(); requestAnimationFrame(frame);
 }
 addEventListener('resize', () => { camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix(); renderer.setSize(innerWidth, innerHeight); composer.setSize(innerWidth, innerHeight); film.uniforms.uAspect.value = innerWidth / innerHeight; gtao?.setSize(innerWidth, innerHeight); buildStops(); });
