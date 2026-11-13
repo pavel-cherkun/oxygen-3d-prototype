@@ -13,7 +13,7 @@ import { RGBELoader } from 'three/addons/loaders/RGBELoader.js';
 import { Reflector } from 'three/addons/objects/Reflector.js';
 import { Pass, FullScreenQuad } from 'three/addons/postprocessing/Pass.js';
 import { CASES, renderCase } from './cases.js';
-import { buildRobozone, buildTdojo, buildOzonCorpAlley } from './zones/zones.js';
+import { buildRobozoneGen, buildTdojoGen, buildOzonCorpAlley } from './zones/zones.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { DRACOLoader } from 'three/addons/loaders/DRACOLoader.js';
 
@@ -308,7 +308,7 @@ function caseZone(q, s, zc, half, kind) {
   const k = q.kit, back = 41, floor = pbr('floor', 0x231e1e, 0.9, THREE.FrontSide, 0.1);
   k.box(floor, back - 11, 0.3, half * 2, s * (11 + (back - 11) / 2), -0.3, zc);   // пол двора
   k.box(pbr('wall', 0x2a2828, 0.8, THREE.FrontSide, 0.12), 1, ROOF, half * 2, s * (back + 0.5), 0, zc);   // задняя стена двора
-  const Zn = kind === 'robo' ? buildRobozone(THREE) : kind === 'dojo' ? buildTdojo(THREE) : buildOzonCorpAlley(THREE, { kv: 'assets/cases/ozon-fandom-kv-1.jpg', length: 27, width: 10 });
+  const Zn = kind === 'robo' ? buildRobozoneGen(THREE, GLTF) : kind === 'dojo' ? buildTdojoGen(THREE, GLTF) : buildOzonCorpAlley(THREE, { kv: 'assets/cases/ozon-fandom-kv-1.jpg', length: 27, width: 10 });
   const g = Zn.group; g.traverse(o => { if (o.isLight) o.visible = false; });
   let title, p, corners;
   if (kind === 'robo') {   // стенд фасадом к улице
