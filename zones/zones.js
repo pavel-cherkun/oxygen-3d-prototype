@@ -519,3 +519,44 @@ export function buildRobozoneGen(THREE, loader, opts = {}) {
     solids: [{ x: 0, z: 0, w: 14.2, d: 11.4, h: 6.5 }],
     update(t, I = 1) { fill.intensity = 8 * I; lights.forEach((l) => (l.intensity = 14 * I)); } };
 }
+
+// ───────────────────────── OZON CORP и OZON СЕЛЕКТ из сгенерированных моделей ─────────────────────────
+// ozoncorp.glb — Higgsfield по двум ракурсам 3D-макета кейса (лучше старой tripo-модели), 14 м по X, низ y=0,
+//   стены граффити/неон с лёгкой эмиссией. Переулок buildOzonCorpAlley ставится вокруг неё.
+// select.glb — Higgsfield по чистому рендеру, собранному в GPT Image из фото с VK TUSA, 18 м по X;
+//   поверх размытых надписей модели — чёткие вывески кодом (лайтбокс «СЕЛЕКТ / OZON», неон «СЕЛЕКТ カエカ»).
+export function buildOzonCorpGen(THREE, loader, opts = {}) {
+  const base = opts.models || MODELS;
+  const g = new THREE.Group(); g.name = 'ozonCorpGen';
+  const job = loadInto(loader, base + 'ozoncorp.glb', g, () => {});
+  const pm = new THREE.PointLight(0xff2bd6, 16, 14, 1.6); pm.position.set(-4, 3.2, 3); g.add(pm);
+  const pc = new THREE.PointLight(0x29b6ff, 16, 14, 1.6); pc.position.set(4, 3.2, 3); g.add(pc);
+  return { group: g, size: { w: 14, d: 7.6, h: 4.5 }, ready: job, solids: [{ x: 0, z: 0, w: 14, d: 7.6, h: 4.5 }],
+    update(t, I = 1) { pm.intensity = (14 + 3 * Math.sin(t * 2.1)) * I; pc.intensity = (14 + 3 * Math.sin(t * 1.7 + 1)) * I; } };
+}
+export function buildSelectGen(THREE, loader, opts = {}) {
+  const base = opts.models || MODELS;
+  const g = new THREE.Group(); g.name = 'selectGen';
+  const job = loadInto(loader, base + 'select.glb', g, () => {});
+  const ctex = (w, h, draw) => { const c = document.createElement('canvas'); c.width = w; c.height = h; draw(c.getContext('2d'), w, h); const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 4; return t; };
+  const light = ctex(1024, 512, (c, w, h) => {
+    const gr = c.createRadialGradient(w / 2, h / 2, 40, w / 2, h / 2, w * 0.6); gr.addColorStop(0, '#ffffff'); gr.addColorStop(1, '#dfeee9'); c.fillStyle = gr; c.fillRect(0, 0, w, h);
+    c.fillStyle = '#0d0e10'; c.textAlign = 'center'; c.textBaseline = 'middle'; c.lineWidth = 3; c.strokeStyle = '#0d0e10';
+    c.font = '300 150px "Helvetica Neue", Arial'; c.fillText('СЕЛЕКТ', w / 2, h / 2 - 30); c.strokeText('СЕЛЕКТ', w / 2, h / 2 - 30);
+    c.font = '700 54px Arial'; c.fillText('OZON', w / 2, h / 2 + 95);
+  });
+  const lb = new THREE.Mesh(new THREE.PlaneGeometry(3.4, 1.7), new THREE.MeshStandardMaterial({ map: light, emissive: 0xffffff, emissiveMap: light, emissiveIntensity: 0.9, roughness: 0.4 }));
+  lb.position.set(-4.3, 1.95, -0.86); g.add(lb);
+  const sign = ctex(1024, 192, (c, w, h) => {
+    c.fillStyle = '#0b0b0c'; c.fillRect(0, 0, w * 0.62, h);
+    c.textBaseline = 'middle'; c.fillStyle = '#ffffff'; c.font = '200 104px "Helvetica Neue", Arial'; c.fillText('СЕЛЕКТ', 40, h / 2 - 6);
+    c.font = '700 30px Arial'; c.fillText('OZON', 200, h - 26);
+    c.fillStyle = '#ff2a2a'; c.shadowColor = '#ff2a2a'; c.shadowBlur = 28; c.font = 'bold 130px sans-serif'; c.fillText('カエカ', w * 0.64, h / 2 + 6);
+  });
+  const sg = new THREE.Mesh(new THREE.PlaneGeometry(4.6, 0.86), new THREE.MeshBasicMaterial({ map: sign, transparent: true, toneMapped: false }));
+  sg.position.set(5.6, 3.4, -0.86); g.add(sg);
+  const wash = new THREE.PointLight(0x9fe8d0, 10, 12, 1.6); wash.position.set(-4.5, 2.2, 2.5); g.add(wash);
+  const red = new THREE.PointLight(0xff2a2a, 6, 8, 1.8); red.position.set(6.5, 3.2, 1.2); g.add(red);
+  return { group: g, size: { w: 18, d: 4.6, h: 4.1 }, ready: job, solids: [{ x: 0, z: 0, w: 18, d: 4.6, h: 4.1 }],
+    update(t, I = 1) { wash.intensity = 10 * I; red.intensity = (6 + (Math.sin(t * 9) > 0.9 ? -4 : 0)) * I; } };
+}

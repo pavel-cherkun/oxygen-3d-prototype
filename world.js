@@ -13,7 +13,7 @@ import { RGBELoader } from 'three/addons/loaders/RGBELoader.js';
 import { Reflector } from 'three/addons/objects/Reflector.js';
 import { Pass, FullScreenQuad } from 'three/addons/postprocessing/Pass.js';
 import { CASES, renderCase } from './cases.js';
-import { buildRobozoneGen, buildTdojoGen, buildOzonCorpAlley } from './zones/zones.js';
+import { buildRobozoneGen, buildTdojoGen, buildOzonCorpAlley, buildOzonCorpGen, buildSelectGen } from './zones/zones.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { DRACOLoader } from 'three/addons/loaders/DRACOLoader.js';
 
@@ -286,7 +286,7 @@ function neutral(z0) {
   [-90, -30, 30, 90].forEach(x => k.box(ln, 0.45, 0.06, z1 - z0, x, 0, mid));             // продольные прорези
   for (let z = z0 + 40; z < z1; z += 80) { k.box(ln, 440, 0.06, 0.45, 0, 0, z); [-90, -30, 30, 90].forEach(x => k.box(ln, 2.6, 0.07, 2.6, x, 0, z)); }   // поперечные и колодцы на узлах
   const r = rng(91); [[-120, z0 + 90, 34], [150, z0 + 160, 46], [-170, z0 + 260, 40], [110, z0 + 330, 30], [-70, z0 + 380, 22], [190, z0 + 40, 26]].forEach(([x, z, a]) => k.box(blk, a, a, a, x, -a * (0.25 + r() * 0.3), z, r() * 0.6));   // кубы-гиганты, утопленные в плиты
-  [['ozon селект', 40], ['золотые ворота', 110], ['белград', 180], ['связь есть везде', 250], ['гусь на заводе', 320]].forEach(([t, dz], i) => cube(q, i % 2 ? 9 : -9, 0, z0 + dz, t, 'btl', { plinth: blk }));
+  [['золотые ворота', 110], ['белград', 180], ['связь есть везде', 250], ['гусь на заводе', 320]].forEach(([t, dz], i) => cube(q, i % 2 ? 9 : -9, 0, z0 + dz, t, 'btl', { plinth: blk }));
   [['дербент', 75, 'cases/derbent-1.jpg'], ['tevredens', 145, 'cases/tevredens-1.jpg', 'tevredens.mp4'], ['заклинатели', 215, 'cases/zaklinateli-1.jpg', 'zaklinateli.mp4'], ['дино', 285, 'cases/dino-1.jpg']].forEach(([t, dz, img, vid], i) => { const x = i % 2 ? 19 : -19, z = z0 + dz;
     banner(q, x, 44, z, t, { w: 24, leg: 'beam', img, vid }); for (const lx of [-24 * 0.32, 24 * 0.32]) k.box(ln, 3, 0.07, 3, x - lx * Math.cos(0.3), 0, z + Math.sign(x) * lx * Math.sin(0.3)); });   // баннер держат световые тросы, под ними — светящиеся колодцы
   path(q, 'btl', [0, 6.5, z0 + 6], [1.5, 7, z0 + 80], [-1, 7.5, z0 + 160], [1.5, 7, z0 + 240], [0, 7, z0 + 330], [0, 6.5, z1]);
@@ -298,6 +298,12 @@ function neutral(z0) {
   q.clouds = []; for (let i = 0; i < 26; i++) q.clouds.push({ x: (cr() - 0.5) * 520, z: z0 - 120 + cr() * (z1 - z0 + 240), w: 30 + cr() * 60, d: 40 + cr() * 80 });
   cl.castShadow = true; cl.frustumCulled = false; q.g.add(cl); q.cloudMesh = cl; q.cloudDm = dm;
   lift(q, ROOF);
+  // ozon селект — модель зоны с VK TUSA, фасадом к дороге, слева от рельсов
+  { const Zs = buildSelectGen(THREE, GLTF), g = Zs.group, z = z0 + 40; g.traverse(o => { if (o.isLight) o.visible = false; });
+    g.rotation.y = Math.PI / 2; g.position.set(-17, 0.25, z); q.g.add(g); ZONES.push({ Zn: Zs, q, at: V(-17, ROOF + 2, z) });
+    q.kit.box(matte(0x0e0e0e, 0.3, 0.4), 6.4, 0.25, 20, -17, 0, z);   // подиум
+    q.anchors.push({ p: V(-9, ROOF + 7, z - 5), c: 0xfff4ea, i: 35, d: 28, pr: 6 }, { p: V(-9, ROOF + 7, z + 5), c: 0xfff4ea, i: 35, d: 28, pr: 6 });
+    q.cubes.push({ p: V(-16.5, ROOF + 2.2, z), title: 'ozon селект', r: 'btl', s: 5, zone: true, half: 0.62, corners: [[-14.7, 0], [-14.7, 4.3]].flatMap(([x, y]) => [-1, 1].map(b => V(x, ROOF + y, z + b * 9.2))) }); }
   return z1;
 }
 
@@ -322,13 +328,10 @@ function caseZone(q, s, zc, half, kind) {
     // сторона переулка, обращённая к подлетающей камере, открыта: иначе с улицы видна только глухая стена (локальный x>0 → мир z<середины)
     g.children.forEach(o => { if (o.position.x > 4.6 && (o.geometry?.type === 'BoxGeometry' || o.geometry?.type === 'PlaneGeometry') && o.position.y > 0.05 && (o.scale.z > 5 || o.geometry.parameters?.depth > 5 || o.geometry.parameters?.width > 5)) o.visible = false; });
     title = 'ozon corp'; p = V(s * 22, 3.5, zc); corners = [[12, 0], [12, 7.5]].flatMap(([x, y]) => [-1, 1].map(b => V(s * x, y, zc + b * 6)));
-    GLTF.loadAsync('assets/models/ozon-corp.min.glb').then(gl => {
-      const m = gl.scene; m.traverse(o => { if (o.isMesh) { o.material.side = THREE.DoubleSide; o.material.envMapIntensity = 0.4; o.castShadow = o.receiveShadow = true; } });
-      const bb = new THREE.Box3().setFromObject(m), sz = bb.getSize(V(0, 0, 0)); if (sz.z > sz.x) m.rotation.y = Math.PI / 2;   // длинной стороной вдоль переулка
-      m.scale.setScalar(7.5 / Math.max(sz.x, sz.z)); m.updateMatrixWorld(true); bb.setFromObject(m); const c = bb.getCenter(V(0, 0, 0));
-      m.position.set(s * 27 - c.x, -bb.min.y + 0.4, zc - c.z); q.g.add(m);
-      k.box(matte(0x060607, 0.1, 0.8), 9, 0.4, 6, s * 27, 0, zc);   // зеркальный подиум
-    }).catch(() => {});
+    // модель зоны (по 3D-макету кейса) стоит в глубине переулка на зеркальном подиуме
+    const M = buildOzonCorpGen(THREE, GLTF); M.group.traverse(o => { if (o.isLight) o.visible = false; });
+    M.group.rotation.y = -s * Math.PI / 2; M.group.scale.setScalar(0.66); M.group.position.set(s * 28, 0.3, zc); q.g.add(M.group); Zn.extra = M;   // фасад к улице, открытый бок — к подлетающей камере
+    k.box(matte(0x060607, 0.1, 0.8), 6.4, 0.3, 9.8, s * 28, 0, zc);
     const imgs = ['ozon-fandom-real-1', 'ozon-fandom-3d-1', 'ozon-fandom-real-2', 'ozon-fandom-kv-1', 'ozon-fandom-real-3', 'ozon-fandom-3d-2', 'ozon-fandom-real-2', 'ozon-fandom-kv-1', 'ozon-fandom-real-1'];
     imgs.forEach((f, i) => { const col = i % 3, row = (i / 3) | 0, x = s * (11.5 + 27 - 0.4), z = zc + (col - 1) * 2.7, y = 1.2 + row * 2.05;
       k.box(matte(0x161616, 0.5), 0.9, 1.95, 2.55, x + s * 0.5, y - 0.97, z);
@@ -620,7 +623,8 @@ function fits(pos, c) {
   cam.position.copy(pos); cam.rotation.set(fa.pitch, Math.PI + fa.yaw, 0, 'YXZ'); cam.updateMatrixWorld(true);
   const [xo, yo] = focusSide(c), mob = innerWidth / innerHeight < 1;
   for (const k of c.corners) { const p = k.clone().applyMatrix4(cam.matrixWorldInverse); if (p.z > -1) return false; p.applyMatrix4(cam.projectionMatrix);
-    if (Math.abs(p.x - xo) > (mob ? 0.92 : c.half || FOC.half) || Math.abs(p.y - yo) > (mob ? 0.5 : 0.82)) return false; }
+    const hx = mob ? 0.92 : c.half || FOC.half;
+    if (p.x < Math.max(-0.88, xo - hx) || p.x > Math.min(0.88, xo + hx) || Math.abs(p.y - yo) > (mob ? 0.5 : 0.82)) return false; }
   return true;
 }
 const w2s = (o, w) => w <= o.trunkW ? w / o.trunkW * TRUNK_W : TRUNK_W + (w - o.trunkW) / o.restW * REST_W;
@@ -807,7 +811,7 @@ function frame() {
   hint.style.opacity = sSm < 10 ? 0.6 : 0;
   routeBtn.style.display = route ? 'block' : 'none'; routeBtn.textContent = `маршрут ${route} · сменить ↺`;
   updateCard(); if (!REC_) updateHover(dt);
-  for (const z of ZONES) if (z.q.g.visible && z.at.distanceTo(camera.position) < 160) { z.Zn.update(time, 1, camera.position); z.Zn.tvs?.forEach((t, i) => { if (i !== 4) t.material.color.setScalar(0.55 + 0.3 * Math.sin(time * 9 + i * 3) ** 8); }); }
+  for (const z of ZONES) if (z.q.g.visible && z.at.distanceTo(camera.position) < 160) { z.Zn.update(time, 1, camera.position); z.Zn.extra?.update(time, 1); z.Zn.tvs?.forEach((t, i) => { if (i !== 4) t.material.color.setScalar(0.55 + 0.3 * Math.sin(time * 9 + i * 3) ** 8); }); }
   film.uniforms.uT.value = (time * 60) % 1000; composer.render(); if (!REC_) govern(); requestAnimationFrame(frame);
 }
 addEventListener('resize', () => { camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix(); renderer.setSize(innerWidth, innerHeight); composer.setSize(innerWidth, innerHeight); film.uniforms.uAspect.value = innerWidth / innerHeight; gtao?.setSize(innerWidth, innerHeight); buildStops(); });
