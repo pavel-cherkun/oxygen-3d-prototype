@@ -118,7 +118,7 @@ header nav{mix-blend-mode:difference}header nav a{color:#fff}nav a.cta{color:#ff
 @keyframes bob{50%{translate:0 6px}}
 #fork.pulse button{animation:pulse .5s ease-out 2}
 @keyframes pulse{50%{background:rgba(244,7,9,.45)}}
-#modal{position:fixed;inset:0;z-index:20;background:rgba(10,10,10,.96);overflow:auto;display:none}
+#modal{position:fixed;inset:0;z-index:20;background:#0a0a0a;overflow:auto;display:none}
 #modal.on{display:block}
 #modal .wrap{max-width:1100px;margin:0 auto;padding:90px 28px 80px}
 #modal h1{font-weight:520;font-size:clamp(48px,7vw,104px);line-height:.92;margin:12px 0 16px}
@@ -137,6 +137,24 @@ header nav{mix-blend-mode:difference}header nav a{color:#fff}nav a.cta{color:#ff
 #views button{all:unset;cursor:pointer;color:var(--cream);padding:3px 8px;border:1px solid rgba(225,217,207,.2)}#views button:hover,#views button.on{background:var(--red);border-color:var(--red)}
 body.qview .ov,body.qview #orbitUi,body.qview #wipe{display:none!important}
 #viewInfo{position:fixed;left:28px;bottom:64px;z-index:6;width:min(420px,calc(100vw - 32px));max-height:70vh;overflow:auto}#viewInfo button{all:unset;cursor:pointer;display:block;padding:10px 0;border-top:1px solid rgba(225,217,207,.12)}#viewInfo button:hover b{color:var(--red)}#viewInfo b{display:block;font-weight:520;font-size:20px}#viewInfo .d{display:block;font-size:14px;color:var(--mute);margin-top:4px}
+
+/* карточка кейса по брендбуку 20_26: шаги 01/{01}, крупные цифры результата, цитата отдельным типографским блоком */
+#modal .cv h1{font-size:clamp(56px,9vw,148px);line-height:.86;letter-spacing:-.03em;margin:14px 0 22px}
+#modal .cv .ti p{font-size:clamp(20px,2vw,26px);line-height:1.22}
+#modal .steps{list-style:none;margin:18px 0 34px;border-top:1px solid #2a2a2a}
+#modal .steps li{display:grid;grid-template-columns:clamp(70px,9vw,130px) 64px 1fr;gap:6px 18px;align-items:baseline;padding:18px 0;border-bottom:1px solid #2a2a2a}
+#modal .steps .n{grid-row:span 2;font-weight:520;font-size:clamp(48px,6vw,96px);line-height:.8;letter-spacing:-.04em;color:var(--cream)}
+#modal .steps .t{align-self:start;padding-top:6px}
+#modal .steps b{font-weight:520;font-size:clamp(20px,2vw,28px);line-height:1.05}
+#modal .steps p{grid-column:3;font-size:17px;color:#bdb6ad;max-width:62ch}
+#modal .res{grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:28px;margin:18px 0 40px}
+#modal .res b{white-space:nowrap;font-size:clamp(48px,6vw,108px);letter-spacing:-.04em;line-height:.85;margin-bottom:10px}
+#modal .res span{display:block;font-size:17px;max-width:24ch}
+#modal blockquote.q{margin:10px 0 40px;padding:28px 0 0;border-top:1px solid var(--red);max-width:900px}
+#modal blockquote.q p{font-weight:420;font-size:clamp(26px,3vw,42px);line-height:1.12;letter-spacing:-.01em}
+#modal blockquote.q cite{display:block;margin-top:14px;font-style:normal}
+#modal .cta{margin-top:20px;padding-top:24px;border-top:1px solid #2a2a2a}#modal .cta .lead{font-size:26px}
+@media(max-width:760px){#modal .steps li{grid-template-columns:56px 1fr}#modal .steps .t{display:none}#modal .steps p{grid-column:2}}
 </style>
 <script type="importmap">
 {"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.169.0/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.169.0/examples/jsm/"}}

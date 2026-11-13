@@ -14,6 +14,7 @@ import { DRACOLoader } from 'three/addons/loaders/DRACOLoader.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 const gltfLoader = new GLTFLoader().setDRACOLoader(new DRACOLoader().setDecoderPath('https://cdn.jsdelivr.net/npm/three@0.169.0/examples/jsm/libs/draco/gltf/'));
 import { CASES, renderCase, MODALS } from './cases.js';
+import { buildRobozone, buildTdojo, buildOzonCorpAlley } from './zones/zones.js';
 // учёт загрузки для прелоадера-искры: каждый файл через общий менеджер, картинки кейсов — вручную в caseTexture
 const LD = { done: 0, total: 0 }, LM = THREE.DefaultLoadingManager, lmStart = LM.itemStart, lmEnd = LM.itemEnd;
 LM.itemStart = u => { LD.total++; lmStart.call(LM, u); }; LM.itemEnd = u => { LD.done++; lmEnd.call(LM, u); };
@@ -736,6 +737,7 @@ const ZONES = {
 const WORLD = [
   { id: 'fandom', r: 'btl', zone: 'asia', kind: 'station', hero: [26, 20, 12], imgs: ['ozon-fandom-kv-1', 'ozon-fandom-real-1', 'ozon-fandom-real-2', 'ozon-fandom-real-3'], nav: 'ozon corp', orbit: true, moment: 'fandom' },
   { id: 'tbank', r: 'btl', zone: 'asia', kind: 'station', hero: [16, 16, 10], imgs: ['tbank-zone-1', 'tbank-zone-top-1', 'tbank-road-1', 'tbank-cover-1'], nav: 'чёрный пояс по it', moment: 'tbank' },
+  { id: 'robozon', r: 'btl', zone: 'joint', kind: 'station', hero: [16, 12, 6], imgs: ['robozone-1', 'robozone-2', 'robozone-3'], nav: 'робозон' },
   { id: 'selekt', r: 'btl', zone: 'joint', kind: 'station', hero: [14, 4, 10], imgs: ['ozon-select-1', 'ozon-select-0', 'ozon-select-2', 'ozon-select-3'], nav: 'ozon селект' },
   { id: 'lion', r: 'btl', zone: 'sport', kind: 'station', hero: [14, 14, 16], imgs: ['../dp/lion-2', '../dp/lion-1', '../dp/lion-cover'], nav: 'синегривый лев', moment: 'lion' },
   { id: 'ironstar', r: 'btl', zone: 'sport', kind: 'station', hero: [12, 12, 4], imgs: ['gdrive-ironstar-1'], nav: 'ironstar', moment: 'ironstar' },
@@ -755,10 +757,13 @@ const WORLD = [
   { id: 'avangard', r: 'atl', zone: 'arena', kind: 'screen', s: -1, img: 'avangard-1', nav: 'время авангарда' },
   { id: 'derbent', r: 'atl', zone: 'city', kind: 'screen', s: 1, img: 'derbent-1', nav: 'дербент' },
   { id: 'tevredens', r: 'atl', zone: 'city', kind: 'screen', s: -1, img: 'tevredens-1', video: 'tevredens', nav: 'tevredens' },
+  { id: 'ozonTravel', r: 'atl', zone: 'city', kind: 'screen', s: 1, img: null, nav: 'ozon travel' },
   { id: 'aiFonbet', r: 'atl', zone: 'ai', kind: 'screen', s: 1, img: 'ai-fonbet', video: 'ai-fonbet', nav: 'ai · fonbet' },
   { id: 'aiMango', r: 'atl', zone: 'ai', kind: 'screen', s: -1, img: 'ai-mango', video: 'ai-mango', nav: 'ai · mango' },
   { id: 'aiLavka', r: 'atl', zone: 'ai', kind: 'screen', s: 1, img: 'ai-lavka', video: 'ai-lavka', nav: 'ai · лавка' },
   { id: 'aiAlfa', r: 'atl', zone: 'ai', kind: 'screen', s: -1, img: 'ai-alfa', video: 'ai-alfa', nav: 'ai · альфа' },
+  { id: 'aiDracondaz', r: 'atl', zone: 'ai', kind: 'screen', s: 1, img: 'ai-dracondaz', nav: 'ai · dracondaz' },
+  { id: 'aiBeep', r: 'atl', zone: 'ai', kind: 'screen', s: -1, img: 'ai-beep', nav: 'ai · beep' },
 ];
 const ZR = {}, TAIL = {};
 const MOMENTS = {};   // кейсы-моменты: свой герой, своя камера, свет в бит; см. раздел «моменты»   // z-диапазоны кварталов; z наград и брифа
@@ -1347,6 +1352,7 @@ function placeholder(w) {
     bb.position.copy(g.position).addScaledVector(ax, away * ex / 2); bb.rotation.y = ry; return solid(bb);
   };
   if (w.r === 'atl') return banner(w);
+  if (ZONE3D[w.id]) return zone3d(w);
   const onRock = w.kind === 'screen' && (w.zone === 'city' || w.zone === 'arena');
   if (onRock) {   // баннер на скале: вместо башни — скальный массив, плита кейса висит на его грани к улице
     const sd = Math.sign(w.tower.x);
@@ -1365,6 +1371,29 @@ function placeholder(w) {
 // atl — большие баннеры-превью с кадром кейса: на фасаде башни, на грани скалы или на крыше «дикси».
 // для каждого заранее считается точка съёмки, и всё, что стоит между ней и баннером или режет баннер, убирается (clearBanners)
 const BANNERS = [];
+// 3D-зоны кейсов по визуализациям (модуль zones/zones.js): Т-Банк — додзё, Ozon Tech — Робозон, Ozon Corp — переулок вокруг модели зоны
+const ZONE3D = { tbank: 'dojo', robozon: 'robo', fandom: 'corp' }, ZLIVE = [];
+function zone3d(w) {
+  const kind = ZONE3D[w.id], Z = kind === 'robo' ? buildRobozone(THREE) : kind === 'dojo' ? buildTdojo(THREE) : buildOzonCorpAlley(THREE, { kv: 'assets/cases/ozon-fandom-kv-1.jpg', length: 30, width: 16 });
+  const c = w.center || w.heroPos, k = Math.min(1.6, 28 / Math.max(Z.size.w, Z.size.d)), g = Z.group;
+  g.scale.setScalar(k); g.position.set(c.x, 0, c.z); g.rotation.y = Math.atan2(22, -34);   // фасад зоны (+z) — к точке съёмки
+  const drop = []; g.traverse(o => { if (o.isSpotLight || o.isDirectionalLight) drop.push(o); if (o.isMesh) { o.castShadow = o.receiveShadow = true; o.userData.case = w.id; clickable.push(o); } });
+  drop.forEach(o => o.parent.remove(o));   // прожекторы зоны не нужны: свет даёт мир, у зоны остаётся свой цветной точечный
+  scene.add(g); g.updateMatrixWorld(true);
+  Z.solids.forEach(sd => { const m = new THREE.Mesh(new THREE.BoxGeometry(sd.w, sd.h, sd.d)); m.position.set(sd.x, sd.h / 2, sd.z); g.add(m); m.updateMatrixWorld(true); SOLIDS.push({ box: new THREE.Box3().setFromObject(m), name: w.id }); g.remove(m); });
+  if (kind === 'corp') {   // модель зоны Ozon Corp в центре переулка и стена ретро-телевизоров с кадрами кейса у входа
+    gltfLoader.loadAsync('assets/models/ozon-corp.min.glb').then(gl => { const m = gl.scene, bb = new THREE.Box3().setFromObject(m), sz = bb.getSize(new THREE.Vector3()), kk = 11 / Math.max(sz.x, sz.z);
+      m.scale.setScalar(kk); bb.setFromObject(m); const cc = bb.getCenter(new THREE.Vector3()); m.position.set(-cc.x, -bb.min.y, -cc.z); m.traverse(o => { if (o.isMesh) { o.castShadow = o.receiveShadow = true; o.userData.case = w.id; clickable.push(o); } }); g.add(m); }).catch(() => {});
+    const tv = new THREE.Group(); tv.position.set(10.5, 0, 12); tv.rotation.y = -0.5; g.add(tv);
+    ['ozon-fandom-real-1', 'ozon-fandom-real-2', 'ozon-fandom-real-3', 'ozon-fandom-kv-1', 'ozon-fandom-3d-1', 'ozon-fandom-real-1', 'ozon-fandom-real-2', 'ozon-fandom-kv-1', 'ozon-fandom-real-3'].forEach((n, i) => {
+      const x = (i % 3 - 1) * 2.3, y = 1.0 + Math.floor(i / 3) * 1.75;
+      const body = new THREE.Mesh(new THREE.BoxGeometry(2.1, 1.6, 1.4), new THREE.MeshStandardMaterial({ color: 0x1b1b1d, roughness: 0.5 })); body.position.set(x, y, -0.7); tv.add(body);
+      const scr = new THREE.Mesh(new THREE.PlaneGeometry(1.7, 1.15), new THREE.MeshBasicMaterial({ map: caseTexture(`assets/cases/${n}.jpg`, true, 512, 340), toneMapped: false })); scr.position.set(x, y, 0.01); tv.add(scr);
+    });
+  }
+  w.cube = { c: V(c.x, Z.size.h * k / 2, c.z), h: Z.size.h * k, w: Math.max(Z.size.w, Z.size.d) * k };
+  ZLIVE.push({ Z, c: V(c.x, 4, c.z) });
+}
 function banner(w) {
   const IMG = { izhora: 'izhora-48-1' }, img = IMG[w.id] || w.img, vert = w.id === 'izhora';
   let W = 46, H = 46 * 9 / 16, x0, sd, y;
@@ -1378,7 +1407,11 @@ function banner(w) {
   const g = new THREE.Group(); g.position.copy(B); g.lookAt(B.clone().add(N)); g.userData.case = w.id; scene.add(g);
   const back = new THREE.Mesh(new THREE.BoxGeometry(W + 1.6, H + 1.6, 1.2), CONC.wall); back.position.z = -0.7; back.castShadow = back.receiveShadow = true; g.add(back);
   const P = B.clone().addScaledVector(N, -2.2), arm = new THREE.Mesh(new THREE.BoxGeometry(Math.abs(x0 - P.x) + 1, 1.6, 1.6), CONC.wall); arm.position.set((x0 + P.x) / 2, y, P.z); scene.add(arm);   // консоль к фасаду — за щитом, не сквозь него
-  const pic = new THREE.Mesh(new THREE.PlaneGeometry(W, H), new THREE.MeshBasicMaterial({ map: caseTexture(`assets/cases/${img}.jpg`, false, vert ? 576 : 1024, vert ? 1024 : 576), toneMapped: false }));
+  const typeBanner = () => canvasTex(1024, 576, (g2, w2, h2) => {   // без материалов заказчика: только типографика и цитата из кейса
+    const c = CASES[w.id]; g2.fillStyle = '#E1D9CF'; g2.fillRect(0, 0, w2, h2); g2.fillStyle = '#F40709'; g2.font = '28px AP, monospace'; g2.fillText(c.pass.клиент.toLowerCase() + ' · ' + c.pass.год, 56, 72);
+    g2.fillStyle = '#111'; g2.font = '520 88px TT, sans-serif'; ['города рф.', 'осенние и зимние', 'маршруты'].forEach((l, i) => g2.fillText(l, 52, 190 + i * 84));
+    if (c.quotes) { g2.font = '400 30px TT, sans-serif'; g2.fillText('«' + c.quotes[0][0] + '»', 56, 470); g2.font = '22px AP, monospace'; g2.fillStyle = '#F40709'; g2.fillText('— ' + c.quotes[0][1], 56, 512); } });
+  const pic = new THREE.Mesh(new THREE.PlaneGeometry(W, H), new THREE.MeshBasicMaterial({ map: img ? caseTexture(`assets/cases/${img}.jpg`, false, vert ? 576 : 1024, vert ? 1024 : 576) : typeBanner(), toneMapped: false }));
   pic.material.color.setScalar(0.95); pic.userData.case = w.id; g.add(pic); clickable.push(pic);
   // точка съёмки почти в лоб: баннер ~половина ширины кадра, в правой части; камера не выходит из коридора между башнями
   const D = Math.max(W / (0.5 * 1.48), H / (0.72 * 0.93)), C = B.clone().addScaledVector(N, D).add(V(0, 3, 0));
@@ -1426,6 +1459,7 @@ function updateCubes() {
 }
 function updateGlow() {
   updateCubes();
+  const tz = clock.elapsedTime; ZLIVE.forEach(q => { const I = clamp01((180 - q.c.distanceTo(camera.position)) / 80); if (I > 0 || q.on) q.Z.update(tz, I, camera.position); q.on = I > 0; });
   const near = GLOW.pts.map(p => [p, p.distanceTo(camera.position)]).sort((a, b) => a[1] - b[1]);
   GLOW.pool.forEach((l, i) => { const [p, d] = near[i]; l.position.copy(p); l.color.copy(p.col); l.intensity = 160 * clamp01((260 - d) / 120); });
 }
@@ -1594,7 +1628,7 @@ const MORE = {
   event: { t: 'другие ивент-кейсы', ids: ['baltikaPlant', 'megafon', 'mice', 'megafonTravel'] },
   merch: { t: 'другие кейсы с мерчем', ids: ['gdriveMerch', 'oxygenSet', 'lionMerch'] },
   dixy: { t: 'другие кейсы «дикси»', ids: ['treschnutye', 'zaklinateli', 'dino'] },
-  ai: { t: 'другие ai-ролики', ids: ['aiFonbet', 'aiMango', 'aiLavka', 'aiAlfa', 'ai'] },
+  ai: { t: 'другие ai-ролики', ids: ['aiFonbet', 'aiMango', 'aiLavka', 'aiAlfa', 'aiDracondaz', 'aiBeep', 'ai'] },
 };
 // рассказы строятся из таблицы мира: окно — отрезок остановки, сторона — напротив носителя в кадре
 const STORIES = WORLD.map(w => [w.id, w.a, w.b, w.r, w.story, [ZONES[w.zone].more, ...(w.also || [])].filter(Boolean), w.orbit]);
