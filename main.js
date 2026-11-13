@@ -14,7 +14,7 @@ import { DRACOLoader } from 'three/addons/loaders/DRACOLoader.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 const gltfLoader = new GLTFLoader().setDRACOLoader(new DRACOLoader().setDecoderPath('https://cdn.jsdelivr.net/npm/three@0.169.0/examples/jsm/libs/draco/gltf/'));
 import { CASES, renderCase, MODALS } from './cases.js';
-import { buildRobozoneGen, buildTdojoGen, buildOzonCorpAlley } from './zones/zones.js';
+import { buildRobozoneGen, buildTdojoGen, buildOzonCorpAlley, buildOzonCorpGen, buildSelectGen } from './zones/zones.js';
 // учёт загрузки для прелоадера-искры: каждый файл через общий менеджер, картинки кейсов — вручную в caseTexture
 const LD = { done: 0, total: 0 }, LM = THREE.DefaultLoadingManager, lmStart = LM.itemStart, lmEnd = LM.itemEnd;
 LM.itemStart = u => { LD.total++; lmStart.call(LM, u); }; LM.itemEnd = u => { LD.done++; lmEnd.call(LM, u); };
@@ -1372,19 +1372,21 @@ function placeholder(w) {
 // для каждого заранее считается точка съёмки, и всё, что стоит между ней и баннером или режет баннер, убирается (clearBanners)
 const BANNERS = [];
 // 3D-зоны кейсов по визуализациям (модуль zones/zones.js): Т-Банк — додзё, Ozon Tech — Робозон, Ozon Corp — переулок вокруг модели зоны
-const ZONE3D = { tbank: 'dojo', robozon: 'robo', fandom: 'corp' }, ZLIVE = [];
+const ZONE3D = { tbank: 'dojo', robozon: 'robo', fandom: 'corp', selekt: 'select' }, ZLIVE = [];
 function zone3d(w) {
-  const kind = ZONE3D[w.id], Z = kind === 'robo' ? buildRobozoneGen(THREE, gltfLoader) : kind === 'dojo' ? buildTdojoGen(THREE, gltfLoader) : buildOzonCorpAlley(THREE, { kv: 'assets/cases/ozon-fandom-kv-1.jpg', length: 30, width: 16 });
-  const c = w.center || w.heroPos, k = Math.min(1.6, 28 / Math.max(Z.size.w, Z.size.d)), g = Z.group;
+  const kind = ZONE3D[w.id], Z = kind === 'robo' ? buildRobozoneGen(THREE, gltfLoader) : kind === 'dojo' ? buildTdojoGen(THREE, gltfLoader) : kind === 'select' ? buildSelectGen(THREE, gltfLoader) : buildOzonCorpAlley(THREE, { kv: 'assets/cases/ozon-fandom-kv-1.jpg', length: 30, width: 16 });
+  const c = w.center || w.heroPos, k = Math.min(kind === 'select' ? 1.15 : 1.6, 28 / Math.max(Z.size.w, Z.size.d)), g = Z.group;
   g.scale.setScalar(k); g.position.set(c.x, 0, c.z); g.rotation.y = Math.atan2(22, -34);   // фасад зоны (+z) — к точке съёмки
   const drop = []; g.traverse(o => { if (o.isSpotLight || o.isDirectionalLight) drop.push(o); if (o.isMesh) { o.castShadow = o.receiveShadow = true; o.userData.case = w.id; clickable.push(o); } });
+  if (kind === 'select') g.traverse(o => { if (o.isPointLight && o.color.getHex() === 0xff2a2a) drop.push(o); });
   drop.forEach(o => o.parent.remove(o));   // прожекторы зоны не нужны: свет даёт мир, у зоны остаётся свой цветной точечный
-  Z.ready?.then(() => g.traverse(o => { if (o.isMesh && !o.userData.case) { o.castShadow = o.receiveShadow = true; o.userData.case = w.id; clickable.push(o); } if (o.isSpotLight && o.parent) o.parent.remove(o); }));   // модели из генерации догружаются позже
+  Z.ready?.then(() => g.traverse(o => { if (o.isMesh && !o.userData.case) { o.castShadow = o.receiveShadow = true; o.userData.case = w.id; clickable.push(o); } }));   // модели из генерации догружаются позже
   scene.add(g); g.updateMatrixWorld(true);
   Z.solids.forEach(sd => { const m = new THREE.Mesh(new THREE.BoxGeometry(sd.w, sd.h, sd.d)); m.position.set(sd.x, sd.h / 2, sd.z); g.add(m); m.updateMatrixWorld(true); SOLIDS.push({ box: new THREE.Box3().setFromObject(m), name: w.id }); g.remove(m); });
   if (kind === 'corp') {   // модель зоны Ozon Corp в центре переулка и стена ретро-телевизоров с кадрами кейса у входа
-    gltfLoader.loadAsync('assets/models/ozon-corp.min.glb').then(gl => { const m = gl.scene, bb = new THREE.Box3().setFromObject(m), sz = bb.getSize(new THREE.Vector3()), kk = 11 / Math.max(sz.x, sz.z);
-      m.scale.setScalar(kk); bb.setFromObject(m); const cc = bb.getCenter(new THREE.Vector3()); m.position.set(-cc.x, -bb.min.y, -cc.z); m.traverse(o => { if (o.isMesh) { o.castShadow = o.receiveShadow = true; o.userData.case = w.id; clickable.push(o); } }); g.add(m); }).catch(() => {});
+    const corp = buildOzonCorpGen(THREE, gltfLoader); g.add(corp.group);   // новая модель зоны (генерация по ракурсам 3D-макета), фасад к входу в переулок
+    { const pl = []; corp.group.traverse(o => { if (o.isPointLight) pl.push(o); }); pl.forEach(o => o.parent.remove(o)); }   // цвет даёт неон переулка — лишние источники не нужны
+    corp.ready?.then(() => corp.group.traverse(o => { if (o.isMesh) { o.castShadow = o.receiveShadow = true; o.userData.case = w.id; clickable.push(o); } }));
     const tv = new THREE.Group(); tv.position.set(10.5, 0, 12); tv.rotation.y = -0.5; g.add(tv);
     ['ozon-fandom-real-1', 'ozon-fandom-real-2', 'ozon-fandom-real-3', 'ozon-fandom-kv-1', 'ozon-fandom-3d-1', 'ozon-fandom-real-1', 'ozon-fandom-real-2', 'ozon-fandom-kv-1', 'ozon-fandom-real-3'].forEach((n, i) => {
       const x = (i % 3 - 1) * 2.3, y = 1.0 + Math.floor(i / 3) * 1.75;
