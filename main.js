@@ -13,6 +13,8 @@ import { Reflector } from 'three/addons/objects/Reflector.js';
 import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
 import { CASES } from './cases.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
+import { buildRobozone, buildTdojo, buildOzonCorpAlley } from './zones/zones.js';
 
 const RED = 0xf40709, CREAM = 0xe1d9cf;
 const V = (x, y, z) => new THREE.Vector3(x, y, z);
@@ -320,32 +322,45 @@ const VIDS = { aiFonbet: 'ai-fonbet', aiMango: 'ai-mango', aiLavka: 'ai-lavka', 
 const PJ = (id, img, loc, zone, w, W, o = {}) => Object.assign({ id, img, loc, zone, C: w.C, n: w.n, W, H: W * 9 / 16, sc: new THREE.Vector2(1, 1), vid: VIDS[id] }, o);
 // раскладка: в каждом зале сначала подряд кейсы одной стены, потом — другой стены во второй половине зала (камера не возвращается к уже виденному)
 const AS = V(0, 0, ZN.asia), wallZ = (x, y, z) => ({ C: V(x, LOW + y, z), n: V(0, 0, 1) });
+// 3D-зоны кейсов (модуль zones/zones.js): локальные метры, фасад в +z — ставим в залы с масштабом S, у каждой свой свет
+const ZONES3 = {
+  robo: { build: buildRobozone, pos: V(300, LOW, -1240), rotY: 0, S: 6, size: { w: 20, d: 11, h: 8.3 } },
+  corp: { build: buildOzonCorpAlley, pos: V(-220, LOW, -1260), rotY: 0, S: 6, size: { w: 10, d: 22, h: 6 } },
+  dojo: { build: buildTdojo, pos: V(130, LOW, -2150), rotY: 0, S: 4, size: { w: 32, d: 40, h: 14.2 } },
+};
+// кадр зоны: «картинка» — фасад зоны (центр по фасаду, ширина ~ ширина зоны)
+const zoneShot = (k, kW, o = {}) => { const z = ZONES3[k], n = V(Math.sin(z.rotY), 0, Math.cos(z.rotY)), C = z.pos.clone().addScaledVector(n, z.size.d * z.S / 2); C.y = LOW + z.size.h * z.S * 0.42; return { C, n, _W: z.size.w * z.S * kW, z3: k, ...o }; };
+const ZS = (id, loc, zone, k, kW, o) => { const z = zoneShot(k, kW, o); return PJ(id, '', loc, zone, z, z._W, z); };
 const SHOTS = [
-  PJ('baltikaPlant', 'cases/baltika-plant-1', 'ивенты', 'hyp', wallPt(-699.5, 115, -730, 1), 230),
-  PJ('megafon', 'cases/megafon-1', 'ивенты', 'hyp', wallPt(-699.5, 115, -990, 1), 230),
-  PJ('mice', 'cases/mice-1', 'ивенты', 'hyp', wallPt(699.5, 115, -1150, -1), 200),
-  PJ('megafonTravel', 'cases/megafon-travel-1', 'ивенты', 'hyp', wallPt(699.5, 115, -1375, -1), 190),
+  PJ('baltikaPlant', 'cases/baltika-plant-1', 'ивенты', 'hyp', wallPt(-699.5, 115, -730, 1), 220),
+  PJ('megafon', 'cases/megafon-1', 'ивенты', 'hyp', wallPt(-699.5, 115, -990, 1), 220),
+  PJ('megafonTravel', 'cases/megafon-travel-1', 'ивенты', 'hyp', wallPt(-699.5, 115, -1250, 1), 220),
+  ZS('fandom', 'ozon corp · 3d-зона', 'hyp', 'corp', 0.95, { yc: 22, a: 8 }),
+  ZS('robozone', 'ozon tech · 3d-зона', 'hyp', 'robo', 0.62, { yc: 30 }),
+  PJ('mice', 'cases/mice-1', 'ивенты', 'hyp', wallPt(699.5, 115, -1420, -1), 140),
   PJ('avangard', 'cases/avangard-1', 'спорт', 'hyp', wallZ(0, 250, -1499.4), 240, { pd: 420 }),
   PJ('derbent', 'cases/derbent-1', 'города', 'shaft', cylPt(SHC, 149.5, -65, -10), 130),
   PJ('tevredens', 'cases/tevredens-1', 'города', 'shaft', cylPt(SHC, 149.5, -125, -10), 130),
+  PJ('ozonTravel', '', 'города', 'shaft', cylPt(SHC, 149.5, 125, -10), 130),
   PJ('izhora', 'cases/izhora-48-1', 'азия', 'asia', cylPt(AS, 259.5, -45, 80), 150),
-  PJ('fandom', 'cases/ozon-fandom-kv-1', 'азия', 'asia', cylPt(AS, 259.5, -100, 80), 150),
-  PJ('tbank', 'cases/tbank-zone-1', 'азия', 'asia', cylPt(AS, 259.5, 115, 80), 150),
-  PJ('treschnutye', 'cases/treschnutye-1', 'азия', 'asia', cylPt(AS, 259.5, 155, 80), 150),
+  PJ('treschnutye', 'cases/treschnutye-1', 'азия', 'asia', cylPt(AS, 259.5, -105, 80), 150),
+  ZS('tbank', 'т-банк · 3d-зона', 'asia', 'dojo', 0.55, { a: -20, yc: 30 }),
   PJ('selekt', 'cases/ozon-select-1', 'ритейл', 'ret', wallPt(-169.4, 150, -2600, 1), 200),
   PJ('zaklinateli', 'cases/zaklinateli-kv-1', 'ритейл', 'ret', wallPt(-169.4, 150, -2870, 1), 200),
-  PJ('dino', 'cases/dino-1', 'ритейл', 'ret', wallPt(169.4, 150, -2900, -1), 190),
-  PJ('gdriveMerch', 'cases/gdrive-capsule-1', 'мерч', 'ret', wallPt(169.4, 150, -3140, -1), 200),
+  PJ('dino', 'cases/dino-1', 'ритейл', 'ret', wallPt(-169.4, 150, -3140, 1), 200),
+  PJ('gdriveMerch', 'cases/gdrive-capsule-1', 'мерч', 'ret', wallPt(169.4, 150, -3140, -1), 190),
   PJ('lionMerch', 'dp/lion-cover', 'мерч', 'ret', wallZ(0, 250, -3319.4), 200, { ceil: LOW + 520, py: LOW + 470 }),
-  PJ('aiFonbet', 'cases/ai-fonbet', 'ai-продакшн', 'ai', wallPt(-699.5, 125, -3550, 1), 200),
-  PJ('aiMango', 'cases/ai-mango', 'ai-продакшн', 'ai', wallPt(-699.5, 125, -3770, 1), 200),
-  PJ('aiLavka', 'cases/ai-lavka', 'ai-продакшн', 'ai', wallPt(-699.5, 125, -3990, 1), 200),
-  PJ('aiAlfa', 'cases/ai-alfa', 'ai-продакшн', 'ai', wallPt(699.5, 125, -4160, -1), 190),
-  PJ('oxygenSet', 'cases/oxygen-set-1', 'мерч', 'ai', wallPt(699.5, 125, -4335, -1), 170),
-  PJ('lion', 'dp/lion-2', 'спорт', 'sport', wallPt(-319.5, 110, -4555, 1), 170),
-  PJ('ironstar', 'cases/gdrive-ironstar-1', 'спорт', 'sport', wallPt(-319.5, 110, -4745, 1), 170),
-  PJ('gdrive', 'cases/gdrive-silk-1', 'спорт', 'sport', wallPt(319.5, 110, -4925, -1), 150),
-  PJ('baltika7', 'cases/baltika7-1', 'спорт', 'sport', wallPt(319.5, 110, -5075, -1), 140),
+  PJ('aiFonbet', 'cases/ai-fonbet', 'ai-продакшн', 'ai', wallPt(-699.5, 125, -3540, 1), 190),
+  PJ('aiMango', 'cases/ai-mango', 'ai-продакшн', 'ai', wallPt(-699.5, 125, -3760, 1), 190),
+  PJ('aiLavka', 'cases/ai-lavka', 'ai-продакшн', 'ai', wallPt(-699.5, 125, -3980, 1), 190),
+  PJ('dracondaz', '', 'ai-продакшн', 'ai', wallPt(-699.5, 125, -4200, 1), 190),
+  PJ('aiAlfa', 'cases/ai-alfa', 'ai-продакшн', 'ai', wallPt(699.5, 125, -4255, -1), 150),
+  PJ('beep', '', 'ai-продакшн', 'ai', wallPt(699.5, 125, -4385, -1), 100),
+  PJ('lion', 'dp/lion-2', 'спорт', 'sport', wallPt(-319.5, 110, -4540, 1), 150),
+  PJ('ironstar', 'cases/gdrive-ironstar-1', 'спорт', 'sport', wallPt(-319.5, 110, -4700, 1), 150),
+  PJ('oxygenSet', 'cases/oxygen-set-1', 'мерч', 'sport', wallPt(-319.5, 110, -4860, 1), 150),
+  PJ('gdrive', 'cases/gdrive-silk-1', 'спорт', 'sport', wallPt(319.5, 110, -4965, -1), 120),
+  PJ('baltika7', 'cases/baltika7-1', 'спорт', 'sport', wallPt(319.5, 110, -5085, -1), 120),
 ];
 SHOTS.forEach(c => { const z = ZP[c.zone]; c.P = c.C.clone().addScaledVector(c.n, c.pd || z.pd); c.P.y = c.py || z.py; });
 // кадр кейса: камера смотрит на стену под углом 30° вперёд по ходу; картинка занимает половину экрана —
@@ -356,8 +371,8 @@ function solveShot(sh, aspect) {
   const wide = aspect >= 1, tx = wide ? s * 0.42 : 0, ty = wide ? 0.16 : 0.34, tw = wide ? 1.08 : 1.84, th = wide ? 1.5 : 0.62;
   const cam = new THREE.PerspectiveCamera(50, aspect, 1, 9000);
   const corners = [[-1, -1], [1, -1], [1, 1], [-1, 1]].map(([a, b]) => sh.C.clone().addScaledVector(T0, a * sh.W / 2).addScaledVector(up, b * sh.H / 2));
-  const yaw = ZP[sh.zone].a ? THREE.MathUtils.degToRad(ZP[sh.zone].a) : SOLVE_A, dh = sh.n.clone().negate().multiplyScalar(Math.cos(yaw)).addScaledVector(f, Math.sin(yaw)).normalize(), right = dh.clone().cross(up).normalize();
-  let D = sh.W * 1.3, lat = -tx * D * 0.6, pitch = 0; const yc = LOW + ZP[sh.zone].yc;
+  const yaw = sh.a != null ? THREE.MathUtils.degToRad(sh.a) : ZP[sh.zone].a ? THREE.MathUtils.degToRad(ZP[sh.zone].a) : SOLVE_A, dh = sh.n.clone().negate().multiplyScalar(Math.cos(yaw)).addScaledVector(f, Math.sin(yaw)).normalize(), right = dh.clone().cross(up).normalize();
+  let D = sh.W * 1.3, lat = -tx * D * 0.6, pitch = 0; const yc = LOW + (sh.yc || ZP[sh.zone].yc);
   for (let it = 0; it < 80; it++) {
     const pos = sh.C.clone().addScaledVector(dh, -D).addScaledVector(right, lat); pos.y = yc;
     const dir = dh.clone(); dir.y = Math.tan(pitch); dir.normalize();
@@ -410,15 +425,16 @@ const KEEP = [];
 { const KK0 = camKeys([{ pos: V(0, LOW + 42, -5200) }]), pp = camPath(KK0).pos;
   for (let i = 0; i < pp.length - 6; i += 6) KEEP.push({ a: pp[i], b: pp[i + 6], r: 24 });
   KK0.filter(k => k.shot).forEach(k => { const c = k.shot, T0 = c.n.clone().negate().cross(V(0, 1, 0)).normalize();
-    for (let a = -2; a <= 2; a++) for (let b = -1; b <= 1; b++) { const g = c.C.clone().addScaledVector(T0, a * c.W / 4.4).add(V(0, b * c.H / 2.2, 0)); KEEP.push({ a: k.pos, b: g, r: 6 }, { a: c.cam.pos, b: g, r: 6 }, { a: c.P, b: g, r: 5 }); } });
+    for (let a = -2; a <= 2; a++) for (let b = -1; b <= 1; b++) { const g = c.C.clone().addScaledVector(T0, a * c.W / 4.4).add(V(0, b * c.H / 2.2, 0)); KEEP.push({ a: k.pos, b: g, r: 6 }, { a: c.cam.pos, b: g, r: 6 }); if (!c.z3) KEEP.push({ a: c.P, b: g, r: 5 }); } });
   KEEP.forEach(k => { k.a2 = k.a.clone().setY(0); k.b2 = k.b.clone().setY(0); }); }
 function segD(px, py, pz, a, b) { const bx = b.x - a.x, by = b.y - a.y, bz = b.z - a.z; let t = ((px - a.x) * bx + (py - a.y) * by + (pz - a.z) * bz) / ((bx * bx + by * by + bz * bz) || 1); t = t < 0 ? 0 : t > 1 ? 1 : t;
   const dx = a.x + bx * t - px, dy = a.y + by * t - py, dz = a.z + bz * t - pz; return Math.sqrt(dx * dx + dy * dy + dz * dz); }
 // весь луч проектора (в плане) — тоже без колонн, иначе картинка ложится на колонну перед стеной
-const inBeam2 = (x, z, r) => SHOTS.some(c => { const T0 = c.n.clone().negate().cross(V(0, 1, 0)).normalize(), A = c.P, B = c.C.clone().addScaledVector(T0, -c.W / 2), C2 = c.C.clone().addScaledVector(T0, c.W / 2);
+const inBeam2 = (x, z, r) => SHOTS.some(c => { if (c.z3) return false; const T0 = c.n.clone().negate().cross(V(0, 1, 0)).normalize(), A = c.P, B = c.C.clone().addScaledVector(T0, -c.W / 2), C2 = c.C.clone().addScaledVector(T0, c.W / 2);
   const sd = (p, q) => (q.x - p.x) * (z - p.z) - (q.z - p.z) * (x - p.x), d1 = sd(A, B), d2 = sd(B, C2), d3 = sd(C2, A);
   return (!((d1 < 0 || d2 < 0 || d3 < 0) && (d1 > 0 || d2 > 0 || d3 > 0))) || segD(x, 0, z, A.clone().setY(0), B.clone().setY(0)) < r || segD(x, 0, z, A.clone().setY(0), C2.clone().setY(0)) < r; });
-const kept2 = (x, z, r) => KEEP.some(k => segD(x, 0, z, k.a2, k.b2) < r + k.r) || inBeam2(x, z, r);
+const inZone2 = (x, z, r) => Object.values(ZONES3).some(Z => { const dx = x - Z.pos.x, dz = z - Z.pos.z, c = Math.cos(Z.rotY), s_ = Math.sin(Z.rotY), lx = dx * c - dz * s_, lz = dx * s_ + dz * c; return Math.abs(lx) < Z.size.w * Z.S / 2 + r + 20 && Math.abs(lz) < Z.size.d * Z.S / 2 + r + 20; });
+const kept2 = (x, z, r) => KEEP.some(k => segD(x, 0, z, k.a2, k.b2) < r + k.r) || inBeam2(x, z, r) || inZone2(x, z, r);
 const kept3 = (p, r) => KEEP.some(k => segD(p.x, p.y, p.z, k.a, k.b) < r + k.r);
 const SHAFTS = [];   // { x, z, r, k, floor, top }
 const LAMPS = [];    // точечные источники локаций: { p, r, c } — к камере подсаживаются ближайшие 8
@@ -475,7 +491,7 @@ function buildWorld(slot) {
     [V(xl, 0.25, 9), up], [V(90, 0.25, 9), up], [V(90, 0.25, STAIR.z0 - run), up]];
   const zBot = STAIR.z0 - run + 2 * LOW;
   P.push([V(90, LOW + 0.25, zBot), V(0, run, -rise).normalize()]);
-  [[90, -700], [-672, -700], [-672, -1050], [672, -1090], [672, -1440], [0, -1440], [0, -1860], [-112, -1905], [-211, -2023], [-211, -2177], [211, -2177], [112, -2295], [0, -2370], [0, -2470], [-140, -2470], [-140, -2885], [140, -2905], [140, -3285], [0, -3285], [0, -3460], [-672, -3460], [-672, -4040], [672, -4080], [672, -4420], [0, -4420], [0, -4470], [-292, -4470], [-292, -4830], [292, -4850], [292, -5100], [0, -5100], [0, ZN.fan + 40]]
+  [[90, -700], [-672, -700], [-672, -1360], [672, -1380], [672, -1440], [0, -1440], [0, -1860], [-112, -1905], [-211, -2023], [-211, -2177], [-112, -2295], [0, -2370], [0, -2470], [-140, -2470], [-140, -3205], [140, -3215], [140, -3285], [0, -3285], [0, -3460], [-672, -3460], [-672, -4225], [672, -4235], [672, -4420], [0, -4420], [0, -4470], [-292, -4470], [-292, -4920], [292, -4930], [292, -5100], [0, -5100], [0, ZN.fan + 40]]
     .forEach(([x, zz]) => P.push([V(x, LOW + 0.25, zz), up]));
   PATH = P;
   let s = 0; SEG = [];
@@ -690,6 +706,23 @@ function buildSphere(c, rad) {
   sphere.position.copy(c); scene.add(sphere); FX.sphere = sphere;
 }
 
+// типографская карточка кейса для проектора: только текст из документа (название, клиент, задача, цитата) — в айдентике 20_26
+function caseCard(c) {
+  const k = CASES[c.id] || {}, ps = k.pass || {};
+  return canvasTex(1600, 900, (g, w, h) => {
+    g.fillStyle = '#010101'; g.fillRect(0, 0, w, h);
+    g.fillStyle = '#F40709'; g.font = '30px AP, monospace'; g.fillText(`{${c.loc}}  ${[ps.клиент, ps.год].filter(Boolean).join(' · ')}`, 90, 120);
+    g.fillStyle = '#E1D9CF'; g.font = '520 116px TT, sans-serif';
+    const wrap = (t, x, y, mw, lh, max = 9) => { const ws = t.split(' '); let line = '', n = 0; for (const wd of ws) { const tt = line ? line + ' ' + wd : wd; if (g.measureText(tt).width > mw && line) { g.fillText(line, x, y); y += lh; line = wd; if (++n >= max) return y; } else line = tt; } g.fillText(line, x, y); return y + lh; };
+    let y = wrap(k.title || '', 90, 270, 1420, 112, 3);
+    const q = (k.quotes || [])[0];
+    g.font = '400 44px TT, sans-serif'; g.fillStyle = q ? '#E1D9CF' : '#8d867e';
+    if (q) { y = wrap(`«${q[0]}»`, 90, y + 40, 1300, 56, 4); g.fillStyle = '#8d867e'; g.font = '28px AP, monospace'; g.fillText(q[1], 90, y + 10); }
+    else wrap(k.task || '', 90, y + 40, 1300, 56, 4);
+    g.fillStyle = '#F40709'; g.fillRect(90, h - 110, 260, 6);
+  });
+}
+
 // ---------- свет, который видно: лучи, проёмы, светильники, кубы, вентилятор ----------
 const beamMat = (col = 0xc4d0ff) => new THREE.ShaderMaterial({
   transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide,
@@ -719,7 +752,7 @@ function buildLight() {
   for (let zz = ZN.st1 - 64; zz > ZN.st1 - 520; zz -= 48) [-1, 1].forEach(sd => { const m = slab(3, 180, V(sd * (VENT.x - 0.6), LOW + 100, zz), 2.6); m.rotation.y = -sd * Math.PI / 2; });   // кадр 9: щели
   // проекторы: корпус на подвесе (или на галерее / на стеллаже), линза, луч в дымке; картинка — в шейдере бетона
   const bodies = [], rods = [], dark = new THREE.Color(0.045, 0.045, 0.05);
-  SHOTS.forEach(c => {
+  SHOTS.filter(c => !c.z3).forEach(c => {
     const z = ZP[c.zone], P = c.P, dir = c.C.clone().sub(P).normalize(), q = new THREE.Quaternion().setFromUnitVectors(V(0, 0, 1), dir);
     bodies.push({ m: new THREE.Matrix4().compose(P.clone().addScaledVector(dir, -7), q, V(11, 7, 15)), c: dark });
     if (c.ceil || z.ceil) rods.push({ m: beam(P.clone().addScaledVector(dir, -7), V(P.x, c.ceil || z.ceil, P.z).addScaledVector(dir, -7), 0.8), c: dark });
@@ -728,7 +761,8 @@ function buildLight() {
     if (c.vid) {
       const v = Object.assign(document.createElement('video'), { src: `assets/${c.vid}.mp4`, muted: true, loop: true, playsInline: true, crossOrigin: 'anonymous', preload: 'auto' });
       v.addEventListener('loadedmetadata', () => cover(v.videoWidth / v.videoHeight)); c.video = v; c.tex = new THREE.VideoTexture(v);
-    } else c.tex = texL.load(`assets/${c.img}.jpg`, t => cover(t.image.width / t.image.height));
+    } else if (!c.img) c.tex = caseCard(c);   // у кейса нет материалов (или их нельзя показывать) — проектор показывает типографскую карточку
+    else c.tex = texL.load(`assets/${c.img}.jpg`, t => cover(t.image.width / t.image.height));
     c.tex.colorSpace = THREE.SRGBColorSpace; c.tex.anisotropy = 8;
     const lens = new THREE.Sprite(new THREE.SpriteMaterial({ map: softDot, color: new THREE.Color(1, 0.95, 0.88).multiplyScalar(4), blending: THREE.AdditiveBlending, depthWrite: false, toneMapped: false }));
     lens.scale.setScalar(16); lens.position.copy(P).addScaledVector(dir, 1); scene.add(lens); FX.glows.push(lens);
@@ -1088,10 +1122,11 @@ function frame() {
   FX.beams.forEach(o => { o.b.material.uniforms.uK.value = 0.03 * o.k * Lh; });
   FX.glows.forEach(g => { g.visible = Lh > 0.01; });
   // проекторы: в шейдер — три ближайших; лучи видны только у ближних
-  const pj = SHOTS.map(c => [c, cp.distanceTo(c.cam.pos)]).sort((a, b) => a[1] - b[1]), cur = SHOTS.find(c => pSm >= c.p0 - 0.004 && pSm <= c.p1 + 0.004);
+  const pj = SHOTS.filter(c => !c.z3).map(c => [c, cp.distanceTo(c.cam.pos)]).sort((a, b) => a[1] - b[1]), cur = SHOTS.find(c => pSm >= c.p0 - 0.004 && pSm <= c.p1 + 0.004);
   for (let n = 0; n < 3; n++) { const c = pj[n][0], fl = 0.97 + 0.03 * Math.sin(time * 31 + n * 2) * Math.sin(time * 17.3);
     U.uJp.value[n].set(c.P.x, c.P.y, c.P.z, 8.5 * fl * Lh * (cur ? (c === cur ? 1 : 0.12) : 0.3 + 0.7 * Math.exp(-pj[n][1] / 160)));   /* чужие кадры приглушены, свой — в полную силу */ U.uJc.value[n].set(c.C.x, c.C.y, c.C.z, c.W); U.uJn.value[n].set(c.n.x, c.n.y, c.n.z, c.H); U.uJs.value[n].copy(c.sc); U[`tJ${n}`].value = c.tex; }
   pj.forEach(([c, d], n) => { if (c.video) { const on = n < 3 && Lh > 0.01; if (on && c.video.paused) c.video.play().catch(() => {}); else if (!on && !c.video.paused) c.video.pause(); } c.beam.visible = n < 4 && Lh > 0.01; c.beam.material.uniforms.uK.value = 0.03 * Lh; });
+  Object.values(ZONES3).forEach(Z => { if (!Z.obj) return; const on = Lh > 0.01 && cp.distanceTo(Z.pos) < 1400; Z.obj.group.visible = on; if (on) Z.obj.update(time, Lh, cp); });
   FX.petals.material.uniforms.uO.value = 0.85 * clamp01((-cp.z - 1700) / 150) * clamp01((2600 + cp.z) / 150);
   // вентилятор: на подходе к шахте раскручивается, гонит пыль на зрителя
   const F = FX.fan, spin = smooth(clamp01((pSm - 0.93) / 0.05));
@@ -1132,6 +1167,29 @@ async function loadBaked() {
   meshes.forEach(m => scene.add(m)); BAKED.on = true;
 }
 
+// 3D-зоны: масштаб под мир, свои источники (дистанции и сила пересчитаны под масштаб), мягкое окружение для металла и пластика,
+// тёплый ключ сверху и контровой свет сзади — как у всего в мегаструктуре; бетон вокруг остаётся своим
+function buildZones() {
+  const env = new THREE.PMREMGenerator(renderer).fromScene(new RoomEnvironment(), 0.04).texture;
+  Object.entries(ZONES3).forEach(([k, Z]) => {
+    const o = Z.build(THREE, k === 'corp' ? { kv: 'assets/cases/ozon-fandom-kv-1.jpg' } : {}), g = o.group;
+    g.scale.setScalar(Z.S); g.position.copy(Z.pos); g.rotation.y = Z.rotY; scene.add(g); Z.obj = o;
+    g.traverse(m => {
+      if (m.isLight) { if (m.distance) m.distance *= Z.S; m.intensity *= Math.pow(Z.S, m.decay || 2); }
+      if (m.isMesh && m.material) [].concat(m.material).forEach(mt => { if (mt.isMeshStandardMaterial) { mt.envMap = env; mt.envMapIntensity = 0.35; } });
+    });
+    const W = Z.size.w * Z.S, D = Z.size.d * Z.S, H = Z.size.h * Z.S;
+    const key = new THREE.SpotLight(0xfff0dc, 2.2 * Math.pow(H * 2.4, 2), H * 6, 0.62, 0.55, 2); key.position.set(W * 0.25, H * 2.4, D * 0.9); key.target.position.set(0, H * 0.3, 0);
+    const rim = new THREE.SpotLight(0xc8d6ff, 3.2 * Math.pow(H * 2.2, 2), H * 7, 0.7, 0.6, 2); rim.position.set(-W * 0.3, H * 1.8, -D * 1.3); rim.target.position.set(0, H * 0.4, 0);
+    [key, rim].forEach(l => { l.position.multiplyScalar(1 / Z.S); l.target.position.multiplyScalar(1 / Z.S); g.add(l, l.target); });   // позиции — в локальных метрах зоны, дальность и сила — мировые
+    if (k === 'corp') new GLTFLoader().loadAsync('assets/models/ozon-corp.min.glb').then(gl => {   // модель зоны Ozon Corp — внутри переулка
+      const m = gl.scene; m.traverse(x => { if (x.isMesh) { x.material.side = THREE.DoubleSide; x.material.envMap = env; x.material.envMapIntensity = 0.3; } });
+      const b = new THREE.Box3().setFromObject(m), sz = b.getSize(V(0, 0, 0)); m.scale.setScalar(7 / Math.max(sz.x, sz.z)); b.setFromObject(m); const c = b.getCenter(V(0, 0, 0));
+      m.position.set(-c.x, -b.min.y, -c.z - 2); g.add(m);
+    }).catch(() => {});
+  });
+}
+
 // мокрый пол: настоящее отражение (Reflector, половинное разрешение) там, где на бетоне лужи
 function buildWetFloor() {
   const shader = {
@@ -1159,12 +1217,16 @@ function openCase() {
   const id = (location.hash.match(/^#case\/(\w+)/) || [])[1], c = id && CASES[id];
   if (!c) { pageEl.classList.remove('on'); document.documentElement.classList.remove('lock'); return; }
   const sh = SHOTS.find(t => t.id === id) || {}, ps = c.pass || {};
+  const steps = (c.steps || []).map((st, i) => st.length > 2 ? st : [String(i + 1).padStart(2, '0'), st[0], st[1]]);
+  const gal = (c.how || []).filter(h => h[0]);
   pageEl.querySelector('.in').innerHTML = `<span class="t" style="color:var(--red)">${sh.loc || ''}</span><h1>${c.title || ''}</h1>
     <div class="ps">${Object.entries(ps).map(([k, v]) => `<div><b>${k}</b>${v}</div>`).join('')}${(c.awards || []).length ? `<div><b>награды</b>${c.awards.join('<br>')}</div>` : ''}</div>
-    ${c.task ? `<h3>задача</h3><p class="big">${c.task}</p>` : ''}${c.idea ? `<h3>идея</h3><p class="big">${c.idea}</p>` : ''}
-    ${(c.how || []).length ? `<h3>как сделали</h3>${c.how.map(([src, a, b]) => `<figure><img src="${src}" alt="" loading="lazy"><figcaption><b>${a || ''}</b>${b ? ' — ' + b : ''}</figcaption></figure>`).join('')}` : ''}
+    ${c.task || c.idea ? `<div class="ti">${c.task ? `<div><h3>задача</h3><p class="big">${c.task}</p></div>` : ''}${c.idea ? `<div><h3>идея</h3><p class="big">${c.idea}</p></div>` : ''}</div>` : ''}
+    ${steps.length ? `<h3>как сделали</h3><ol class="steps">${steps.map(([n, a, b]) => `<li><span class="n">${n}</span><div><b>${a}</b>${b ? `<p>${b}</p>` : ''}</div></li>`).join('')}</ol>` : ''}
+    ${gal.length ? `<div class="gal${gal.length === 1 ? ' one' : ''}">${gal.map(([src, a, b]) => `<figure><img src="${src}" alt="${c.title}${a ? ': ' + a : ''}" loading="lazy">${a || b ? `<figcaption><b>${a || ''}</b>${b ? ' — ' + b : ''}</figcaption>` : ''}</figure>`).join('')}</div>` : ''}
     ${(c.result || []).length ? `<h3>результат</h3><div class="res">${c.result.map(([a, b]) => `<div><b>${a}</b>${b}</div>`).join('')}</div>` : ''}
-    <a class="btn" href="#">хочу так же</a>`;
+    ${(c.quotes || []).map(([q, who]) => `<blockquote class="q"><p>${q}</p><cite>${who}</cite></blockquote>`).join('')}
+    <div class="cta"><a class="btn" href="#">хочу так же</a></div>`;
   pageEl.scrollTop = 0; pageEl.classList.add('on'); document.documentElement.classList.add('lock');
 }
 addEventListener('hashchange', openCase);
@@ -1173,10 +1235,11 @@ addEventListener('keydown', e => { if (e.key === 'Escape' && pageEl.classList.co
 
 // ---------- старт ----------
 history.scrollRestoration = 'manual'; scrollTo(0, 0);
-await document.fonts.load('520 64px TT').catch(() => {});
+await document.fonts.load('520 64px TT').catch(() => {}); await document.fonts.load('30px AP').catch(() => {});
 await buildLogo();
-buildWorld(slot); buildLight(); buildNeon(); buildReel(); buildWetFloor(); buildTimeline();
-if (!new URLSearchParams(location.search).has('live')) await loadBaked();
+buildWorld(slot); buildLight(); buildZones(); buildNeon(); buildReel(); buildWetFloor(); buildTimeline();
+// запечённый свет снят с геометрии до 3D-зон (колонны в гипостиле переставлены) — пока живой расчёт; ?baked включает старое запекание
+if (new URLSearchParams(location.search).has('baked')) await loadBaked();
 renderer.compile(scene, camera);
 window.__mega = { cam: camera, composer, bloom, fanMesh: FX.fan.bi, LAMPS, SHAFTS, glows: FX.glows, U, rigAt: q => { camTarget(q); return [camT.toArray(), look.toArray()]; }, go: p => { scrollTo(0, toRaw(p) * (document.documentElement.scrollHeight - innerHeight)); pSm = p; snapCam = true; }, STOPS: () => SHOTS.map(c => [c.id, +c.pMid.toFixed(4)]), SHOTS, CP, renderer, scene };
 const AT = new URLSearchParams(location.search).get('p'); if (AT) window.__mega.go(+AT);
