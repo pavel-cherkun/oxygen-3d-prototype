@@ -74,6 +74,8 @@ header nav{display:flex;gap:12px;align-items:flex-start}
 @keyframes hover{0%,100%{transform:translateY(-6px) rotate(-6deg)}50%{transform:translateY(6px) rotate(8deg)}}
 @keyframes flick{50%{opacity:.93}}
 #loader.done{opacity:0;pointer-events:none}
+#arrows{position:fixed;left:50%;bottom:22px;z-index:6;display:flex;gap:4px;padding:4px;border:1px solid #2a2724;border-radius:40px;background:rgba(1,1,1,.45);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);transform:translate(-50%,8px);opacity:0;pointer-events:none;transition:opacity .4s,transform .4s}#arrows.on{opacity:1;transform:translate(-50%,0);pointer-events:auto}
+#arrows button{width:46px;height:36px;border:0;border-radius:40px;background:none;color:var(--cream);font:18px/1 "TT",sans-serif;cursor:pointer;transition:background .25s,opacity .25s}#arrows button:hover:not(:disabled){background:var(--red)}#arrows button:disabled{opacity:.25;cursor:default}
 #fade{position:fixed;inset:0;z-index:9;background:#010101;opacity:0;pointer-events:none;transition:opacity .35s}#fade.on{opacity:1}
 @media(max-width:760px){header{padding:16px}.menu .in{columns:1}.l,.r{left:16px;right:16px;text-align:left}.r p{margin-left:0}}
 </style>
@@ -100,6 +102,7 @@ header nav{display:flex;gap:12px;align-items:flex-start}
   </form>
 </div>
 <div id="fade"></div>
+<div id="arrows"><button type="button" aria-label="предыдущий кейс">←</button><button type="button" aria-label="следующий кейс">→</button></div>
 
 <!-- текст живёт в HTML: его видят поисковики, 3D только иллюстрирует -->
 <section class="ov l" data-a="0" data-b="0.045">

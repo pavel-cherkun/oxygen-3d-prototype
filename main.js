@@ -408,8 +408,8 @@ function solveShot(sh, aspect) {
     cam.position.copy(pos); cam.lookAt(pos.clone().add(dir)); cam.updateMatrixWorld();
     let x0 = 1e9, x1 = -1e9, y0 = 1e9, y1 = -1e9, behind = false;
     corners.forEach(c => { const v = c.clone().applyMatrix4(cam.matrixWorldInverse); if (v.z > -1) behind = true; const q = c.clone().project(cam); x0 = Math.min(x0, q.x); x1 = Math.max(x1, q.x); y0 = Math.min(y0, q.y); y1 = Math.max(y1, q.y); });
-    if (behind || !isFinite(x0 + x1 + y0 + y1)) { D *= 1.25; lat *= 0.8; continue; }   // угол картинки за камерой — отходим (на узких экранах иначе расчёт уходил в NaN)
     sh.cam = { pos, dir, s, f, D };
+    if (behind || !isFinite(x0 + x1 + y0 + y1)) { D *= 1.25; lat *= 0.8; continue; }   // угол картинки за камерой — отходим (на узких экранах иначе расчёт уходил в NaN)
     D *= Math.min(1.4, Math.max(0.7, Math.pow(Math.max((x1 - x0) / tw, (y1 - y0) / th), 0.6)));
     lat += Math.max(-0.3, Math.min(0.3, (x0 + x1) / 2 - tx)) * D * 0.3; pitch = Math.max(-0.6, Math.min(0.6, pitch + ((y0 + y1) / 2 - ty) * 0.2));
   }
@@ -1112,6 +1112,7 @@ function updateRays() {
 const zoneAt = z => { let i = 0; while (i < ZONES.length - 2 && z < ZONES[i + 1].z) i++; const a = ZONES[i], b = ZONES[i + 1], t = smooth(clamp01((a.z - z) / (a.z - b.z))); const mix = (u, v) => u.map((x, k) => x + (v[k] - x) * t); return { haze: mix(a.haze, b.haze), k: a.k + (b.k - a.k) * t, amb: mix(a.amb, b.amb) }; };
 const camT = V(0, 0, 0), rigPos = V(0, 0, 0), rigQ = new THREE.Quaternion(), _qT = new THREE.Quaternion(), _qS = new THREE.Quaternion(), _m4 = new THREE.Matrix4(), _up = V(0, 1, 0);
 let snapCam = true, snapPrev = true;
+const FOL = { s: 0, v: 0, a: 0, boost: 1, vmax: 60, amax: 90, dec: 55 };   // догонка скролла в единицах vh
 // цель камеры: интро — по ключам; дальше — по таблице траектории (по длине ленты)
 function camTarget(q) {
   if (q > P_A && q < P_B && CP.p.length) {
@@ -1145,8 +1146,15 @@ function caption(p) {
 }
 function frame() {
   const dt = Math.min(clock.getDelta(), 0.05), time = clock.elapsedTime;
-  const max = document.documentElement.scrollHeight - innerHeight, p = toP(max > 0 ? clamp01(scrollY / max) : 0);
-  pSm += (p - pSm) * (1 - Math.exp(-dt * 2.6));
+  const max = document.documentElement.scrollHeight - innerHeight;
+  // камера догоняет скролл по кривой торможения без пружины (из форка 2): скорость к цели сама гаснет, разгон с ограничением рывка, перелёта нет
+  { const tgt = scrollY / innerHeight, err = tgt - FOL.s, dist = Math.abs(err), sg = Math.sign(err);
+    FOL.boost += Math.max(-0.8 * dt, Math.min(0.8 * dt, Math.min(1.5, 1 + dist / 120) - FOL.boost));
+    const vT = sg * Math.min(FOL.vmax * FOL.boost, Math.sqrt(2 * FOL.dec * FOL.boost * dist), 3 * dist);
+    if (Math.sign(vT) === Math.sign(FOL.v || vT) && Math.abs(vT) > Math.abs(FOL.v)) { FOL.a = Math.min(FOL.a + 160 * dt, FOL.amax * FOL.boost); FOL.v += Math.sign(vT - FOL.v) * Math.min(Math.abs(vT - FOL.v), FOL.a * dt); }
+    else { FOL.a = 0; FOL.v += Math.sign(vT - FOL.v) * Math.min(Math.abs(vT - FOL.v), 1.5 * FOL.amax * dt); }
+    const st = FOL.v * dt; if (dist < 0.02 && Math.abs(FOL.v) < 0.1 || (sg !== 0 && (err - st) * sg < 0)) { FOL.s = tgt; if (dist < 0.02 || (err - st) * sg < 0) FOL.v = 0; } else FOL.s += st; }
+  pSm = toP(max > 0 ? clamp01(FOL.s * innerHeight / max) : 0);
   U.uT.value = time;
   camTarget(pSm);
   // риг: пружина с пределом скорости 160 м/с и пределом поворота 40°/с — без рывков даже при резком скролле
@@ -1316,6 +1324,30 @@ document.querySelectorAll('[data-jump]').forEach(el => el.addEventListener('clic
     let bad = false; [d.name, d.contact].forEach(i => { const v = !i.value.trim(); i.style.borderColor = v ? 'var(--red)' : ''; bad ||= v; }); if (bad) return;
     const body = `Имя: ${d.name.value.trim()}\nКонтакт: ${d.contact.value.trim()}\n\n${d.task.value.trim()}`;
     location.href = `mailto:ask@oxygen-agency.ru?subject=${encodeURIComponent('Задача с сайта')}&body=${encodeURIComponent(body)}`; fm.classList.add('sent'); }); }
+// листание по кейсам (из форка 2): один жест колеса / свайп / клавиша = один кейс; стрелки ← → внизу посередине.
+// Работает на участке кейсов (от парапета до входа в вентшахту), до и после — обычный скролл.
+{ const arrows = document.getElementById('arrows'), [bPrev, bNext] = arrows.querySelectorAll('button');
+  const maxS = () => document.documentElement.scrollHeight - innerHeight, pNow = () => toP(clamp01(scrollY / Math.max(1, maxS()))), E = 1e-4;
+  const targets = () => [P_A, ...SHOTS.map(c => c.pMid), P_B];
+  const zone = dir => { const p = pNow(); return p >= P_A - E && p <= P_B + E && !(dir > 0 && p >= P_B - E) && !(dir < 0 && p <= P_A + E); };
+  const busy = () => pageEl.classList.contains('on') || document.getElementById('form').classList.contains('on');
+  const navStep = dir => { const T = targets(), p = pNow(), cur = dir > 0 ? Math.max(p, pSm) : p;
+    const t = dir > 0 ? T.find(x => x > cur + E) : [...T].reverse().find(x => x < cur - E); if (t == null) return; scrollTo(0, toRaw(t) * maxS()); };
+  const N = { acc: 0, lock: 0, last: 0, tail: 1e9, armed: true };
+  addEventListener('wheel', e => { if (busy() || e.ctrlKey) return; const dy = e.deltaMode === 1 ? e.deltaY * 16 : e.deltaY, dir = Math.sign(dy); if (!dir || !zone(dir)) return;
+    e.preventDefault(); const now = performance.now(), gap = now - N.last, a = Math.abs(dy); N.last = now;
+    if (dir !== N.dir) { N.lock = 0; N.armed = true; N.acc = 0; } N.dir = dir;   // разворот — сразу новый жест
+    if (now < N.lock) { N.tail = Math.min(N.tail, a); return; }   // инерционный хвост трекпада после шага не считаем
+    if (!N.armed) { if (gap > 250 || a > N.tail * 2.2) { N.armed = true; N.acc = 0; } else { N.tail = Math.min(N.tail, a); return; } }
+    if (gap > 250) N.acc = 0; N.acc += dy;
+    if (Math.abs(N.acc) > 30) { navStep(Math.sign(N.acc)); N.acc = 0; N.armed = false; N.tail = a; N.lock = now + 450; } }, { passive: false });
+  let ty = null; addEventListener('touchstart', e => { ty = e.touches[0].clientY; }, { passive: true });
+  addEventListener('touchmove', e => { if (ty != null && !busy() && zone(Math.sign(ty - e.touches[0].clientY) || 1)) e.preventDefault(); }, { passive: false });
+  addEventListener('touchend', e => { if (ty == null || busy()) return; const d = ty - e.changedTouches[0].clientY; ty = null; if (Math.abs(d) > 40 && zone(Math.sign(d))) navStep(Math.sign(d)); });
+  addEventListener('keydown', e => { if (busy() || /input|textarea/i.test(e.target.tagName)) return; const dir = ['ArrowDown', 'PageDown', ' '].includes(e.key) ? 1 : ['ArrowUp', 'PageUp'].includes(e.key) ? -1 : 0;
+    if (dir && zone(dir)) { e.preventDefault(); navStep(dir); } });
+  bPrev.addEventListener('click', () => navStep(-1)); bNext.addEventListener('click', () => navStep(1));
+  const upd = () => { const p = pSm, on = p >= P_A - 0.003 && p <= P_B + E && !busy(); arrows.classList.toggle('on', on); bPrev.disabled = pNow() <= P_A + E; bNext.disabled = pNow() >= P_B - E; requestAnimationFrame(upd); }; upd(); }
 addEventListener('hashchange', openCase);
 pageEl.querySelector('.x').addEventListener('click', () => { history.pushState('', '', location.pathname + location.search); openCase(); });
 addEventListener('keydown', e => { if (e.key === 'Escape' && pageEl.classList.contains('on')) pageEl.querySelector('.x').click(); });
@@ -1328,7 +1360,7 @@ buildWorld(slot); buildLight(); buildZones(); buildNeon(); buildReel(); buildWet
 // запечённый свет снят с геометрии до 3D-зон (колонны в гипостиле переставлены) — пока живой расчёт; ?baked включает старое запекание
 if (!new URLSearchParams(location.search).has('live')) await loadBaked();
 renderer.compile(scene, camera);
-window.__mega = { cam: camera, composer, bloom, fanMesh: FX.fan.bi, LAMPS, SHAFTS, glows: FX.glows, U, rigAt: q => { camTarget(q); return [camT.toArray(), look.toArray()]; }, go: p => { scrollTo(0, toRaw(p) * (document.documentElement.scrollHeight - innerHeight)); pSm = p; snapCam = true; }, STOPS: () => SHOTS.map(c => [c.id, +c.pMid.toFixed(4)]), SHOTS, CP, renderer, scene };
+window.__mega = { cam: camera, composer, bloom, fanMesh: FX.fan.bi, LAMPS, SHAFTS, glows: FX.glows, U, rigAt: q => { camTarget(q); return [camT.toArray(), look.toArray()]; }, go: p => { scrollTo(0, toRaw(p) * (document.documentElement.scrollHeight - innerHeight)); FOL.s = scrollY / innerHeight; FOL.v = 0; FOL.a = 0; pSm = p; snapCam = true; }, STOPS: () => SHOTS.map(c => [c.id, +c.pMid.toFixed(4)]), pScroll: () => toP(clamp01(scrollY / (document.documentElement.scrollHeight - innerHeight))), SHOTS, CP, renderer, scene };
 const AT = new URLSearchParams(location.search).get('p'); if (AT) window.__mega.go(+AT);
 frame();
 await new Promise(res => { const t0 = performance.now(); let calm = 0; const tick = () => { calm = LOAD.total === LOAD.loaded ? calm + 1 : 0; if (calm > 3 || performance.now() - t0 > 30000) return res(); setTimeout(tick, 150); }; tick(); });
