@@ -381,7 +381,12 @@ CASES.gdriveMerch.how = [...CASES.gdriveMerch.how, [C + 'pf-gdriveMerch-19.jpg',
 // «паттерн, а не логотип на груди» — только мерч G-Drive для ралли «Шёлковый путь»; дождевик ГПН (gdrive-merch-1) — другой кейс, без текста не публикуем
 CASES.gdriveMerch.how = CASES.gdriveMerch.how.filter(h => !h[0].includes('gdrive-merch-1'));
 CASES.gdriveMerch.pass = { ...CASES.gdriveMerch.pass, формат: 'мерч для ралли «Шёлковый путь»' };
-export const ORDER = { btl: ['fandom', 'tbank', 'robozon', 'selekt', 'ironstar', 'gdrive', 'baltika7', 'baltikaPlant', 'megafon', 'mice', 'megafonTravel', 'gdriveMerch', 'oxygenSet', 'lionMerch'], atl: ['treschnutye', 'zaklinateli', 'dino', 'izhora', 'avangard', 'lion', 'derbent', 'tevredens', 'aiFonbet', 'aiMango', 'aiLavka', 'aiAlfa', 'aiDracondaz', 'aiBeep', 'ai'] };
+// мерч ГПН — отдельный кейс от мерча G-Drive для ралли (записка 16.11); текста по кейсу нет — только кадр и паспорт, ничего не выдумываем
+CASES.gpnMerch = { dir: 'btl', title: 'мерч гпн', awards: [], pass: { клиент: 'ГПН', формат: 'мерч' }, task: '', idea: '', how: [[C + 'gdrive-merch-1.jpg', '', '']], result: [] };
+CASES.gdriveMerch.title = 'мерч g-drive для ралли';
+// синегривый лев: кадры из папки кейса «Зенит Маскот Кейс» (ключевой визуал, стикерпак, 2D, эскизы, 3D-ракурсы)
+CASES.lion.how = [...CASES.lion.how, [C + 'lion-case-kv.jpg', 'ключевой визуал', ''], [C + 'lion-case-stickers.jpg', 'стикерпак', ''], [C + 'lion-case-2d.jpg', '2D-образ', ''], [C + 'lion-case-sketch.jpg', 'поиск образа', 'эскизы'], [C + 'lion-case-3d-1.jpg', '3D-образ', ''], [C + 'lion-case-3d-2.jpg', '3D-образ', '']];
+export const ORDER = { btl: ['fandom', 'tbank', 'robozon', 'selekt', 'ironstar', 'gdrive', 'baltika7', 'baltikaPlant', 'megafon', 'mice', 'megafonTravel', 'gdriveMerch', 'gpnMerch', 'oxygenSet', 'lionMerch'], atl: ['treschnutye', 'zaklinateli', 'dino', 'izhora', 'avangard', 'lion', 'derbent', 'tevredens', 'aiFonbet', 'aiMango', 'aiLavka', 'aiAlfa', 'aiDracondaz', 'aiBeep', 'ai'] };
 
 export function renderCase(id) {
   const c = CASES[id], list = ORDER[c.dir], next = list[(list.indexOf(id) + 1) % list.length], nn = i => String(i + 1).padStart(2, '0');
@@ -390,7 +395,7 @@ export function renderCase(id) {
   <h1>${c.title}</h1>
   ${c.awards.length ? `<div class="tags">${c.awards.map(a => `<a href="#" data-go="awards">${a}</a>`).join('')}</div>` : ''}
   <div class="pass">${Object.entries(c.pass).map(([k, v]) => `<div><span class="t">${k}</span><br>${v}</div>`).join('')}</div>
-  <div class="ti"><div><span class="t">{задача}</span><p>${c.task}</p></div><div><span class="t">{идея}</span><p>${c.idea}</p></div></div>
+  ${c.task ? `<div class="ti"><div><span class="t">{задача}</span><p>${c.task}</p></div><div><span class="t">{идея}</span><p>${c.idea}</p></div></div>` : ''}
   ${c.steps ? `<span class="t">{как сделали}</span><ol class="steps">${c.steps.map(([h, d], i) => `<li><span class="n">${nn(i)}</span><span class="t">{${nn(i)}}</span><b>${h}</b><p>${d}</p></li>`).join('')}</ol>` : ''}
   ${c.how && c.how.length ? `<div class="gal">${c.how.map(([src, h, d]) => `<figure><img src="${src}" alt="${c.title}: ${h}" loading="lazy">${h ? `<figcaption><b>${h}</b><br><span class="t">${d}</span></figcaption>` : ''}</figure>`).join('')}</div>` : ''}
   ${c.result && c.result.length && c.result[0][0] !== '—' ? `<span class="t">{результат}</span><div class="res">${c.result.map(([n, d]) => `<div><b>${n}</b><span>${d}</span></div>`).join('')}</div>` : ''}
