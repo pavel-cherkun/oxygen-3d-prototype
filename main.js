@@ -364,7 +364,7 @@ const SHOTS = [
   PJ('ozonTravel', '', 'города', 'shaft', cylPt(SHC, 149.5, 125, -10), 130),
   PJ('izhora', 'cases/izhora-48-1', 'азия', 'asia', cylPt(AS, 259.5, -45, 80), 150),
   PJ('fandom', 'cases/ozon-fandom-kv-1', 'азия', 'asia', cylPt(AS, 259.5, -100, 80), 150),
-  PJ('tbank', 'cases/tbank-belt-1', 'азия', 'asia', cylPt(AS, 259.5, 115, 80), 150),
+  PJ('tbank', 'cases/tbank-zone-1', 'азия', 'asia', cylPt(AS, 259.5, 115, 80), 150),
   PJ('treschnutye', 'cases/treschnutye-1', 'азия', 'asia', cylPt(AS, 259.5, 155, 80), 150),
   PJ('selekt', 'cases/ozon-select-1', 'ритейл', 'ret', wallPt(-169.4, 150, -2600, 1), 200),
   PJ('zaklinateli', 'cases/zaklinateli-kv-1', 'ритейл', 'ret', wallPt(-169.4, 150, -2870, 1), 200),
