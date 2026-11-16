@@ -13,8 +13,8 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { DRACOLoader } from 'three/addons/loaders/DRACOLoader.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 const gltfLoader = new GLTFLoader().setDRACOLoader(new DRACOLoader().setDecoderPath('https://cdn.jsdelivr.net/npm/three@0.169.0/examples/jsm/libs/draco/gltf/'));
-import { CASES, renderCase, MODALS } from './cases.js?v=1116h';
-import { buildRobozoneGen, buildTdojoGen, buildOzonCorpAlley, buildOzonCorpGen, buildSelectGen, buildBaltika7Gen, buildMerchGen } from './zones/zones.js?v=1116h';
+import { CASES, renderCase, MODALS } from './cases.js?v=1116l';
+import { buildRobozoneGen, buildTdojoGen, buildOzonCorpAlley, buildOzonCorpGen, buildSelectGen, buildBaltika7Gen, buildMerchGen } from './zones/zones.js?v=1116l';
 // учёт загрузки для прелоадера-искры: каждый файл через общий менеджер, картинки кейсов — вручную в caseTexture
 const LD = { done: 0, total: 0 }, LM = THREE.DefaultLoadingManager, lmStart = LM.itemStart, lmEnd = LM.itemEnd;
 LM.itemStart = u => { LD.total++; lmStart.call(LM, u); }; LM.itemEnd = u => { LD.done++; lmEnd.call(LM, u); };
@@ -1651,7 +1651,8 @@ function sOfP(k, p) {
 }
 function pOfS(k, sv) { let a = 0, b = 1; for (let n = 0; n < 26; n++) { const m = (a + b) / 2; sOfP(k, m) < sv ? a = m : b = m; } return (a + b) / 2; }
 function camAt(k, sv, pos, lk) { const u = clamp01(sv / k.L); k.pos.getPointAt(u, pos); k.look.getPoint(k.pos.getUtoTmapping(u), lk); }
-const CS = { s: 0, v: 0, q: new THREE.Quaternion(), init: false, snap: false, m: new THREE.Matrix4(), dq: new THREE.Quaternion() };
+const CAMK = { vmax: 48, amax: 60, dec: 40, near: 3, boostLag: 60, boostMax: 1.5, boostRate: 0.8, jerk: 160 };
+const CS = { s: 0, v: 0, acc: 0, boost: 1, q: new THREE.Quaternion(), init: false, snap: false, m: new THREE.Matrix4(), dq: new THREE.Quaternion() };
 function camU(k, p) { let i = 0; while (i < k.length - 2 && p > k[i + 1].p) i++; const f = clamp01((p - k[i].p) / (k[i + 1].p - k[i].p)); return (i + (p < P0 ? f : f * f * (3 - 2 * f))) / (k.length - 1); }
 function sample(keys, p, fn) {
   let i = 0; while (i < keys.length - 2 && p > keys[i + 1].p) i++;
@@ -1676,7 +1677,7 @@ STORIES.forEach(([id, a, b, r, side, more, orbitBtn]) => {
   if (true) {
     // у каждого кейса вместо окна — титр во весь экран: заходит после пролёта камеры, всё остальное в «кейс целиком»
     const res = c.result.filter(x => x[0] !== '—')[0];
-    el.className = 'ov left flex'; el.dataset.a = w.p - w.span * 0.12; el.dataset.b = b; el.dataset.f = 0.004; el.dataset.route = r;
+    el.className = 'ov left flex'; el.dataset.a = w.p - Math.max(w.span * 0.3, 0.008); el.dataset.b = b; el.dataset.f = 0.004; el.dataset.route = r;   // титр набирает полную непрозрачность раньше, чем камера встаёт на остановку
     el.innerHTML = `<span class="t">${c.pass.клиент}</span><h2>${c.title}</h2><p class="idea">${c.idea}</p>
       ${res ? `<div class="hit"><b>${res[0]}</b><span class="t">${res[1]}</span></div>` : ''}<button class="btn" data-case="${id}">кейс целиком</button>`;
     return document.body.insertBefore(el, document.getElementById('orbitUi'));
@@ -1707,14 +1708,16 @@ function updateOverlay(p) {
     o.el.style.opacity = op; o.el.classList.toggle('on', op > 0.5);
     o.el.style.translate = `0 ${(1 - op) * 18}px`;
   });
-  routeBtn.style.display = route && p > FORK - 0.005 && p < 0.97 ? '' : 'none'; routeBtn.querySelectorAll('button').forEach(b => b.classList.toggle('on', b.dataset.go === route));
+  routeBtn.style.display = route && p > FORK - 0.005 ? '' : 'none'; routeBtn.querySelectorAll('button').forEach(b => b.classList.toggle('on', b.dataset.go === route));
+  arrowsEl.classList.toggle('on', INTRO.done && !modal.classList.contains('on')); arrowsEl.children[0].disabled = p < P0 + 0.003; arrowsEl.children[1].disabled = p > 0.997;
   micro?.classList.toggle('dim', ovs.some(o => o.el.classList.contains('right') && o.el.classList.contains('panel') && o.el.classList.contains('on')));
 }
 const modal = document.getElementById('modal'), modalBody = document.getElementById('modalBody');
 const openModal = html => { modalBody.innerHTML = html; modal.classList.add('on'); modal.scrollTop = 0; };
 const closeModal = () => modal.classList.remove('on');
 document.getElementById('modalClose').addEventListener('click', closeModal);
-const routeBtn = document.getElementById('routeBtn');
+const routeBtn = document.getElementById('routeBtn'), arrowsEl = document.getElementById('arrows');
+arrowsEl.addEventListener('click', e => { const b = e.target.closest('[data-d]'); if (b) stepTo(+b.dataset.d); });
 const WORD = { reel: 'фильм', cross: 'развилка', btl: 'btl', alley: 'азиатский квартал', sport: 'спорт', event: 'ивент', shops: 'мерч', dixy: 'дикси', ai: 'ai-продакшн', atl: 'atl', awards: 'награды', about: 'о нас', brief: 'бриф' };
 const curtain = document.getElementById('curtain'), curtainWord = document.getElementById('curtainWord');
 const goTo = key => {
@@ -1738,9 +1741,6 @@ document.addEventListener('click', e => {
   if (el.dataset.case) return openModal(renderCase(el.dataset.case));
   if (el.dataset.modal) return openModal(MODALS[el.dataset.modal]);
   if (el.dataset.brief) {   // бриф открывается с подставленным направлением или кейсом
-    document.getElementById('briefDir').value = el.dataset.brief;
-    const bc = document.getElementById('briefCase');
-    if (el.dataset.briefCase) { bc.style.display = ''; bc.value = 'по мотивам кейса «' + el.dataset.briefCase + '»'; }
     return goTo('brief');
   }
   goTo(el.dataset.go);
@@ -1769,15 +1769,21 @@ function stepTo(dir) {
   // шаг считается от цели прошлого шага, пока до неё едем, — так быстрые жесты всегда идут вперёд, а не возвращают к уже пройденному
   const base = performance.now() < STEPS.until && STEPS.target !== null ? STEPS.target : pNow();
   const st = stopsOf(), t = dir > 0 ? st.find(v => v > base + 0.002) : [...st].reverse().find(v => v < base - 0.002);
-  if (t === undefined) return;
+  if (t === undefined || (dir > 0 && t <= pSm)) return;   // шаг вперёд никогда не ведёт назад
   if (!route && t > FORK) { const f = document.getElementById('fork'); f.classList.add('pulse'); setTimeout(() => f.classList.remove('pulse'), 1100); return; }
   STEPS.target = t; STEPS.until = performance.now() + 1600;
-  scrollTo({ top: toScroll(t), behavior: 'smooth' });
+  scrollTo(0, toScroll(t));   // скролл сразу встаёт на цель, плавность даёт кривая торможения камеры
 }
+// один жест = один кейс (механика форка 2): инерционный хвост трекпада гасится — пока события идут подряд и не набирают силу заново, это тот же жест
+const NAV = { last: 0, armed: true, acc: 0, low: 1e9, t0: 0 };
 addEventListener('wheel', e => {
-  if (!free()) return; e.preventDefault();
-  const now = performance.now(); if (now < stepLock) { wheelAcc = 0; return; }
-  wheelAcc += e.deltaY; if (Math.abs(wheelAcc) > 30) { stepTo(Math.sign(wheelAcc)); wheelAcc = 0; stepLock = now + 700; }
+  if (!free() || e.ctrlKey) return; e.preventDefault();
+  const d = e.deltaY * (e.deltaMode === 1 ? 16 : e.deltaMode === 2 ? innerHeight : 1), now = performance.now(), ad = Math.abs(d);
+  const locked = now - NAV.t0 < 450;   // после шага полсекунды не слушаем: камера уже поехала
+  if (!locked && (now - NAV.last > 250 || Math.sign(d) !== Math.sign(NAV.acc))) { NAV.armed = true; NAV.acc = 0; NAV.low = 1e9; }   // затишье — новый жест
+  NAV.last = now; NAV.acc += d; NAV.low = Math.min(NAV.low, ad);
+  if (!NAV.armed && !locked && ad > 14 && ad > NAV.low * 2.2) { NAV.armed = true; NAV.acc = d; }   // хвост затух и пошёл новый толчок
+  if (NAV.armed && !locked && Math.abs(NAV.acc) > 30) { NAV.armed = false; NAV.low = ad; NAV.t0 = now; stepTo(Math.sign(NAV.acc)); }
 }, { passive: false });
 addEventListener('touchstart', e => { touchY = e.touches[0].clientY; }, { passive: true });
 addEventListener('touchend', e => { if (!free() || touchY === null) return; const dy = touchY - e.changedTouches[0].clientY; touchY = null; if (Math.abs(dy) > 40) stepTo(Math.sign(dy)); }, { passive: true });
@@ -1889,11 +1895,16 @@ function frame() {
   if (orbitOn) { orbit.update(); }
   else {
     const k = CAM[route || 'btl'], sT = sOfP(k, p);
-    if (!CS.init || CS.snap || !INTRO.done) { CS.s = sT; CS.v = 0; }   // вступление и прыжки по меню (под шторкой) — без догона
-    else {   // догон цели: предел скорости растёт с высотой, разгон и торможение ограничены
-      const vmax = 60 + Math.max(0, camera.position.y) * 0.3, amax = 48;   // отзывчивее: догоняет скролл быстрее, но без рывков
-      const dS = sT - CS.s, want = Math.sign(dS) * Math.min(vmax, Math.abs(dS) * 2.6, Math.sqrt(2 * amax * Math.abs(dS)) * 0.92);   // тормозит заранее, без проскока
-      CS.v += Math.max(-amax * dt, Math.min(amax * dt, want - CS.v)); CS.s += CS.v * dt;
+    if (!CS.init || CS.snap || !INTRO.done) { CS.s = sT; CS.v = 0; CS.acc = 0; CS.boost = 1; }   // вступление и прыжки по меню (под шторкой) — без догона
+    else {   // догон цели по кривой торможения (как в форке 2): целевая скорость сама гаснет к цели — без пружины, перелёта и «качелей»
+      const err = sT - CS.s, dist = Math.abs(err), dir = Math.sign(err);
+      const bT = Math.min(CAMK.boostMax, 1 + dist / CAMK.boostLag); CS.boost += Math.max(-CAMK.boostRate * dt, Math.min(CAMK.boostRate * dt, bT - CS.boost));
+      const am = CAMK.amax * CS.boost, vm = CAMK.vmax * CS.boost, vT = dir * Math.min(vm, Math.sqrt(2 * CAMK.dec * CS.boost * dist), CAMK.near * dist);
+      const dv = vT - CS.v, speedUp = Math.abs(vT) > Math.abs(CS.v) && vT * CS.v >= 0;
+      if (speedUp) { CS.acc = Math.min(am, CS.acc + CAMK.jerk * dt); CS.v += Math.sign(dv) * Math.min(Math.abs(dv), CS.acc * dt); }   // разгон нарастает плавно
+      else { CS.acc = Math.max(0, CS.acc - CAMK.jerk * dt); CS.v += Math.sign(dv) * Math.min(Math.abs(dv), am * 1.5 * dt); }       // тормозить можно сразу
+      let step = CS.v * dt; if (step * dir > dist) step = err;   // цель никогда не проезжаем
+      CS.s += step; if (dist < 0.02 && Math.abs(CS.v) < 0.1) { CS.s = sT; CS.v = 0; CS.acc = 0; }
     }
     camAt(k, CS.s, camera.position, look);
     mouseSm.lerp(mouse, Math.min(1, dt * 2));
@@ -1901,7 +1912,7 @@ function frame() {
     // взгляд: мягкое догоняние с пределом угловой скорости (50°/с, во вступлении — быстрее)
     CS.m.lookAt(camera.position, look, camera.up); CS.dq.setFromRotationMatrix(CS.m);
     if (!CS.init || CS.snap) CS.q.copy(CS.dq);
-    else { const ang = CS.q.angleTo(CS.dq), wmax = INTRO.done ? 1.4 : 3.5; CS.q.rotateTowards(CS.dq, Math.min(ang * (1 - Math.exp(-dt * 4.5)), wmax * dt)); }
+    else { const ang = CS.q.angleTo(CS.dq), wmax = INTRO.done ? 0.7 : 3.5; CS.q.rotateTowards(CS.dq, Math.min(ang * (1 - Math.exp(-dt * (INTRO.done ? 2.2 : 4.5))), wmax * dt)); }   // голова доводится экспонентой с пределом угловой скорости — не кружит
     camera.quaternion.copy(CS.q); CS.init = true; CS.snap = false;
     pSm = INTRO.done ? pOfS(k, CS.s) : p;   // тексты, искра и финал привязаны к тому, где камера на самом деле
   }
@@ -1932,12 +1943,12 @@ function frame() {
   updateAtmosphere(time, dt);
   if (promo.v && !promo.started && pSm > 0.3) { promo.started = true; promo.v.play().catch(() => addEventListener('pointerdown', () => promo.v.play(), { once: true })); }
   hud2d(pSm, time);
-  updateOverlay(WHITE.k > 0.9 ? Math.max(pSm, 0.996) : pSm);
+  updateOverlay(WHITE.k > 0.85 ? Math.max(pSm, 0.999) : Math.min(pSm, 0.996));   // форма — только когда экран уже белый
   CITY.sky.position.copy(camera.position); grain.uniforms.t.value = time % 100; {
     const fin = clamp01((pSm - 0.928) / 0.068), ss = (a, b, x) => { const t = clamp01((x - a) / (b - a)); return t * t * (3 - 2 * t); };
     const spd = INTRO.done && !orbitOn ? clamp01((Math.abs(CS.v) - 6) / 26) : 0;
     const U = grain.uniforms; U.fin.value = fin; U.spd.value = spd;
-    U.uA.value = ss(0, 0.35, fin); U.uB.value = ss(0.3, 0.7, fin); U.uC.value = ss(0.62, 0.95, fin); WHITE.k += ((p > 0.985 && pSm > 0.95 ? 1 : ss(0.975, 0.995, pSm)) - WHITE.k) * Math.min(1, dt * 3); U.uW.value = WHITE.k > 0.995 ? 1 : WHITE.k;   // «сигнал» — только финал; на последнем шаге экран гарантированно уходит в чистый белый
+    U.uA.value = ss(0, 0.35, fin); U.uB.value = ss(0.3, 0.7, fin); U.uC.value = ss(0.62, 0.95, fin); WHITE.k += ((pSm > 0.998 ? 1 : ss(0.988, 0.998, pSm)) - WHITE.k) * Math.min(1, dt * 6); U.uW.value = WHITE.k > 0.995 ? 1 : WHITE.k; document.body.classList.toggle('white', WHITE.k > 0.6);   // «сигнал» — только финал; на последнем шаге экран гарантированно уходит в чистый белый
     const W = { scan: 0, zoom: 0, spot: 0, ink: 0, bars: 0, gen: 0, print: 0, view: 0, anime: 0, led: 0, duo: 0, keep: 0, engr: 0 };
     if (route && !orbitOn) for (const w of WORLD) { if (w.r !== route) continue; const b = ss(0, 1, 1 - Math.abs(pSm - w.p) / (w.span * 0.95)) * (w.r === 'atl' ? 0.5 : 1), k = w.id in CFX ? CFX[w.id] : ZFX[w.zone]; if (k) W[k] = Math.max(W[k], b); }   // на баннерах эффект вдвое тише — кадр кейса должен читаться
     const fade = 1 - fin;   // к финалу эффекты мест уступают «сигналу»

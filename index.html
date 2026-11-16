@@ -95,12 +95,16 @@ header nav{mix-blend-mode:difference}header nav a{color:#fff}nav a.cta{color:#ff
 /* текст поверх сцены инвертируется к фону: на белом небе — чёрный, на чёрном фасаде — белый */
 .ov:not(.panel):not(#fork):not(#brief) :is(h1,h2,p,.lead,.idea){mix-blend-mode:difference}
 .flex h2{text-shadow:none}.flex .idea{text-shadow:none}
-#routeBtn{left:28px;bottom:22px;pointer-events:auto;display:flex;align-items:center;gap:4px;padding:4px;background:rgba(10,10,10,.82);border:1px solid rgba(255,255,255,.18);border-radius:999px;backdrop-filter:blur(8px);font:500 13px/1 inherit;font-family:inherit}
-#routeBtn span{color:rgba(255,255,255,.5);padding:0 10px 0 12px;font-size:11px;text-transform:uppercase;letter-spacing:.08em}
-#routeBtn button{font:inherit;color:#fff;background:transparent;border:0;border-radius:999px;padding:11px 18px;cursor:pointer;transition:background .25s,color .25s}
-#routeBtn button:hover{background:rgba(255,255,255,.12)}
-#routeBtn button.on{background:var(--red);color:#fff}
-@media(max-width:760px){#routeBtn{left:16px;bottom:16px}#routeBtn span{display:none}#routeBtn button{padding:10px 14px}}
+#arrows{position:fixed;left:50%;bottom:24px;translate:-50% 0;z-index:6;display:none;gap:6px;padding:4px;border:1px solid rgba(255,255,255,.18);border-radius:60px;background:rgba(10,10,10,.82);backdrop-filter:blur(8px)}
+#arrows.on{display:flex}
+#arrows button{all:unset;cursor:pointer;width:52px;height:44px;display:grid;place-items:center;border-radius:40px;color:#fff;font:520 22px/1 "TT",sans-serif;opacity:.75;transition:background .25s,opacity .25s}
+#arrows button:hover{opacity:1;background:var(--red)}
+#arrows button:disabled{opacity:.2;pointer-events:none}
+body.white nav a.cta{color:#111}
+#routeBtn{display:flex;align-items:center;gap:2px;padding:3px;margin-right:10px;border:1px solid rgba(255,255,255,.22);border-radius:40px;background:rgba(10,10,10,.55);backdrop-filter:blur(8px)}
+#routeBtn button{all:unset;cursor:pointer;font:500 14px/1 "TT",sans-serif;color:#fff;padding:7px 14px;border-radius:40px;transition:background .25s}
+#routeBtn button:hover{background:rgba(255,255,255,.14)}
+#routeBtn button.on{background:var(--red)}
 #micro{position:fixed;right:28px;top:76px;z-index:5;text-align:right;line-height:1.55;pointer-events:none;font-size:11px;transition:opacity .3s;color:var(--mute);opacity:.6}#micro:hover{opacity:1}
 #micro a,#micro [data-j]{pointer-events:auto;cursor:pointer}
 #micro [data-j]:hover{color:var(--cream)}
@@ -173,10 +177,10 @@ body.qview .ov,body.qview #orbitUi,body.qview #wipe{display:none!important}
 <header>
   <img src="assets/logo.svg" alt="Oxygen">
   <nav>
-    <a href="#" class="cta" data-go="brief">есть задача</a>
+    <div id="routeBtn" style="display:none"><button data-go="btl">btl</button><button data-go="atl">atl</button></div><a href="#" class="cta" data-go="brief">есть задача</a>
   </nav>
 </header>
-<div class="hud" id="routeBtn" style="display:none"><span>маршрут</span><button data-go="btl">btl · спецпроекты</button><button data-go="atl">atl · реклама</button></div>
+<div id="arrows"><button data-d="-1" aria-label="предыдущий кейс">←</button><button data-d="1" aria-label="следующий кейс">→</button></div>
 
 <!-- текст живёт в HTML: его видят поисковики и нейросети, 3D только иллюстрирует -->
 <section class="ov left" data-a="0.338" data-b="0.395">
@@ -224,21 +228,13 @@ body.qview .ov,body.qview #orbitUi,body.qview #wipe{display:none!important}
 <!-- плашка наград убрана до лучшей подачи -->
 
 
-<section class="ov" data-a="0.993" data-b="1.01" data-f="0.004" id="brief">
-  <h2>с чем вы приходите?</h2>
+<section class="ov" data-a="0.998" data-b="1.01" data-f="0.001" id="brief">
+  <h2>есть задача?</h2>
   <form id="briefForm" onsubmit="event.preventDefault();this.innerHTML='<p>прототип: данные никуда не отправлены</p>'">
-    <select id="briefDir"><option value="">выберите задачу</option><option value="atl">нужна кампания к запуску</option><option value="tender">скоро тендер</option><option value="btl">нужно мероприятие или промо</option><option value="audience">хотим выйти на новую аудиторию</option><option value="special">нужен спецпроект</option></select>
-    <input id="briefCase" placeholder="по мотивам кейса" style="display:none">
-    <input placeholder="имя *" required><input placeholder="компания"><input placeholder="телефон или почта *" required>
+    <input placeholder="имя *" required><input placeholder="телефон или почта *" required>
     <textarea rows="2" placeholder="задача в двух словах *" required></textarea>
     <button class="btn" style="justify-self:start">отправить</button>
   </form>
-  <div style="margin-top:14px">
-    <div class="row"><span>new business</span><span class="t">имя · почта — от риты</span></div>
-    <div class="row"><span>пресса · hr</span><span class="t">почты — от риты</span></div>
-    <div class="row"><span>санкт-петербург</span><span class="t">адрес → на карте</span></div>
-  </div>
-  <footer class="ft t"><a href="#">new business</a><a href="#">пресса</a><a href="#" data-modal="jobs">ищем тех, кто превращает чужие искры в пламя →</a></footer>
 </section>
 
 <div id="orbitUi">
@@ -255,6 +251,6 @@ body.qview .ov,body.qview #orbitUi,body.qview #wipe{display:none!important}
 <div id="modal"><button class="btn ghost close" id="modalClose">закрыть ✕</button><div class="wrap" id="modalBody"></div></div>
 
 <div id="scroll"></div>
-<script type="module" src="main.js?v=1116h"></script>
+<script type="module" src="main.js?v=1116l"></script>
 </body>
 </html>
