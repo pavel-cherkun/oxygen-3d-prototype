@@ -26,6 +26,7 @@ html.lock,html.lock body{overflow:hidden}
 #routes{right:28px;top:20px;pointer-events:auto;display:none;gap:4px;padding:4px;border:1px solid rgba(225,217,207,.22);border-radius:60px;background:rgba(10,10,10,.35);backdrop-filter:blur(6px)}
 #routes button{all:unset;cursor:pointer;font:520 clamp(22px,2.2vw,34px)/1 "TT",sans-serif;padding:10px 22px;border-radius:50px;color:var(--cream);opacity:.55;transition:background .25s,opacity .25s}
 #routes button:hover{opacity:1}
+#routes .st{font-size:clamp(14px,1.2vw,18px);padding:10px 16px;align-self:center}
 #routes[data-r=btl] [data-to=btl],#routes[data-r=atl] [data-to=atl]{background:var(--red);opacity:1}
 #flash{position:fixed;inset:0;z-index:9;background:#000;opacity:0;pointer-events:none;transition:opacity .28s}
 #flash.on{opacity:1}
@@ -116,7 +117,7 @@ html.lock,html.lock body{overflow:hidden}
 <div class="hud" id="zone"><span class="t" id="zoneN"></span><b id="zoneT"></b></div>
 <div class="hud t" id="pct">000%</div>
 <div class="hud t" id="hint">скролл — идти за искрой</div>
-<div class="hud" id="routes"><button data-to="btl">btl</button><button data-to="atl">atl</button></div>
+<div class="hud" id="routes"><button data-to="start" class="st">начало</button><button data-to="btl">btl</button><button data-to="atl">atl</button></div>
 <div id="flash"></div>
 <div id="end"><span class="t">{06} финал</span><h2>добавьте кислорода</h2><button class="t">есть задача →</button></div>
 <div id="card"></div>

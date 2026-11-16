@@ -318,8 +318,8 @@ function caseZone(q, s, zc, half, kind) {
     const sc = 1.15; g.scale.setScalar(sc); g.rotation.y = -s * Math.PI / 2; g.position.set(s * (12.5 + Zn.size.d * sc / 2), 0, zc);
     title = 'робозон'; p = V(s * 20, 4.5, zc); corners = [[13, 0], [16, Zn.size.h * sc]].flatMap(([x, y]) => [-1, 1].map(b => V(s * x, y, zc + b * Zn.size.w * sc / 2)));
   } else if (kind === 'dojo') {   // тории смотрят навстречу движению: их видно ещё на подходе по улице
-    const sc = 0.72; g.scale.setScalar(sc); g.rotation.y = Math.PI; g.position.set(s * 21, 0, zc + 4);
-    title = 'т-банк'; p = V(s * 21, 4, zc - 4); corners = boxCorners(g, -12, 12, 0, 12, -12, 19);
+    const sc = 1; g.scale.setScalar(sc); g.rotation.y = Math.PI + Math.PI / 4; g.position.set(s * 24, 0, zc + 2);   // крупнее и повёрнуты на 45° против часовой
+    title = 'т-банк'; p = V(s * 24, 6, zc - 2); corners = boxCorners(g, -12, 12, 0, 12, -12, 19);
   }
   q.g.add(g); ZONES.push({ Zn, q, at: V(g.position.x, 3, zc) });
   // свет двора: тёплые софиты перед зоной — берут лампы из общего пула (их число постоянно, шейдеры не пересобираются), у зон приоритет перед фонарями улицы
@@ -334,8 +334,11 @@ function corpStreet(q, zc) {
   const k = q.kit, Zn = buildOzonCorpAlley(THREE, { kv: 'assets/cases/ozon-fandom-kv-1.jpg', length: 44, width: 21 }), g = Zn.group;
   g.traverse(o => { if (o.isLight) o.visible = false; }); g.position.set(0, 0.02, zc); q.g.add(g);
   const M = buildOzonCorpGen(THREE, GLTF); M.group.traverse(o => { if (o.isLight) o.visible = false; });
-  M.group.rotation.y = Math.PI / 2; M.group.position.set(-6.9, 0.3, zc + 2); q.g.add(M.group); Zn.extra = M;   // фасад к проходу, открытый бок — к подлетающей камере
-  k.box(matte(0x060607, 0.1, 0.8), 8.4, 0.3, 15.4, -6.9, 0, zc + 2);   // зеркальный подиум
+  // модель вдвое крупнее и чуть повёрнута против часовой: фасад смотрит на подлетающую камеру. стоит во дворе между башнями, передом выходит на улицу
+  const piv = new THREE.Group(); piv.position.set(-17.5, 0, zc + 2); piv.rotation.y = Math.PI / 2 + 0.3; piv.scale.setScalar(2); q.g.add(piv);
+  M.group.position.set(0, 0.15, 0); piv.add(M.group); Zn.extra = M;
+  const pod = new THREE.Mesh(new THREE.BoxGeometry(15.4, 0.15, 8.4), matte(0x060607, 0.1, 0.8)); pod.position.y = 0.075; pod.receiveShadow = true; piv.add(pod);   // зеркальный подиум
+  k.box(pbr('floor', 0x231e1e, 0.9, THREE.FrontSide, 0.1), 30, 0.3, 40, -26, -0.3, zc + 2); k.box(pbr('wall', 0x2a2828, 0.8, THREE.FrontSide, 0.12), 1, ROOF, 40, -41.5, 0, zc + 2);   // пол и задняя стена двора
   const imgs = ['ozon-fandom-real-1', 'ozon-fandom-3d-1', 'ozon-fandom-real-2', 'ozon-fandom-kv-1', 'ozon-fandom-real-3', 'ozon-fandom-3d-2', 'ozon-fandom-real-2', 'ozon-fandom-kv-1', 'ozon-fandom-real-1'];
   imgs.forEach((f, i) => { const col = i % 3, row = (i / 3) | 0, x = 9.6, z = zc + 2 + (col - 1) * 2.7, y = 1.2 + row * 2.05;
     k.box(matte(0x161616, 0.5), 0.9, 1.95, 2.55, x + 0.5, y - 0.97, z);
@@ -343,8 +346,8 @@ function corpStreet(q, zc) {
     TXL.load(`assets/cases/${f}.jpg`, t => { t.colorSpace = THREE.SRGBColorSpace; scr.material.map = t; scr.material.needsUpdate = true; });
     scr.position.set(x - 0.02, y, z); scr.rotation.y = -Math.PI / 2; q.g.add(scr); Zn.tvs ||= []; Zn.tvs.push(scr); });
   ZONES.push({ Zn, q, at: V(0, 3, zc) });
-  q.anchors.push({ p: V(-1, 5, zc - 6), c: 0xffffff, i: 55, d: 24, pr: 6 }, { p: V(4, 5, zc + 8), c: 0xbfd8ff, i: 45, d: 20, pr: 6 });
-  q.cubes.push({ p: V(-6.9, 2.4, zc + 2), title: 'ozon corp', r: 'btl', s: 6, zone: true, half: 0.62, corners: boxCorners(M.group, -7, 7, 0, 4.5, -3.8, 3.8) });
+  q.anchors.push({ p: V(-6, 12, zc - 8), c: 0xffffff, i: 80, d: 34, pr: 6 }, { p: V(4, 5, zc + 8), c: 0xbfd8ff, i: 45, d: 20, pr: 6 });
+  q.cubes.push({ p: V(-17.5, 4.8, zc + 2), title: 'ozon corp', r: 'btl', s: 6, zone: true, half: 0.62, stopAt: zc - 30, corners: boxCorners(M.group, -7, 7, 0, 4.5, -3.8, 3.8) });
 }
 // восемь углов локальной коробки модели в мире — по ним считается точка обзора
 function boxCorners(g, x0, x1, y0, y1, z0, z1) { g.updateWorldMatrix(true, false); const o = []; for (const x of [x0, x1]) for (const y of [y0, y1]) for (const z of [z0, z1]) o.push(V(x, y, z).applyMatrix4(g.matrixWorld)); return o; }
@@ -381,7 +384,7 @@ function asia(z0) {
   for (const sd of [-1, 1]) k.box(S, 180, 2, z1 - z0, sd * 130, ROOF - 2, (z0 + z1) / 2);   // поверхность города продолжается над кварталом
   const NICHE = [[-1, z0 + DS + 20], [1, z0 + DS + 130]];   // ниши в башнях под баннеры atl: башни здесь расступаются
   // дворы btl-кейсов: башни расступаются до самой земли, во дворе стоит 3D-зона кейса. [сторона, середина, полудлина]
-  const COURT = [[1, z0 + DS + 192, 19, 'dojo']];
+  const COURT = [[1, z0 + DS + 192, 19, 'dojo'], [-1, z0 + DS + 88, 20, 'corp']];   // corp — двор справа: модель вдвое крупнее не влезает на улицу
   for (const s of [-1, 1]) for (let z = z0; z < z1;) {
     const L = 9 + r() * 10, d = 30, x = s * (11 + d / 2), zc = z + L / 2, g0 = gy(z + L);
     if (NICHE.some(([ns, nz]) => ns === s && z < nz + 11 && z + L > nz - 11) || COURT.some(([ns, nz, h]) => ns === s && z < nz + h && z + L > nz - h)) { z += L + 1.4 + r() * 2; continue; }
@@ -394,7 +397,7 @@ function asia(z0) {
   for (const z of [z0 + DS + 30, z0 + DS + 222]) {   // тории на улице: в начале и в конце квартала — у дворов с зонами улица открыта
     [-8.5, 8.5].forEach(x => k.geo(tor, new THREE.CylinderGeometry(0.45, 0.55, 15, 12), x, 7.5, z)); k.box(tor, 22, 0.9, 1.1, 0, 15, z); k.box(tor, 19, 0.6, 0.7, 0, 12.6, z); q.anchors.push({ p: V(0, 13, z), c: 0xff3020, i: 70 }); }
   for (let z = z0 + 40; z < z0 + DS; z += 60) q.anchors.push({ p: V(0, gy(z) + 14, z), c: 0xff3020, i: 60 });
-  COURT.forEach(([s, z, h, k]) => caseZone(q, s, z, h, k)); corpStreet(q, z0 + DS + 86);
+  COURT.forEach(([s, z, h, k]) => k !== 'corp' && caseZone(q, s, z, h, k)); corpStreet(q, z0 + DS + 86);
   NICHE.forEach(([s, z], i) => { banner(q, s * 11, 49, z, ['хроники ижоры', 'треснутые'][i], { w: 16, turn: 0.42, leg: 'beam', img: ['cases/izhora-48-1.jpg', 'cases/treschnutye-1.jpg'][i] }); q.anchors.push({ p: V(s * 4, 54, z - 6), c: 0xff4030, i: 50 }); });   // баннер в нише башни, наверху квартала
   path(q, 'btl', ...[10, 50, 90, 130, 170, 210].map(dz => [0, gy(z0 + dz) + 6.5, z0 + dz]), [1.5, 4.5, z0 + DS + 30], [0, 3, z0 + DS + 60], [0, 3, z0 + DS + 112], [-1.5, 5, z0 + DS + 140], [1, 5.5, z0 + DS + 190], [0, 6, z1]);
   path(q, 'atl', [0, ROOF + 26, z0 + 10], ...[70, 130, 190].map(dz => [0, ROOF + 26 - (ROOF + 26 - 50) * (dz - 10) / (DS + 10), z0 + dz]), [1, 50, z0 + DS + 20], [-1, 50, z0 + DS + 130], [0, 54, z1 - 30], [0, 58, z1]);
@@ -445,37 +448,57 @@ function sport(z0) {
 // по стенам, чёрные глянцевые постаменты с красным контуром. btl — нижний этаж, atl — верхний
 function merch(z0) {
   const q = zone('merch', { grade: { sat: 0.92, con: 0.1, grain: 0.022, vig: 0.25, ca: 0.3, tint: [1.02, 1.0, 0.97], rays: 0.12, streak: 0.08 },  n: '04', t: 'мерч', line: 'концепт-стор: белые залы, светящиеся потолки, рейлы, чёрные постаменты', exp: 0.9, sky: ['#d0c8be', '#e6e0d7', '#f6f2ec'], hemi: [0xffffff, 0xc8c0b4, 1.15], key: [0xfff6ea, 1.4, V(0.4, 1, 0.25)], bloom: 0.45, spark: 3 });
-  const rooms = 5, L = 46, z1 = z0 + rooms * L, k = q.kit, mid = (z0 + z1) / 2;   // зал 0 — ozon селект, дальше витрины мерча
+  // залы: 0 — ozon селект (длинный: витрина во всю высоту стены выходит почти на 66 м), 1 — g-drive, 2 — «простор» в градиенте, 3 — лев
+  const LS = [74, 46, 46, 46], ZS = LS.reduce((o, l) => (o.push(o.at(-1) + l), o), [z0]), rooms = LS.length, z1 = ZS.at(-1), k = q.kit, mid = (z0 + z1) / 2, zcOf = i => (ZS[i] + ZS[i + 1]) / 2;
   q.wet.push({ w: 36, d: z1 - z0, x: 0, y: 0.03, z: mid, k: 0.3, pol: 1, below: 16 }, { w: 36, d: z1 - z0, x: 0, y: 18.15, z: mid, k: 0.3, pol: 1, above: 16 });   // полированные полы обоих этажей
   const Wl = matte(0xe2dbd0, 0.92), FL = matte(0xd4cec4, 0.3, 0.05), blk = matte(0x0d0d0d, 0.22, 0.3), steel = matte(0xc8c8c8, 0.25, 0.9), lightP = glow(0xfff6ec, 0.95), red = glow(RED, 1.5);
   q.rects.push([-30, 30, z0 - 60, z1 + 10]);
   k.box(FL, 38, 0.3, z1 - z0, 0, -0.3, mid); k.box(Wl, 38, 2, z1 - z0, 0, 16, mid); k.box(FL, 36, 0.12, z1 - z0, 0, 18, mid); k.box(Wl, 38, 1, z1 - z0, 0, 34.5, mid);
   for (const s of [-1, 1]) k.box(Wl, 1.2, 35, z1 - z0, s * 18.6, 0, mid);
-  for (let i = 0; i <= rooms; i++) { const z = z0 + i * L; for (const y0 of [0, 18]) { for (const s of [-1, 1]) k.box(Wl, 13.4, 16, 1.2, s * 11.7, y0, z); k.box(Wl, 10, 4, 1.2, 0, y0 + 12, z); } k.box(Wl, 36, 2, 1.2, 0, 16, z); }
+  for (let i = 0; i <= rooms; i++) { const z = ZS[i]; for (const y0 of [0, 18]) { for (const s of [-1, 1]) k.box(Wl, 13.4, 16, 1.2, s * 11.7, y0, z); k.box(Wl, 10, 4, 1.2, 0, y0 + 12, z); } k.box(Wl, 36, 2, 1.2, 0, 16, z); }
   const clothes = [matte(0x111111, 0.8), matte(CREAM, 0.85), matte(0x2a2a2a, 0.8), matte(RED, 0.7)];
   for (let i = 0; i < rooms; i++) for (const y0 of [0, 18]) {
-    const zc = z0 + i * L + L / 2;
+    const zc = zcOf(i), L = LS[i];
     k.box(lightP, 26, 0.1, L - 10, 0, y0 + (y0 ? 16.3 : 15.8), zc);   // светящийся потолок
     q.anchors.push({ p: V(0, y0 + 12, zc), c: 0xfff4e6, i: 40 });
+    if (!y0) continue;   // на первом этаже рейлов нет: там витрины и подвесы; рейлы с одеждой — на втором, мимо них летит atl
     for (const s of [-1, 1]) {
-      if (!y0 && (i === 0 || i === 3)) continue;   // в зале селекта и в зале «простора» рейлов нет
       k.box(steel, 0.12, 0.12, 16, s * 16.6, y0 + 9, zc); [-8, 8].forEach(o => k.box(steel, 2, 0.1, 0.1, s * 17.6, y0 + 9, zc + o));   // рейл на кронштейнах
       for (let j = 0; j < 9; j++) k.box(clothes[(j + i + (s > 0 ? 1 : 0)) % 3 === 0 && j === 4 ? 3 : (j + i) % 3], 0.35, 4.4, 1.3, s * 16.6, y0 + 4.5, zc - 7 + j * 1.75);
     }
   }
-  // мерч — витрины из моделей вещей: дождевик ГПН (отдельного кейса пока нет — экспонат без карточки), капсула G-Drive, бокс «Простора», капсула льва
-  // зал 0: ozon селект вдоль стены во всю длину, от витрины на пол и стены ложится светлый холодный свет
-  { const zc = z0 + L / 2, Zs = buildSelectGen(THREE, GLTF); zoneAt(q, Zs, -12.2, zc, 2.4, 'ozon селект', 80); Object.assign(q.cubes.at(-1), { stopAt: z0 + 3 });
-    Zs.ready?.then(() => Zs.group.traverse(o => { if (o.isMesh && o.material?.emissive) o.material.emissiveIntensity = Math.min(o.material.emissiveIntensity, 0.35); }));   // витрина не должна выгорать в белое   // витрина во всю стену: 43 м в длину, ~10 м в высоту; смотрим на неё от входа в зал
-    const wash = new THREE.Mesh(new THREE.PlaneGeometry(18, 44), new THREE.MeshBasicMaterial({ map: (() => { const c = document.createElement('canvas'); c.width = c.height = 256; const g = c.getContext('2d'), gr = g.createRadialGradient(0, 128, 10, 0, 128, 250); gr.addColorStop(0, 'rgba(225,255,245,.22)'); gr.addColorStop(0.5, 'rgba(200,240,230,.07)'); gr.addColorStop(1, 'rgba(0,0,0,0)'); g.fillStyle = gr; g.fillRect(0, 0, 256, 256); return new THREE.CanvasTexture(c); })(), transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, toneMapped: false }));
-    wash.rotation.x = -Math.PI / 2; wash.position.set(-3, 0.06, zc); q.g.add(wash);   // световое пятно от витрины на полированном полу
-    q.anchors.push({ p: V(-4, 8, zc - 12), c: 0xe6fff6, i: 42, d: 30, pr: 6 }, { p: V(-4, 8, zc + 10), c: 0xe6fff6, i: 42, d: 34, pr: 6 }); }
-  // зал «простора» целиком в фирменном градиенте: стены и перегородки — голубое небо
-  { const zc = z0 + 3 * L + L / 2, grad = new THREE.MeshBasicMaterial({ toneMapped: false, map: (() => { const c = document.createElement('canvas'); c.width = 8; c.height = 512; const g = c.getContext('2d'), gr = g.createLinearGradient(0, 0, 0, 512); gr.addColorStop(0, '#1d7dff'); gr.addColorStop(0.62, '#9fd2ff'); gr.addColorStop(1, '#f2f8ff'); g.fillStyle = gr; g.fillRect(0, 0, 8, 512); const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; return t; })() });
+  // подвес: вещи висят на тросах с потолка по всей ширине зала справа и слева от камеры и медленно вращаются. skip — полоса z, где стоит витрина (с её стороны там не вешаем)
+  const spinners = [];
+  function hangCloud(i, files, n, size, side = 0, seed = 7, zx = zcOf(i)) { const zc = zcOf(i), L = LS[i], rr = rng(seed), wire = matte(0x9a9a9a, 0.5, 0.6);
+    files.forEach((f, fi) => GLTF.loadAsync(`assets/zones/models/${f}.glb`).then(gl => { const src = gl.scene, b = new THREE.Box3().setFromObject(src), sz = b.getSize(V(0, 0, 0)), c = b.getCenter(V(0, 0, 0)); src.position.sub(c); src.traverse(o => { if (o.isMesh) o.castShadow = true; });
+      const unit = new THREE.Group(); unit.add(src); unit.scale.setScalar(1 / Math.max(sz.x, sz.y, sz.z));
+      for (let j = fi; j < n; j += files.length) { const sd = j % 2 ? 1 : -1, x = sd * (3.6 + rr() * 11.4), z = zc - L / 2 + 5 + rr() * (L - 10), y = 6.2 + rr() * 6;
+        if (side && sd === side && Math.abs(z - zx) < 13) continue;
+        const sc = size * (0.75 + rr() * 0.5), piv = new THREE.Group(); piv.position.set(x, y, z); piv.rotation.y = rr() * 6.28; q.g.add(piv);
+        const it = unit.clone(); it.scale.multiplyScalar(sc); it.rotation.set((rr() - 0.5) * 0.5, 0, (rr() - 0.5) * 0.5); piv.add(it); spinners.push([piv, (rr() - 0.5) * 0.5]);
+        const w = new THREE.Mesh(new THREE.CylinderGeometry(0.02, 0.02, 15.8 - y - sc / 2, 4), wire); w.position.set(x, (15.8 + y + sc / 2) / 2, z); q.g.add(w); } }).catch(e => console.warn(f, e)));
+  }
+  ZONES.push({ Zn: { update: t => spinners.forEach(([p, w]) => { p.rotation.y += w * 0.01; }) }, q, at: V(0, 5, mid) });
+  // зал 0: ozon селект — витрина во всю высоту стены (от пола до светящегося потолка); глубину модели поджали, чтобы фасад не вылезал на проход
+  { const zc = zcOf(0), Zs = buildSelectGen(THREE, GLTF), sc = 15.2 / Zs.size.h; zoneAt(q, Zs, -13, zc, sc, 'ozon селект', 80); Zs.group.scale.z = 1.9; Object.assign(q.cubes.at(-1), { stopAt: z0 + 3, corners: boxCorners(Zs.group, -Zs.size.w / 2, Zs.size.w / 2, 0, Zs.size.h, -Zs.size.d / 2, Zs.size.d / 2) });
+    Zs.ready?.then(() => Zs.group.traverse(o => { if (o.isMesh && o.material?.emissive) o.material.emissiveIntensity = Math.min(o.material.emissiveIntensity, 0.35); }));   // витрина не должна выгорать в белое
+    const wash = new THREE.Mesh(new THREE.PlaneGeometry(16, LS[0] - 4), new THREE.MeshBasicMaterial({ map: (() => { const c = document.createElement('canvas'); c.width = c.height = 256; const g = c.getContext('2d'), gr = g.createRadialGradient(0, 128, 10, 0, 128, 250); gr.addColorStop(0, 'rgba(225,255,245,.22)'); gr.addColorStop(0.5, 'rgba(200,240,230,.07)'); gr.addColorStop(1, 'rgba(0,0,0,0)'); g.fillStyle = gr; g.fillRect(0, 0, 256, 256); return new THREE.CanvasTexture(c); })(), transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, toneMapped: false }));
+    wash.rotation.x = -Math.PI / 2; wash.position.set(-1, 0.06, zc); q.g.add(wash);   // световое пятно от витрины на полированном полу
+    q.anchors.push({ p: V(-2, 9, zc - 18), c: 0xe6fff6, i: 42, d: 34, pr: 6 }, { p: V(-2, 9, zc + 14), c: 0xe6fff6, i: 42, d: 34, pr: 6 }); }
+  // зал «простора» целиком в фирменном градиенте: стены и перегородки — голубое небо. розовая бубля — огромная петля, коробки висят по всему залу
+  { const zc = zcOf(2), L = LS[2], grad = new THREE.MeshBasicMaterial({ toneMapped: false, map: (() => { const c = document.createElement('canvas'); c.width = 8; c.height = 512; const g = c.getContext('2d'), gr = g.createLinearGradient(0, 0, 0, 512); gr.addColorStop(0, '#1d7dff'); gr.addColorStop(0.62, '#9fd2ff'); gr.addColorStop(1, '#f2f8ff'); g.fillStyle = gr; g.fillRect(0, 0, 8, 512); const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; return t; })() });
     for (const sd of [-1, 1]) { const m = new THREE.Mesh(new THREE.PlaneGeometry(L - 1.3, 16), grad); m.position.set(sd * 17.94, 8, zc); m.rotation.y = -sd * Math.PI / 2; q.g.add(m);
-      for (const [dz, ry] of [[-L / 2 + 0.62, 0], [L / 2 - 0.62, Math.PI]]) { const w = new THREE.Mesh(new THREE.PlaneGeometry(13.4, 16), grad); w.position.set(sd * 11.7, 8, zc + dz); w.rotation.y = ry; q.g.add(w); } } }
-  [['gpn', 1], ['gdrive', 2, 'мерч g-drive'], ['prostor', 3, 'набор креатора'], ['lion', 4, 'мерч льва']].forEach(([kind, i, t]) => { const x = i % 2 ? 8 : -8, z = z0 + i * L + L / 2;
-    k.box(red, 0.12, 0.05, 12, x - Math.sign(x) * 3.2, 0, z); zoneAt(q, buildMerchGen(THREE, GLTF, kind), x, z, 1.6, t, 45); });
+      for (const [dz, ry] of [[-L / 2 + 0.62, 0], [L / 2 - 0.62, Math.PI]]) { const w = new THREE.Mesh(new THREE.PlaneGeometry(13.4, 16), grad); w.position.set(sd * 11.7, 8, zc + dz); w.rotation.y = ry; q.g.add(w); } }
+    const pink = new THREE.MeshPhysicalMaterial({ color: 0xff3fae, roughness: 0.18, clearcoat: 1, clearcoatRoughness: 0.1, emissive: 0x6a0636, emissiveIntensity: 0.25 });
+    const tube = (pts, r, closed) => { const m = new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts.map(([x, y, z]) => V(x, y, zc + z)), closed, 'centripetal'), 400, r, 20, closed), pink); m.castShadow = true; q.g.add(m); };
+    tube([[-5, 0.9, -16], [-9, 8, -13], [-15, 12.5, -5], [-12, 5, 2], [-6, 10.5, 8], [-11, 13, 15], [-16, 3, 12], [-13, 0.8, 0], [-9, 2.5, -8]], 0.6, true);   // главная петля — справа, на неё смотрит карточка
+    tube([[11, 14, -L / 2 + 1], [5, 13, -12], [-4, 14.2, -3], [6, 13.4, 6], [13, 14, 12], [8, 13, L / 2 - 1]], 0.32, false);   // вторая петля тянется под потолком через весь зал
+    hangCloud(2, ['merch-prostor'], 22, 2.2, -1, 11);
+    q.anchors.push({ p: V(-6, 10, zc - 4), c: 0xffe4f2, i: 50, d: 30, pr: 6 });
+    q.cubes.push({ p: V(-11, 6.5, zc), title: 'набор креатора', r: 'btl', s: 5, zone: true, half: 0.62, stopAt: ZS[2] + 2, corners: [-16, -5].flatMap(x => [0, 13].flatMap(y => [-16, 15].map(z => V(x, y, zc + z)))) }); }
+  // g-drive и лев: витрины втрое крупнее прежних, вещи висят по залу
+  [['gdrive', 1, 'мерч g-drive', ['merch-tee']], ['lion', 3, 'мерч льва', ['merch-lion-hoodie', 'merch-lion-bomber', 'merch-lion-panama']]].forEach(([kind, i, t, hang]) => { const x = 10, z = ZS[i] + 29;   // витрина в глубине зала, точка обзора — у входа в зал: из соседнего её закрыли бы перегородки
+    k.box(red, 0.12, 0.05, 20, x - 6.5, 0, z); zoneAt(q, buildMerchGen(THREE, GLTF, kind), x, z, 2.8, t, 45); q.cubes.at(-1).stopAt = ZS[i] + 2; hangCloud(i, hang, 16, kind === 'lion' ? 2.2 : 2.6, 1, 20 + i, z); });
   path(q, 'btl', [0, 5, z0 - 14], [0, 5, z0 + 6], [0, 5, z0 + 90], [0, 5, z1]);
   path(q, 'atl', [0, 36, z0 - 22], [0, 23.5, z0 - 6], [0, 23.5, z0 + 90], [0, 23.5, z1]);
   return z1;
@@ -521,21 +544,27 @@ function ending(z0) {
 
 // ---------- сборка мира: развилка → нейтральная → азия → спорт → мерч → ai → финал, оба маршрута через все локации ----------
 const zR = rotunda(), zN = neutral(zR + 8), zA = asia(zN), zS = sport(zA), zM = merch(zS + 70), zI = ai(zM), FIN = ending(zI);
+FIN.gone = 0; const BLK = { k: 0, dir: V(0, 0.3, 1) };   // BLK — чёрное солнце у tevredens: вес и направление
 ZL.forEach(q => q.kit.flush(q.g));
 const ground = new THREE.Mesh(new THREE.PlaneGeometry(4000, 4000), matte(0x050505, 1)); ground.rotation.x = -Math.PI / 2; ground.position.y = -0.4; scene.add(ground);
 
 // небо: сфера вокруг камеры, градиент и диск солнца смешиваются по зонам
 const sky = new THREE.Mesh(new THREE.SphereGeometry(600, 48, 24), new THREE.ShaderMaterial({
   side: THREE.BackSide, depthWrite: false, fog: false,
-  uniforms: { uTop: { value: new THREE.Color() }, uMid: { value: new THREE.Color() }, uBot: { value: new THREE.Color() }, uSun: { value: V(0, 0.2, 1) }, uSunC: { value: new THREE.Color() }, uK: { value: 0 }, tHdr: { value: null }, uHdr: { value: 0 }, uHdrK: { value: 0.5 } },
+  uniforms: { uTop: { value: new THREE.Color() }, uMid: { value: new THREE.Color() }, uBot: { value: new THREE.Color() }, uSun: { value: V(0, 0.2, 1) }, uSunC: { value: new THREE.Color() }, uK: { value: 0 }, tHdr: { value: null }, uHdr: { value: 0 }, uHdrK: { value: 0.5 }, uBlk: { value: 0 }, uBlkD: { value: V(0, 0.3, 1) } },
   vertexShader: 'varying vec3 vD; void main(){ vD = normalize(position); gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
-  fragmentShader: `uniform vec3 uTop, uMid, uBot, uSunC, uSun; uniform float uK, uHdr, uHdrK; uniform sampler2D tHdr; varying vec3 vD;
+  fragmentShader: `uniform vec3 uTop, uMid, uBot, uSunC, uSun; uniform float uK, uHdr, uHdrK, uBlk; uniform vec3 uBlkD; uniform sampler2D tHdr; varying vec3 vD;
     float h(vec2 p){ return fract(sin(dot(p, vec2(12.9898, 78.233))) * 43758.5453); }
     void main(){ vec3 d = normalize(vD); float y = d.y; vec3 c = mix(uBot, uMid, smoothstep(0.0, 0.25, y)); c = mix(c, uTop, smoothstep(0.2, 0.8, y));
       float s = max(dot(d, normalize(uSun)), 0.0); c += uSunC * (pow(s, 700.0) * 4.0 + pow(s, 14.0) * 0.4) * uK;
       if (uHdr > 0.001) { vec2 e = vec2(atan(d.z, d.x) * 0.15915 + 0.5, asin(clamp(d.y, -1.0, 1.0)) * 0.31831 + 0.5); vec3 hc = texture2D(tHdr, e).rgb * uHdrK;
         float l = dot(hc, vec3(0.2126, 0.7152, 0.0722)); hc = mix(hc, vec3(l), 0.65);   // небо почти без цвета — палитра бренда ахроматична
         c = mix(c, hc, uHdr * smoothstep(0.2, 0.46, y)); }   // горизонт HDRI (деревья) прячем в градиент — видны только облака
+      if (uBlk > 0.001) {   // чёрное солнце tevredens: чёрный диск с тонким светлым ободом и чёрные лучи вокруг
+        vec3 a = normalize(uBlkD), t1 = normalize(cross(a, vec3(0.0, 1.0, 0.0))), t2 = cross(a, t1); float r = acos(clamp(dot(d, a), -1.0, 1.0)), ang = atan(dot(d, t2), dot(d, t1));
+        float disc = 1.0 - smoothstep(0.085, 0.092, r), rim = smoothstep(0.08, 0.09, r) * (1.0 - smoothstep(0.092, 0.11, r));
+        float rays = smoothstep(0.55, 0.95, sin(ang * 16.0) * 0.5 + 0.5 + 0.25 * sin(ang * 5.0 + 1.3)) * exp(-(r - 0.09) * 3.2) * step(0.09, r);
+        c = mix(c, c * (1.0 - max(disc, rays * 0.92)) + vec3(0.85) * rim * 0.6, uBlk); }
       c += (h(gl_FragCoord.xy) - 0.5) / 255.0; gl_FragColor = vec4(c, 1.0); }`,
 }));
 sky.renderOrder = -1; sky.frustumCulled = false; scene.add(sky);
@@ -700,7 +729,7 @@ function navIdx() { const L = STOPS[route]; let k = -1; for (let i = 0; i < L.le
 function navStep(dir) {
   const L = STOPS[route], k = navIdx(), cur = scrollY / PX, atStop = k >= 0 && Math.abs(L[k].s - cur) < 1.5;
   let target;
-  if (dir > 0) target = k + 1 < L.length ? L[k + 1].s : TOTAL;
+  if (dir > 0) { target = k + 1 < L.length ? L[k + 1].s : TOTAL; if (target <= Math.max(cur, sSm)) return; }   // шаг вперёд никогда не ведёт назад
   else if (!atStop && k >= 0) target = L[k].s;   // между кейсами — назад к тому, что позади
   else if (k > 0) target = L[k - 1].s;
   else { route = null; target = TRUNK_W - 4; }   // назад с первого кейса — к развилке
@@ -723,7 +752,7 @@ addEventListener('touchend', e => { if (!route || NAV.ty === null || modalOpen()
 addEventListener('keydown', e => { if (!route || modalOpen()) return; const f = { ArrowDown: 1, PageDown: 1, ' ': 1, ArrowUp: -1, PageUp: -1 }[e.key]; if (f) { e.preventDefault(); navStep(f); } });
 // магнит — только для полосы прокрутки: отпустили между кейсами — камера доезжает до ближайшего
 const MAG = { idle: 400, last: 0, done: true };
-addEventListener('pointerdown', () => { MAG.last = performance.now(); MAG.done = false; }, { passive: true });
+addEventListener('pointerdown', e => { if (e.clientX < document.documentElement.clientWidth) return; MAG.last = performance.now(); MAG.done = false; }, { passive: true });   // только нажатие на саму полосу прокрутки, а не клик по странице
 addEventListener('pointerup', () => { MAG.last = performance.now(); }, { passive: true });
 function magnet(s) {
   if (!route || MAG.done || performance.now() - MAG.last < MAG.idle || s <= TRUNK_W) return; MAG.done = true;
@@ -747,7 +776,7 @@ function updateZones(dawn) {
     sp += q.spark * w; ex += q.exp * w; { const g = { ...GRADE0, ...q.grade }; for (const k of ['sat', 'con', 'grain', 'vig', 'ca', 'red', 'rays', 'streak', 'rain']) gr[k] += g[k] * w; gr.t0 += g.tint[0] * w; gr.t1 += g.tint[1] * w; gr.t2 += g.tint[2] * w; } hd += q.hdr * w; fg += q.fog * w; keyI += q.key[1] * w; hemiI += q.hemi[2] * w; bl += q.bloom * w; M.dir.addScaledVector(q.key[2].clone().normalize(), w); });
   curZone = ZL[best];
   const u = sky.material.uniforms, D = dawn;
-  u.uTop.value.copy(M.top).multiplyScalar(D); u.uMid.value.copy(M.mid).multiplyScalar(D); u.uBot.value.copy(M.bot).multiplyScalar(D); u.uSun.value.copy(M.sun); u.uSunC.value.copy(M.sunC); u.uK.value = sunK * D;
+  u.uTop.value.copy(M.top).multiplyScalar(D); u.uMid.value.copy(M.mid).multiplyScalar(D); u.uBot.value.copy(M.bot).multiplyScalar(D); u.uSun.value.copy(M.sun); u.uSunC.value.copy(M.sunC); u.uK.value = sunK * D * (1 - BLK.k); u.uHdrK.value = 0.5 * (1 - 0.45 * BLK.k);
   sky.position.copy(camera.position);
   hemi.color.copy(M.hs); hemi.groundColor.copy(M.hg); hemi.intensity = hemiI * D;
   key.color.copy(M.key); key.intensity = keyI * D;
@@ -765,8 +794,8 @@ function updateZones(dawn) {
   { const f = film.uniforms; f.uSat.value = gr.sat; f.uCon.value = gr.con; f.uGrain.value = gr.grain; f.uVig.value = gr.vig; f.uCA.value = gr.ca; f.uRed.value = gr.red; f.uTint.value.set(gr.t0, gr.t1, gr.t2); f.uStreak.value = gr.streak * D; f.uRain.value = gr.rain * D;
     // солнце на экране: лучи тянутся к нему, только если оно впереди
     const sp = camera.position.clone().addScaledVector(M.sun.clone().normalize(), 400), front = sp.clone().sub(camera.position).dot(camera.getWorldDirection(new THREE.Vector3())) > 0; sp.project(camera);
-    f.uSunUV.value.set(sp.x * 0.5 + 0.5, sp.y * 0.5 + 0.5); f.uRays.value = front ? gr.rays * D * (1 - smooth(clamp01(Math.hypot(sp.x, sp.y) / 2.2))) : 0; RAIN.k = gr.rain; }
-  renderer.toneMappingExposure = ex; bloom.strength = 0.6 * bl; sparkLight.intensity = sp * (0.9 + 0.1 * Math.sin(performance.now() / 140)) * (0.35 + 0.65 * D) + (1 - D) * 25;
+    f.uSunUV.value.set(sp.x * 0.5 + 0.5, sp.y * 0.5 + 0.5); f.uRays.value = (front ? gr.rays * D * (1 - smooth(clamp01(Math.hypot(sp.x, sp.y) / 2.2))) : 0) * (1 - BLK.k); sky.material.uniforms.uBlk.value = BLK.k * D; sky.material.uniforms.uBlkD.value.copy(BLK.dir); RAIN.k = gr.rain; }
+  renderer.toneMappingExposure = ex; bloom.strength = 0.6 * bl; sparkLight.intensity = (sp * (0.9 + 0.1 * Math.sin(performance.now() / 140)) * (0.35 + 0.65 * D) + (1 - D) * 25) * (1 - FIN.gone);
   // лампы зоны: три ближайшие точки света из всех видимых зон
   const an = ZL.filter(q => q.g.visible).flatMap(q => q.anchors).map(a => [a, a.p.distanceToSquared(camera.position) / (a.pr || 1)]).sort((a, b) => a[1] - b[1]);
   lamps.forEach((l, i) => { const a = an[i]?.[0]; if (!a) { l.intensity = 0; return; } l.position.copy(a.p); l.color.set(a.c); l.intensity = a.i * D; l.distance = a.d || 50; });
@@ -778,6 +807,7 @@ const forkEl = document.getElementById('fork'), routeBtn = document.getElementBy
 forkEl.addEventListener('click', e => { const b = e.target.closest('[data-r]'); if (!b) return; route = b.dataset.r; forkEl.classList.remove('on'); scrollTo(0, STOPS[route][0].s * PX); });   // сразу к первому кейсу маршрута
 // смена маршрута — телепорт: вспышка в чёрное, и камера уже стоит у соответствующего кейса другого маршрута (та же доля пути), без пролёта
 routeBtn.addEventListener('click', e => { const b = e.target.closest('[data-to]'); if (!b || !route || b.dataset.to === route) return; const to = b.dataset.to;
+  if (to === 'start') { flashEl.classList.add('on'); setTimeout(() => { go(null, 0); lastZone = ''; requestAnimationFrame(() => flashEl.classList.remove('on')); }, 280); return; }   // кнопка «начало» — телепорт в самое начало, к старту
   const A = STOPS[route], B = STOPS[to]; let k = 0; A.forEach((x, i) => { if (Math.abs(x.s - sSm) < Math.abs(A[k].s - sSm)) k = i; });
   const target = sSm < A[0].s - STEP * 0.5 ? B[0].s : B[Math.round(k / Math.max(1, A.length - 1) * (B.length - 1))].s;
   flashEl.classList.add('on'); setTimeout(() => { go(to, target); lastZone = ''; requestAnimationFrame(() => flashEl.classList.remove('on')); }, 280); });
@@ -886,6 +916,7 @@ function frame() {
   spark.children[0].material.opacity = 1 - dock; spark.material.emissiveIntensity = (gtao && gtao.enabled ? 3.2 : 2.2) * (1 - landed) + 1.2 * landed;   // на десктопе ореол искры делает bloom
   LOGO.mat.emissiveIntensity = landed * 0.75; LOGO.glow.intensity = landed * 220;
   sparkLight.distance = 30 + 70 * smooth(clamp01((150 - dLogo) / 70));   // на подлёте искра выхватывает чёрный логотип из темноты
+  FIN.gone = clamp01(landed * 4); spark.material.transparent = true; spark.material.opacity = 1 - FIN.gone; spark.visible = FIN.gone < 0.99;   // как только логотип загорается, искра гаснет — в вырезе чёрное
   endEl.classList.toggle('on', landed > 0.6);
   sparkLight.position.copy(spark.position);
   const dawn = smooth(clamp01((sSm - 6) / 50));   // мир проявляется, когда искра трогается с места
@@ -893,6 +924,8 @@ function frame() {
   { const a = time * 0.06 + camera.position.z * 0.004, N = Z.neutral, F0 = Z.fork; N.key[2].set(Math.cos(a) * 0.9, 0.42 + 0.12 * Math.sin(time * 0.11), Math.sin(a) * 0.9); F0.key[2].set(Math.cos(a * 1.4 + 1) * 0.85, 0.36, Math.sin(a * 1.4 + 1) * 0.85);
     N.sun[0].copy(N.key[2]).setY(0.16).normalize();
     if (N.g.visible) { N.clouds.forEach((c, i) => { N.cloudDm.position.set(((c.x + time * 7 + 260) % 520 + 520) % 520 - 260, 72, c.z); N.cloudDm.scale.set(c.w, 2, c.d); N.cloudDm.updateMatrix(); N.cloudMesh.setMatrixAt(i, N.cloudDm.matrix); }); N.cloudMesh.instanceMatrix.needsUpdate = true; } }
+  { const on = focC?.id === 'tevredens' ? focW : 0; BLK.k += (on - BLK.k) * Math.min(1, dt * 2.5);   // у tevredens солнце становится чёрным и встаёт над баннером
+    if (BLK.k > 0.001) { const c = STOPS.atl.find(o => o.c.id === 'tevredens').c; BLK.dir.copy(c.p).sub(camera.position).setY(0).normalize().multiplyScalar(0.9).add(V(Math.sign(c.p.x) * 0.12, 0.2, 0)).normalize(); } }
   updateZones(dawn);
   if (focC?.zone) { const k = focW * 0.75; scene.fog.density *= 1 - k; const f = film.uniforms; f.uTint.value.lerp(V(1, 1, 1), k); f.uSat.value += (0.95 - f.uSat.value) * k; f.uVig.value *= 1 - 0.4 * k; }   // у 3D-зоны квартал расступается: туман и красный фильтр слабеют, зона читается в своих цветах
   if (curZone && curZone.k !== lastZone) { lastZone = curZone.k; zoneN.textContent = `{${curZone.n}} ${route ? (route === 'btl' ? 'btl · на земле' : 'atl · над городом') : 'вход'}`; zoneT.textContent = curZone.t; }
