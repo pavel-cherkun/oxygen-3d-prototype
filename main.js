@@ -13,8 +13,8 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { DRACOLoader } from 'three/addons/loaders/DRACOLoader.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 const gltfLoader = new GLTFLoader().setDRACOLoader(new DRACOLoader().setDecoderPath('https://cdn.jsdelivr.net/npm/three@0.169.0/examples/jsm/libs/draco/gltf/'));
-import { CASES, renderCase, MODALS } from './cases.js?v=1116g';
-import { buildRobozoneGen, buildTdojoGen, buildOzonCorpAlley, buildOzonCorpGen, buildSelectGen, buildBaltika7Gen, buildMerchGen } from './zones/zones.js?v=1116g';
+import { CASES, renderCase, MODALS } from './cases.js?v=1116h';
+import { buildRobozoneGen, buildTdojoGen, buildOzonCorpAlley, buildOzonCorpGen, buildSelectGen, buildBaltika7Gen, buildMerchGen } from './zones/zones.js?v=1116h';
 // учёт загрузки для прелоадера-искры: каждый файл через общий менеджер, картинки кейсов — вручную в caseTexture
 const LD = { done: 0, total: 0 }, LM = THREE.DefaultLoadingManager, lmStart = LM.itemStart, lmEnd = LM.itemEnd;
 LM.itemStart = u => { LD.total++; lmStart.call(LM, u); }; LM.itemEnd = u => { LD.done++; lmEnd.call(LM, u); };
@@ -1406,7 +1406,7 @@ function carStand(w) {
 const ZONE3D = { tbank: 'dojo', robozon: 'robo', fandom: 'corp', selekt: 'select', baltika7: 'b7', gdriveMerch: 'merch:gdrive', gpnMerch: 'merch:gpn', oxygenSet: 'merch:prostor', lionMerch: 'merch:lion' }, ZLIVE = [];
 function zone3d(w) {
   const kind = ZONE3D[w.id], Z = kind === 'robo' ? buildRobozoneGen(THREE, gltfLoader) : kind === 'dojo' ? buildTdojoGen(THREE, gltfLoader) : kind === 'select' ? buildSelectGen(THREE, gltfLoader) : kind === 'b7' ? buildBaltika7Gen(THREE, gltfLoader) : kind.startsWith('merch:') ? buildMerchGen(THREE, gltfLoader, kind.slice(6)) : buildOzonCorpAlley(THREE, { kv: 'assets/cases/ozon-fandom-kv-1.jpg', length: 30, width: 16 });
-  const c = w.center || w.heroPos || V(w.F.x, 0, w.z), k = Math.min(kind === 'select' ? 1.7 : kind === 'b7' ? 1.3 : kind === 'robo' ? 2.0 : kind.startsWith('merch:') ? 2.7 : 2.4, (kind === 'merch:prostor' ? 22 : kind.startsWith('merch:') ? 27 : 40) / Math.max(Z.size.w, Z.size.d)), g = Z.group;
+  const c = w.center || w.heroPos || V(w.F.x, 0, w.z), k = Math.min(kind === 'select' ? 1.7 : kind === 'b7' ? 1.3 : kind === 'robo' ? 2.0 : kind.startsWith('merch:') ? 2.7 : 2.4, (kind === 'merch:prostor' ? 19 : kind.startsWith('merch:') ? 27 : 40) / Math.max(Z.size.w, Z.size.d)), g = Z.group;
   g.scale.setScalar(k); g.position.set(c.x, 0, c.z); g.rotation.y = Math.atan2(22, -34);   // фасад зоны (+z) — к точке съёмки
   const drop = []; g.traverse(o => { if (o.isSpotLight || o.isDirectionalLight) drop.push(o); if (o.isMesh) { o.castShadow = o.receiveShadow = true; o.userData.case = w.id; clickable.push(o); } });
   if (kind === 'select') g.traverse(o => { if (o.isPointLight && o.color.getHex() === 0xff2a2a) drop.push(o); });
