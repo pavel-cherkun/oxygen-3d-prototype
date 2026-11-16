@@ -628,27 +628,44 @@ export function buildMerchGen(THREE, loader, kind, opts = {}) {
   };
   const backdrop = (w, h, tex, z = -1.2, y0 = 0) => { const m = new THREE.Mesh(new THREE.PlaneGeometry(w, h), new THREE.MeshBasicMaterial({ map: tex, toneMapped: false })); m.position.set(0, y0 + h / 2, z); g.add(m); return m; };
   if (kind === 'prostor') {
-    backdrop(7, 4.2, ctex(16, 512, (c, w, h) => { const gr = c.createLinearGradient(0, 0, 0, h); gr.addColorStop(0, '#1d7dff'); gr.addColorStop(0.65, '#9fd2ff'); gr.addColorStop(1, '#f2f8ff'); c.fillStyle = gr; c.fillRect(0, 0, w, h); }));
-    // розовая «бубля» — глянцевая трубка-петля, повторяет фирменную петлю «Простора»
-    const pink = new THREE.MeshPhysicalMaterial({ color: 0xff3fae, roughness: 0.18, clearcoat: 1, clearcoatRoughness: 0.1, emissive: 0x6a0636, emissiveIntensity: 0.25 });
-    const loop = (pts, r) => { const m = new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts.map((p) => new THREE.Vector3(...p)), true, 'centripetal'), 220, r, 24, true), pink); m.castShadow = true; g.add(m); return m; };
-    spin.push(loop([[-2.3, 0.5, -0.9], [-1.5, 3.3, -0.7], [1.2, 3.6, -0.5], [2.4, 1.3, -0.6], [0.6, 0.25, -0.3], [-1.3, 1.0, -0.4]], 0.13));
-    loop([[2.6, 3.2, -1.05], [0.4, 2.4, -1.0], [-2.6, 2.9, -1.05], [-0.6, 3.8, -1.1]], 0.08);
-    const a = new THREE.Group(); a.position.set(-0.75, 1.9, 0.4); a.rotation.set(1.05, 0.35, -0.1); g.add(a); spin.push(a);
-    jobs.push(loadInto(loader, base + 'merch-prostor.glb', a, (o) => { fit(o, 1.7); o.position.sub(new THREE.Box3().setFromObject(o).getCenter(new THREE.Vector3())); }));
-    const b = new THREE.Group(); b.position.set(1.05, 1.05, 0.8); b.rotation.set(0.85, -0.45, 0.2); g.add(b); spin.push(b);
-    jobs.push(loadInto(loader, base + 'merch-prostor.glb', b, (o) => { fit(o, 1.25); o.position.sub(new THREE.Box3().setFromObject(o).getCenter(new THREE.Vector3())); }));
+    // кейвижуал «Простора» в объёме: большой небесный задник, розовые «бубли» проходят сквозь кадр спереди и сзади, две коробки крупно у камеры
+    backdrop(16, 10, ctex(16, 512, (c, w, h) => { const gr = c.createLinearGradient(0, 0, 0, h); gr.addColorStop(0, '#0a5cff'); gr.addColorStop(0.55, '#5aa8ff'); gr.addColorStop(1, '#eef6ff'); c.fillStyle = gr; c.fillRect(0, 0, w, h); }), -2.6, -0.5);
+    const pink = new THREE.MeshPhysicalMaterial({ color: 0xff2fa6, roughness: 0.12, clearcoat: 1, clearcoatRoughness: 0.05, emissive: 0x8a0748, emissiveIntensity: 0.35 });
+    const loop = (pts, r, closed = true) => { const m = new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts.map((p) => new THREE.Vector3(...p)), closed, 'centripetal'), 260, r, 28, closed), pink); m.castShadow = true; g.add(m); return m; };
+    const big = new THREE.Group(); g.add(big); spin.push(big);   // главная петля — огибает коробки, проходит перед камерой
+    big.add(loop([[-5.2, 0.6, -1.4], [-3.6, 6.2, -1.8], [1.8, 7.4, -1.2], [5.4, 3.6, 0.4], [3.2, 0.5, 2.6], [-1.6, 1.2, 3.0]], 0.34));
+    loop([[-7.5, 5.8, -2.3], [-2.0, 8.6, -2.2], [3.2, 6.4, -2.3], [7.6, 8.4, -2.2]], 0.22, false);    // волна по небу за коробками
+    loop([[-7.8, 1.6, -2.2], [-4.2, 3.4, -2.0], [-0.4, 2.2, -2.1], [4.4, 4.4, -2.0], [7.8, 2.4, -2.2]], 0.16, false);
+    loop([[4.6, 0.3, 3.4], [6.4, 2.6, 2.4], [7.6, 0.6, 1.2]], 0.26, false);                        // хвост у самой камеры — даёт глубину
+    const a = new THREE.Group(); a.position.set(-1.4, 3.6, 1.6); a.rotation.set(0.95, 0.4, -0.12); g.add(a); spin.push(a);
+    jobs.push(loadInto(loader, base + 'merch-prostor.glb', a, (o) => { fit(o, 3.2); o.position.sub(new THREE.Box3().setFromObject(o).getCenter(new THREE.Vector3())); }));
+    const b = new THREE.Group(); b.position.set(2.0, 1.9, 2.6); b.rotation.set(0.8, -0.5, 0.22); g.add(b); spin.push(b);
+    jobs.push(loadInto(loader, base + 'merch-prostor.glb', b, (o) => { fit(o, 2.5); o.position.sub(new THREE.Box3().setFromObject(o).getCenter(new THREE.Vector3())); }));
   } else if (kind === 'gdrive') {
     backdrop(6.4, 3.6, new THREE.TextureLoader().load(opts.board || 'assets/cases/gdrive-capsule-1.jpg', (t) => (t.colorSpace = THREE.SRGBColorSpace)), -1.6, 2.0);           // красная доска концепта над вешалкой
     rail(-1.9, 1.9, 1.85, 0.4); hang('merch-tee.glb', -0.85, 0.4, 1.3, 1.85); hang('merch-tee.glb', 0.85, 0.4, 1.3, 1.85);
   } else if (kind === 'gpn') {
-    rail(-1.0, 1.0, 2.8, 0); hang('merch-coat.glb', 0, 0, 1.6, 2.8);
+    // мерч «Газпромнефти» по кейсу: задник — паттерн путешествия, на стойках карточки вещей из кейса (худи, прозрачная сумка, шопер, шарф),
+    // перед ними — прозрачная сумка-кроссбоди на чёрной ленте в объёме
+    const tl = new THREE.TextureLoader(), img = (n) => tl.load((opts.cases || 'assets/cases/') + n + '.jpg', (t) => (t.colorSpace = THREE.SRGBColorSpace));
+    backdrop(6.2, 4.4, img('gpn-merch-2'), -1.6, 0.2);
+    const card = (n, w, h, x, y, z, ry) => { const fr = new THREE.Mesh(new THREE.BoxGeometry(w + 0.08, h + 0.08, 0.06), new THREE.MeshStandardMaterial({ color: 0x0d0d0d, roughness: 0.4 })); fr.position.set(x, y, z - 0.04); fr.rotation.y = ry; g.add(fr);
+      const m = new THREE.Mesh(new THREE.PlaneGeometry(w, h), new THREE.MeshBasicMaterial({ map: img(n), toneMapped: false })); m.position.set(x, y, z); m.rotation.y = ry; g.add(m);
+      const leg = new THREE.Mesh(new THREE.CylinderGeometry(0.025, 0.025, y - h / 2, 8), steel); leg.position.set(x, (y - h / 2) / 2, z - 0.06); g.add(leg); };
+    card('gpn-merch-1', 2.2, 1.65, -2.6, 2.1, 0.3, 0.35); card('gpn-merch-3', 1.9, 1.9, 2.6, 2.3, 0.3, -0.35);
+    card('gpn-merch-4', 1.1, 1.6, -1.3, 1.25, 1.2, 0.2); card('gpn-merch-5', 1.1, 1.6, 1.3, 1.25, 1.2, -0.2);
+    const clear = new THREE.MeshPhysicalMaterial({ color: 0xffffff, roughness: 0.05, transmission: 0.9, thickness: 0.05, transparent: true, opacity: 0.55, clearcoat: 1 });
+    const bag = new THREE.Group(); bag.position.set(0, 1.9, 1.0); g.add(bag); swing.push(bag);
+    const body = new THREE.Mesh(new THREE.BoxGeometry(0.9, 1.3, 0.22), clear); body.position.y = -0.9; bag.add(body);
+    const flap = new THREE.Mesh(new THREE.BoxGeometry(0.92, 0.42, 0.24), clear); flap.position.y = -0.4; bag.add(flap);
+    const strap = new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3([[-0.44, -0.3, 0], [-0.5, 0.6, 0.05], [0, 1.0, 0.08], [0.5, 0.6, 0.05], [0.44, -0.3, 0]].map((p) => new THREE.Vector3(...p))), 60, 0.035, 6), new THREE.MeshStandardMaterial({ color: 0x0a0a0a, roughness: 0.6 })); bag.add(strap);
   } else if (kind === 'lion') {
     rail(-1.9, 0.5, 2.6, -0.3); hang('merch-lion-hoodie.glb', -1.3, -0.3, 1.0); hang('merch-lion-bomber.glb', -0.1, -0.3, 1.0);
     plinth('merch-lion-panama.glb', 1.3, 0.2, 0.55, 1.0); plinth('merch-lion-slippers.glb', 2.3, 0.4, 0.6, 0.6);
   }
   const key = new THREE.SpotLight(0xffffff, 24, 12, 0.6, 0.5, 1.4); key.position.set(1.5, 5, 4); key.target.position.set(0, 1.4, 0); g.add(key, key.target);
-  return { group: g, size: { w: 7, d: 3, h: 4.2 }, ready: Promise.all(jobs), solids: [{ x: 0, z: 0, w: 6, d: 2.4, h: 4 }],
+  const P = kind === 'prostor';
+  return { group: g, size: P ? { w: 16, d: 6, h: 9.5 } : { w: 7, d: 3, h: 4.2 }, ready: Promise.all(jobs), solids: [P ? { x: 0, z: 0, w: 16, d: 6, h: 9 } : { x: 0, z: 0, w: 6, d: 2.4, h: 4 }],
     update(t, I = 1) { swing.forEach((p, i) => (p.rotation.z = Math.sin(t * 0.9 + i * 1.7) * 0.04)); spin.forEach((p, i) => (p.rotation.y += 0.002 * (i % 2 ? -1 : 1))); key.intensity = 24 * I; } };
 }
 

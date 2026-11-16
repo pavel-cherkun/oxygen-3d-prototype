@@ -13,8 +13,8 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { DRACOLoader } from 'three/addons/loaders/DRACOLoader.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 const gltfLoader = new GLTFLoader().setDRACOLoader(new DRACOLoader().setDecoderPath('https://cdn.jsdelivr.net/npm/three@0.169.0/examples/jsm/libs/draco/gltf/'));
-import { CASES, renderCase, MODALS } from './cases.js?v=1116c';
-import { buildRobozoneGen, buildTdojoGen, buildOzonCorpAlley, buildOzonCorpGen, buildSelectGen, buildBaltika7Gen, buildMerchGen } from './zones/zones.js?v=1116c';
+import { CASES, renderCase, MODALS } from './cases.js?v=1116g';
+import { buildRobozoneGen, buildTdojoGen, buildOzonCorpAlley, buildOzonCorpGen, buildSelectGen, buildBaltika7Gen, buildMerchGen } from './zones/zones.js?v=1116g';
 // учёт загрузки для прелоадера-искры: каждый файл через общий менеджер, картинки кейсов — вручную в caseTexture
 const LD = { done: 0, total: 0 }, LM = THREE.DefaultLoadingManager, lmStart = LM.itemStart, lmEnd = LM.itemEnd;
 LM.itemStart = u => { LD.total++; lmStart.call(LM, u); }; LM.itemEnd = u => { LD.done++; lmEnd.call(LM, u); };
@@ -1391,7 +1391,7 @@ function giantLion(w) {
 // ironstar и шёлковый путь: машина без брендинга (мустанг / пресс-кар) и большой экран-баннер с превью кейса за ней
 function carStand(w) {
   const c = w.heroPos, img = w.imgs[0], car = carModel(w.id === 'ironstar' ? 'mustang' : 'tiggo8', 7.6, false);
-  car.position.set(c.x + 2, 0, c.z); car.rotation.y = 0.6; scene.add(car);
+  car.position.set(c.x + 2, 0, c.z); car.rotation.y = 0.6 + (w.id === 'ironstar' ? 0 : Math.PI); scene.add(car);   // пресс-кар «шёлкового пути» модель смотрит в другую сторону — разворачиваем мордой к камере
   car.traverse(o => { if (o.isMesh) o.castShadow = true; }); setTimeout(() => car.traverse(o => { if (o.isMesh) { o.castShadow = o.receiveShadow = true; o.userData.case = w.id; clickable.push(o); } }), 4000);
   const cam = V(c.x + 22, 6, c.z - 34), g = new THREE.Group(); g.position.set(c.x - 8, 0, c.z + 8); g.rotation.y = Math.atan2(cam.x - g.position.x, cam.z - g.position.z); scene.add(g);
   const W = 24, H = 13.5, y = 3 + H / 2;
@@ -1406,7 +1406,7 @@ function carStand(w) {
 const ZONE3D = { tbank: 'dojo', robozon: 'robo', fandom: 'corp', selekt: 'select', baltika7: 'b7', gdriveMerch: 'merch:gdrive', gpnMerch: 'merch:gpn', oxygenSet: 'merch:prostor', lionMerch: 'merch:lion' }, ZLIVE = [];
 function zone3d(w) {
   const kind = ZONE3D[w.id], Z = kind === 'robo' ? buildRobozoneGen(THREE, gltfLoader) : kind === 'dojo' ? buildTdojoGen(THREE, gltfLoader) : kind === 'select' ? buildSelectGen(THREE, gltfLoader) : kind === 'b7' ? buildBaltika7Gen(THREE, gltfLoader) : kind.startsWith('merch:') ? buildMerchGen(THREE, gltfLoader, kind.slice(6)) : buildOzonCorpAlley(THREE, { kv: 'assets/cases/ozon-fandom-kv-1.jpg', length: 30, width: 16 });
-  const c = w.center || w.heroPos || V(w.F.x, 0, w.z), k = Math.min(kind === 'select' ? 1.15 : kind === 'b7' ? 1.0 : kind.startsWith('merch:') ? 2.2 : 1.6, 28 / Math.max(Z.size.w, Z.size.d)), g = Z.group;
+  const c = w.center || w.heroPos || V(w.F.x, 0, w.z), k = Math.min(kind === 'select' ? 1.7 : kind === 'b7' ? 1.3 : kind === 'robo' ? 2.0 : kind.startsWith('merch:') ? 2.7 : 2.4, (kind === 'merch:prostor' ? 22 : kind.startsWith('merch:') ? 27 : 40) / Math.max(Z.size.w, Z.size.d)), g = Z.group;
   g.scale.setScalar(k); g.position.set(c.x, 0, c.z); g.rotation.y = Math.atan2(22, -34);   // фасад зоны (+z) — к точке съёмки
   const drop = []; g.traverse(o => { if (o.isSpotLight || o.isDirectionalLight) drop.push(o); if (o.isMesh) { o.castShadow = o.receiveShadow = true; o.userData.case = w.id; clickable.push(o); } });
   if (kind === 'select') g.traverse(o => { if (o.isPointLight && o.color.getHex() === 0xff2a2a) drop.push(o); });
@@ -1707,7 +1707,7 @@ function updateOverlay(p) {
     o.el.style.opacity = op; o.el.classList.toggle('on', op > 0.5);
     o.el.style.translate = `0 ${(1 - op) * 18}px`;
   });
-  routeBtn.style.display = route && p < 0.97 ? '' : 'none'; routeBtn.querySelectorAll('button').forEach(b => b.classList.toggle('on', b.dataset.go === route));
+  routeBtn.style.display = route && p > FORK - 0.005 && p < 0.97 ? '' : 'none'; routeBtn.querySelectorAll('button').forEach(b => b.classList.toggle('on', b.dataset.go === route));
   micro?.classList.toggle('dim', ovs.some(o => o.el.classList.contains('right') && o.el.classList.contains('panel') && o.el.classList.contains('on')));
 }
 const modal = document.getElementById('modal'), modalBody = document.getElementById('modalBody');
@@ -1968,6 +1968,14 @@ await new Promise(r => setTimeout(r, 450));
 BR.chunks.forEach(c => { c.g.visible = true; }); try { await renderer.compileAsync(scene, camera); } catch (e) { renderer.compile(scene, camera); }
 { const seen = new Set(); scene.traverse(o => { const ms = o.material ? (Array.isArray(o.material) ? o.material : [o.material]) : [];   // все картинки кейсов — в видеокарту заранее
   ms.forEach(m => ['map', 'normalMap', 'emissiveMap', 'alphaMap', 'lightMap', 'aoMap'].forEach(k => { const t = m[k]; if (t && !seen.has(t) && !t.isVideoTexture && t.image) { seen.add(t); try { renderer.initTexture(t); } catch (e) {} } })); }); }
+// прогрев: под шторкой проводим камеру по развилке и всем остановкам обоих маршрутов и рендерим кадр целиком —
+// так тени, зеркало пола и модели зон компилируются и заливаются в видеокарту до старта, а не на повороте
+await Promise.all(ZLIVE.map(z => z.Z.ready).filter(Boolean)).catch(() => {});
+{ const pos = new THREE.Vector3(), lk = new THREE.Vector3(), q = camera.quaternion.clone(), p0 = camera.position.clone();
+  const pts = [['btl', FORK - 0.03], ['btl', FORK], ['atl', FORK], ...WORLD.filter(w => w.r === 'btl' || w.r === 'atl').map(w => [w.r, w.p])];
+  for (const [r, pp] of pts) { const k = CAM[r]; camAt(k, sOfP(k, pp), pos, lk); camera.position.copy(pos); camera.lookAt(lk); camera.updateMatrixWorld(); updateSun(lk); updateReach();
+    renderer.shadowMap.needsUpdate = true; try { composer.render(); } catch (e) {} await new Promise(res => setTimeout(res, 0)); }
+  camera.position.copy(p0); camera.quaternion.copy(q); }
 clearInterval(ldTick); ldPct.textContent = '100';
 window.__cam = () => ({ p: +pSm.toFixed(4), s: +CS.s.toFixed(1), v: +CS.v.toFixed(1), pos: camera.position.toArray().map(v => +v.toFixed(1)) });
 window.__three = { renderer, scene, CAM, THREE, WORLD, BR, checkPath, go: (p, r) => { INTRO.done = true; document.documentElement.classList.remove('lock'); route = r; scrollTo(0, toScroll(p)); CS.snap = true; } };   // для отладки
