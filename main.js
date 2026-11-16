@@ -138,8 +138,9 @@ const PROJ = /* glsl */`uniform vec4 uJp[3]; uniform vec4 uJc[3]; uniform vec4 u
     img = pow(img, vec3(1.3)) * 1.18 + 0.004;   // контраст света: чёрное остаётся бетоном, светлое горит
     img = img * m + (avg + 0.15) * halo * on + vec3(1.0, 0.95, 0.9) * band * 1.6 * m;
     float lam = max(dot(N, -normalize(d)), 0.0), vig = 1.0 - 0.7 * dot(uv - 0.5, uv - 0.5) * 2.0;
-    img *= P.w * (0.35 + 0.65 * lam) * vig;
-    return img / (1.0 + img * 0.12);   // мягкое сжатие светов — без выгорания
+    float lum = dot(texture2D(tI, vec2(0.5), 9.0).rgb, vec3(0.3, 0.55, 0.15));
+    img *= P.w * (0.35 + 0.65 * lam) * vig * mix(1.0, 0.55, smoothstep(0.35, 0.8, lum));   // светлые кадры приглушаем, чтобы не выгорали
+    return img / (1.0 + img * 0.18);   // мягкое сжатие светов — без выгорания
   }
   // отражённый свет: проекция подсвечивает пол и всё вокруг средним цветом кадра
   vec3 bounceOne(sampler2D tI, vec4 P, vec4 C, vec4 Nn, vec3 N, vec3 w) {
@@ -203,6 +204,11 @@ function litMat({ flat = false, glow = 0, side = THREE.DoubleSide, baked = null,
       }`,
     fragmentShader: /* glsl */`
       uniform sampler2D tAlb, tNrm, tStain; uniform float uBake;
+      float hash3(vec3 p) { p = fract(p * 0.3183099 + 0.1); p *= 17.0; return fract(p.x * p.y * p.z * (p.x + p.y + p.z)); }
+      float vnoise(vec3 x) { vec3 i = floor(x), f = fract(x); f = f * f * (3.0 - 2.0 * f);
+        return mix(mix(mix(hash3(i), hash3(i + vec3(1, 0, 0)), f.x), mix(hash3(i + vec3(0, 1, 0)), hash3(i + vec3(1, 1, 0)), f.x), f.y),
+                   mix(mix(hash3(i + vec3(0, 0, 1)), hash3(i + vec3(1, 0, 1)), f.x), mix(hash3(i + vec3(0, 1, 1)), hash3(i + vec3(1, 1, 1)), f.x), f.y), f.z); }
+      float fbm(vec3 p) { float a = 0.5, s = 0.0; for (int i = 0; i < 4; i++) { s += a * vnoise(p); p = p * 2.03 + vec3(1.7, 9.2, 3.1); a *= 0.5; } return s / 0.9375; }
       // без повтора: текстура берётся с двумя сдвигами, выбор плавно меняется по поверхности (приём И. Кильеса)
       vec4 noTile(sampler2D t, vec2 uv, out float sel) {
         float l = texture2D(tStain, uv * 0.031).g * 9.0, f = fract(l), ia = floor(l), ib = ia + 1.0;
@@ -238,9 +244,14 @@ function litMat({ flat = false, glow = 0, side = THREE.DoubleSide, baked = null,
           if (a.y > a.x && a.y > a.z) { uv = vW.xz; t1 = vec3(1., 0., 0.); t2 = vec3(0., 0., 1.); }
           else if (a.x > a.z) { uv = vW.zy; t1 = vec3(0., 0., 1.); t2 = vec3(0., 1., 0.); }
           else { uv = vW.xy; t1 = vec3(1., 0., 0.); t2 = vec3(0., 1., 0.); }
-          float sel; alb = pow(noTile(tAlb, uv / 16.0, sel).rgb, vec3(2.2)) * tint;
-          vec3 tn = noTileN(tNrm, uv / 16.0, sel).xyz * 2.0 - 1.0;
-          N = normalize(n * max(tn.z, 0.2) + (t1 * tn.x + t2 * tn.y) * 0.7);
+          // бетон без текстуры: шум в мировых координатах — пятна по 60 м, тон по 8 м, зерно и поры; повтора нет в принципе
+          vec3 q = vW + n * 13.7;
+          float big = fbm(q / 64.0), mid = fbm(q / 8.0 + 4.1), grain = vnoise(q * 1.7), pore = smoothstep(0.82, 0.9, vnoise(q * 5.3));
+          alb = vec3(0.27, 0.262, 0.252) * (0.6 + 0.8 * big * big) * (0.86 + 0.28 * mid) * (0.95 + 0.1 * grain) * (1.0 - 0.3 * pore) * tint;
+          float hgt = vnoise(q * 1.3) * 0.4 + vnoise(q * 4.1) * 0.6 - pore * 0.5;
+          vec3 dpx = dFdx(vW), dpy = dFdy(vW); float dhx = dFdx(hgt), dhy = dFdy(hgt);
+          vec3 r1 = cross(dpy, n), r2 = cross(n, dpx); float det = dot(dpx, r1);
+          N = normalize(abs(det) * n - sign(det) * (dhx * r1 + dhy * r2) * 0.28 * exp(-length(vW - cameraPosition) / 160.0));
           float wall = 1.0 - smoothstep(0.6, 0.9, a.y);
           float streak = texture2D(tStain, vec2(uv.x / 97.0, uv.y / 900.0)).r;                 // потёки по вертикали
           alb *= mix(1.0, 1.0 - 0.32 * streak, wall);
@@ -251,7 +262,7 @@ function litMat({ flat = false, glow = 0, side = THREE.DoubleSide, baked = null,
           alb *= 0.9 + 0.2 * texture2D(tStain, vW.xz / 1900.0 + vW.y / 2300.0).g;              // крупный тон, километрами
         }
         #ifdef BAKED
-          vec3 lm = texture2D(tLM, vLM).rgb, L = lm * lm * uCK * uL * uBake * (0.82 + 0.18 * max(dot(N, n), 0.0) * 1.2) + lightDyn(N, vW) + uAmb * 0.3;
+          vec3 lm = texture2D(tLM, vLM).rgb, L = pow(lm * lm, vec3(1.35)) * uCK * uL * uBake *   /* степень: заполняющий свет уходит в темноту, у источников остаётся */ (0.82 + 0.18 * max(dot(N, n), 0.0) * 1.2) + lightDyn(N, vW) + uAmb * 0.3;
         #else
           vec3 L = light(N, vW);
         #endif
@@ -359,9 +370,8 @@ const SHOTS = [
   PJ('robozone', 'cases/robozone-1', 'ozon tech', 'hyp', wallPt(699.5, 115, -1275, -1), 160),
   PJ('mice', 'cases/mice-1', 'ивенты', 'hyp', wallPt(699.5, 115, -1420, -1), 130),
   PJ('avangard', 'cases/avangard-1', 'спорт', 'hyp', wallZ(0, 250, -1499.4), 240, { pd: 420 }),
-  PJ('derbent', 'cases/derbent-1', 'города', 'shaft', cylPt(SHC, 149.5, -65, -10), 130),
-  PJ('tevredens', 'cases/tevredens-1', 'города', 'shaft', cylPt(SHC, 149.5, -125, -10), 130),
-  PJ('ozonTravel', '', 'города', 'shaft', cylPt(SHC, 149.5, 125, -10), 130),
+  PJ('derbent', 'cases/derbent-1', 'города', 'shaft', cylPt(SHC, 149.5, -80, -5), 185),
+  PJ('tevredens', 'cases/tevredens-1', 'города', 'shaft', cylPt(SHC, 149.5, 100, -5), 185),
   PJ('izhora', 'cases/izhora-48-1', 'азия', 'asia', cylPt(AS, 259.5, -45, 80), 150),
   PJ('fandom', 'cases/ozon-fandom-kv-1', 'азия', 'asia', cylPt(AS, 259.5, -100, 80), 150),
   PJ('tbank', 'cases/tbank-zone-1', 'азия', 'asia', cylPt(AS, 259.5, 115, 80), 150),
@@ -374,10 +384,8 @@ const SHOTS = [
   PJ('aiFonbet', 'cases/ai-fonbet', 'ai-продакшн', 'ai', wallPt(-699.5, 125, -3540, 1), 190),
   PJ('aiMango', 'cases/ai-mango', 'ai-продакшн', 'ai', wallPt(-699.5, 125, -3760, 1), 190),
   PJ('aiLavka', 'cases/ai-lavka', 'ai-продакшн', 'ai', wallPt(-699.5, 125, -3980, 1), 190),
-  PJ('dracondaz', '', 'ai-продакшн', 'ai', wallPt(-699.5, 125, -4200, 1), 190),
-  PJ('aiAlfa', 'cases/ai-alfa', 'ai-продакшн', 'ai', wallPt(699.5, 125, -4255, -1), 150),
-  PJ('beep', '', 'ai-продакшн', 'ai', wallPt(699.5, 125, -4385, -1), 100),
-  PJ('lion', 'dp/lion-2', 'спорт', 'sport', wallPt(-319.5, 110, -4540, 1), 150),
+  PJ('aiAlfa', 'cases/ai-alfa', 'ai-продакшн', 'ai', wallPt(699.5, 125, -4230, -1), 190),
+  PJ('lion', 'dp/lion-1', 'спорт', 'sport', wallPt(-319.5, 110, -4540, 1), 150),
   PJ('ironstar', 'cases/gdrive-ironstar-1', 'спорт', 'sport', wallPt(-319.5, 110, -4700, 1), 150),
   PJ('oxygenSet', 'cases/oxygen-set-1', 'мерч', 'sport', wallPt(-319.5, 110, -4860, 1), 150),
   PJ('gdrive', 'cases/gdrive-silk-1', 'спорт', 'sport', wallPt(319.5, 110, -4965, -1), 120),
@@ -422,7 +430,7 @@ function camKeys(endKeys) {
   const K = [{ pos: CAM0.pos.clone(), dir: CAM0.look.clone().sub(CAM0.pos).normalize() }, { pos: V(40, 6, -400) }];
   SHOTS.forEach((c, i) => {
     // проход мимо кадра: камера едет вдоль стены (по ходу), взгляд всё это время прикован к картинке
-    const zr = ZR[c.zone], L = c.cam.D * (c.zone === 'sport' ? 0.3 : 0.5), cz = z => Math.min(zr[0], Math.max(zr[1], z));
+    const zr = ZR[c.zone], L = c.cam.D * 0.5, cz = z => Math.min(zr[0], Math.max(zr[1], z));
     const A = c.cam.pos.clone().addScaledVector(c.cam.f, -L / 2), B = c.cam.pos.clone().addScaledVector(c.cam.f, L / 2); A.z = cz(A.z); B.z = cz(B.z);
     const pr = SHOTS[i - 1]; if (pr && pr.zone !== c.zone) DOORS[`${pr.zone}>${c.zone}`].forEach(p => { if (p.z > A.z + 5) K.push({ pos: p.clone() }); });
     K.push({ pos: A, dir: lockDir(c, A), shot: c, hold: 'A' }, { pos: B, dir: lockDir(c, B), shot: c, hold: 'B' });
@@ -549,7 +557,7 @@ function buildWorld(slot) {
   inst(new THREE.RingGeometry(SR - 12, SR, 96), concrete, ledge);
   box(-8, 8, LOW - 7, LOW, SC.z - SR - 8, SC.z + SR + 8, 0.85);                                    // мост
   box(-8, -7.6, LOW, LOW + 1.4, SC.z - SR - 8, SC.z + SR + 8, 0.5); box(7.6, 8, LOW, LOW + 1.4, SC.z - SR - 8, SC.z + SR + 8, 0.5);
-  LAMPS.push({ p: V(0, LOW - 1400, SC.z), r: 900, c: V(0.75, 0.85, 1).multiplyScalar(0.9) });
+  LAMPS.push({ p: V(0, LOW - 1400, SC.z), r: 900, c: V(0.75, 0.85, 1).multiplyScalar(0.35) });
   FX.shaftC = SC; FX.shaftR = SR;
   const redGlow = [];
 
@@ -768,7 +776,7 @@ function buildLight() {
   const cold = 0xdfe8ff, slab = (w, h, pos, k = 2.6) => { const m = new THREE.Mesh(new THREE.PlaneGeometry(w, h), basic(cold, k)); m.position.copy(pos); scene.add(m); FX.glows.push(m); return m; };
   slab(80, 330, V(470, LOW + 260, -299), 2.4); slab(50, 330, V(590, LOW + 260, -299), 2.4);                                                                    // кадр 1: свет из-за края стены
   FX.slitsHyp.forEach(o => slab(o.w, 340, V(o.x, LOW + 190, ZN.hyp + 0.6)));                                 // кадры 2–3
-  const bot = new THREE.Mesh(new THREE.CircleGeometry(FX.shaftR - 10, 64), basic(cold, 3)); bot.rotation.x = -Math.PI / 2; bot.position.set(0, LOW - 2560, FX.shaftC.z); scene.add(bot); FX.glows.push(bot);   // кадр 4
+  const bot = new THREE.Mesh(new THREE.CircleGeometry(FX.shaftR - 10, 64), basic(cold, 1.4)); bot.rotation.x = -Math.PI / 2; bot.position.set(0, LOW - 2560, FX.shaftC.z); scene.add(bot); FX.glows.push(bot);   // кадр 4
   slab(118, 138, V(0, LOW + 70, ZN.ret1 - 4), 1.9);                                                           // кадр 6: конец прохода
   const back = new THREE.Mesh(new THREE.CircleGeometry(300, 96), basic(cold, 2.8)); back.position.set(0, LOW + 430, -4350); scene.add(back); FX.glows.push(back);   // кадр 7
   FX.slitsSt.forEach(o => slab(o.w, 600, V(o.x, LOW + 560, ZN.st1 + 0.6), 2.4));                             // кадр 8
@@ -996,7 +1004,11 @@ function buildTimeline() {
   const sm = t => t * t * t * (t * (t * 6 - 15) + 10);
   const slerpV = (a, b, t) => { const ang = a.angleTo(b); if (ang < 1e-4) return a.clone(); let ax = a.clone().cross(b); if (ax.lengthSq() < 1e-8) ax = V(0, 1, 0); return a.clone().applyAxisAngle(ax.normalize(), ang * t); };
   const tan = cp.map((p, j) => { const d = cp[Math.min(N, j + 6)].clone().sub(cp[Math.max(0, j - 6)]); d.y = Math.max(-0.2, Math.min(0.2, d.y / (Math.hypot(d.x, d.z) || 1))) * Math.hypot(d.x, d.z); return d.normalize(); });
-  const tanS = tan.map((_, j) => { const a = V(0, 0, 0); for (let k = -40; k <= 40; k += 4) a.add(tan[Math.min(N, Math.max(0, j + k))]); return a.normalize(); });
+  const tanS0 = tan.map((_, j) => { const a = V(0, 0, 0); for (let k = -40; k <= 40; k += 4) a.add(tan[Math.min(N, Math.max(0, j + k))]); return a.normalize(); });
+  // между кейсами камера идёт за лучом: смотрит на неон впереди (≈200 м по ленте) и чуть вверх — виден масштаб, луч остаётся в кадре
+  const nearS = []; { let ss = sv[9]; for (let j = 0; j <= N; j++) { let best = ss, bd = 1e9; for (let x = ss - 100; x <= ss + 700; x += 6) { const d = hd(x).distanceTo(cp[j]); if (d < bd) { bd = d; best = x; } } ss = Math.max(ss, best); nearS.push(ss); } }
+  const tanS1 = cp.map((p, j) => { const t = hd(nearS[j] + 360), d = t.sub(p); const hz = Math.hypot(d.x, d.z) || 1; d.y = Math.max(-0.25, Math.min(0.12, d.y / hz)) * hz + hz * 0.2; return d.normalize().lerp(tanS0[j], 0.3).normalize(); });
+  const tanS = tanS1.map((_, j) => { const a = V(0, 0, 0); for (let k = -48; k <= 48; k += 4) a.add(tanS1[Math.min(N, Math.max(0, j + k))]); return a.normalize(); });
   const anc = KK.filter(k => k.dir), RT = 150, dirs = [];
   for (let j = 0, ai = 0; j <= N; j++) {
     while (ai < anc.length - 2 && anc[ai + 1].j <= j) ai++;
@@ -1033,7 +1045,7 @@ function buildTimeline() {
     for (let j = 0, a = 0; j <= N; j++) { if (inH[j]) { a = j; continue; } let b = j; while (b < N && !inH[b]) b++; const t = sm(clamp01((CP.p[j] - CP.p[a]) / ((CP.p[b] - CP.p[a]) || 1)));
       dirs[j] = slerpV(fw[j], bw[j], t).normalize(); } }
   const pAtArc = x => { let j = 0; while (j < N && arc[j] < x) j++; return CP.p[j]; };
-  KK.filter(k => k.hold === 'A').forEach(k => { const c = k.shot, b = KK[KK.indexOf(k) + 1]; c.p0 = pAtArc(k.arc - 25); c.p1 = pAtArc(b.arc + 5); c.pMid = pAtArc((k.arc + b.arc) / 2); });
+  KK.filter(k => k.hold === 'A').forEach(k => { const c = k.shot, b = KK[KK.indexOf(k) + 1]; c.p0 = pAtArc(k.arc - 150); c.p1 = pAtArc(b.arc + 10); c.pOn = pAtArc(k.arc - 320); c.pMid = pAtArc((k.arc + b.arc) / 2); });
   }
   CAMK.sort((a, b) => a.p - b.p);
   CAMK.pos = new THREE.CatmullRomCurve3(CAMK.map(k => k.pos), false, 'centripetal');
@@ -1060,11 +1072,11 @@ const pctEl = document.getElementById('pct');
 let pSm = 0; const mouse = new THREE.Vector2(), mouseSm = new THREE.Vector2(), look = V(0, 0, 0), head = V(0, 0, 0), tmp = V(0, 0, 0);
 addEventListener('pointermove', e => mouse.set(e.clientX / innerWidth - 0.5, e.clientY / innerHeight - 0.5));
 const clock = new THREE.Clock();
-const RED_C = new THREE.Color(1, 0.06, 0.05), RED_V = V(1, 0.06, 0.05), CREAM_V = V(1, 0.9, 0.78);
+const _black = new THREE.Color(0.012, 0.01, 0.01), RED_C = new THREE.Color(1, 0.06, 0.05), RED_V = V(1, 0.06, 0.05), CREAM_V = V(1, 0.9, 0.78);
 const BACKLIGHTS = [   // точка, откуда бьёт контровой свет, — для лучей
   { z0: 200, z1: -640, p: V(520, LOW + 260, -300), k: 0.6 },
   { z0: -300, z1: -1500, p: V(0, LOW + 190, ZN.hyp), k: 0.8 },
-  { z0: -1500, z1: -1840, p: V(0, LOW - 2560, -1676), k: 0.9 },
+  { z0: -1500, z1: -1840, p: V(0, LOW - 2560, -1676), k: 0.4 },
   { z0: -1840, z1: -2420, p: V(0, LOW + 1000, ZN.asia), k: 0.8 },
   { z0: -2420, z1: -3330, p: V(0, LOW + 70, ZN.ret1), k: 0.9 },
   { z0: -3330, z1: -4440, p: V(0, LOW + 430, -4350), k: 1.0 },
@@ -1105,8 +1117,10 @@ const toP = r => { const B = rawB(); return r < RAW_A ? r * P_A / RAW_A : r < B 
 const toRaw = p => { const B = rawB(); return p < P_A ? p * RAW_A / P_A : p < P_B ? RAW_A + (p - P_A) * (B - RAW_A) / (P_B - P_A) : B + (p - P_B) * (1 - B) / (1 - P_B); };
 const capEl = document.getElementById('case'), shadeEl = document.getElementById('shade');
 let capId = null;
+// из перекрывающихся окон подлёта — кейс, к середине которого камера ближе
+const nearShot = (p, a, pad) => { let b = null, bd = 1e9; for (const c of SHOTS) if (p >= c[a] && p <= c.p1 + pad) { const d = Math.abs(p - c.pMid); if (d < bd) { bd = d; b = c; } } return b; };
 function caption(p) {
-  const k = SHOTS.findIndex(c => p >= c.p0 && p <= c.p1), t = SHOTS[k];
+  const t = nearShot(p, 'p0', 0), k = SHOTS.indexOf(t);
   if (!t) { capEl.classList.remove('on'); shadeEl.classList.remove('on'); capId = null; return; }
   if (capId !== t.id) { capId = t.id; const c = CASES[t.id] || {}, ps = c.pass || {};
     capEl.innerHTML = `<span class="t">{${String(k + 1).padStart(2, '0')}} ${t.loc}</span><h2>${c.title || ''}</h2><p class="m">${[ps.клиент, ps.год].filter(x => x && x !== '—').join(' · ')}</p><p>${c.idea || c.task || ''}</p><a class="btn" href="#case/${t.id}">читать кейс</a>`;
@@ -1135,7 +1149,8 @@ function frame() {
   const flick = 0.9 + 0.1 * Math.sin(time * 13) * Math.sin(time * 7.3);
   logo.key.position.copy(iskra.position).add(V(0, 0, -3)); logo.key.intensity = 260 * (1 - landed) * flick;
   logo.mat.emissiveIntensity = 1.3 * landed; logo.mat.color.set(0x241514).lerp(RED_C, landed); logo.fill.intensity = 120 * landed;
-  iskra.material.emissiveIntensity = 1.0 * (1 - landed) + 1.3 * landed;
+  iskra.material.emissiveIntensity = 1.0 * (1 - landed);   // логотип загорается — искра в нём становится чёрной, как в знаке
+  iskra.material.color.set(RED).lerp(_black, landed); iskra.material.emissive.set(RED).multiplyScalar(1 - landed);
   // лента
   const s = sOfP(pSm); neon.material.uniforms.uDraw.value = pSm < P_LINE ? -1 : s; neon.material.uniforms.uT.value = time;
   headAt(s, head);
@@ -1153,9 +1168,10 @@ function frame() {
   FX.beams.forEach(o => { o.b.material.uniforms.uK.value = 0.03 * o.k * Lh; });
   FX.glows.forEach(g => { g.visible = Lh > 0.01; });
   // проекторы: в шейдер — три ближайших; лучи видны только у ближних
-  const pj = SHOTS.filter(c => !c.z3).map(c => [c, cp.distanceTo(c.cam.pos)]).sort((a, b) => a[1] - b[1]), cur = SHOTS.find(c => pSm >= c.p0 - 0.004 && pSm <= c.p1 + 0.004);
+  const pj = SHOTS.filter(c => !c.z3).map(c => [c, cp.distanceTo(c.cam.pos)]).sort((a, b) => a[1] - b[1]), cur = nearShot(pSm, 'p0', 0), curOn = cur || nearShot(pSm, 'pOn', 0.002);   // горит тот кейс, чья подпись на экране; до подписи — ближайший на подлёте   // проектор загорается заранее, на подлёте
+  if (curOn) { const i = pj.findIndex(x => x[0] === curOn); if (i > 0) pj.unshift(pj.splice(i, 1)[0]); }   // свой проектор — всегда в первом слоте шейдера
   // включение проекторов: у своего кадра проектор плавно загорается (с миганием на старте), чужие гаснут
-  pj.forEach(([c]) => { const tgt = cur ? (c === cur ? 1 : 0) : 0.35; c.on = c.on ?? 0; c.on += (tgt - c.on) * (1 - Math.exp(-dt * (tgt > c.on ? 1.6 : 2.5))); if (snapPrev) c.on = tgt; });
+  pj.forEach(([c]) => { const tgt = c === curOn ? 1 : 0; c.on = c.on ?? 0; c.on += (tgt - c.on) * (1 - Math.exp(-dt * (tgt > c.on ? 2.6 : 1.4))); if (snapPrev) c.on = tgt; });
   for (let n = 0; n < 3; n++) { const c = pj[n][0], fl = (0.97 + 0.03 * Math.sin(time * 31 + n * 2) * Math.sin(time * 17.3)) * (c.on < 0.35 ? (Math.sin(time * 47 + n) > 0.2 ? 1 : 0.25) : 1);
     U.uJp.value[n].set(c.P.x, c.P.y, c.P.z, 8.5 * fl * Lh * Math.min(1, c.on * 2.5));   /* чужие кадры приглушены, свой — в полную силу */ U.uJc.value[n].set(c.C.x, c.C.y, c.C.z, c.W); U.uJn.value[n].set(c.n.x, c.n.y, c.n.z, c.H); U.uJs.value[n].copy(c.sc); U.uJo.value[n] = Math.min(1, c.on); U[`tJ${n}`].value = c.tex; }
   pj.forEach(([c, d], n) => { if (c.video) { const on = n < 3 && Lh > 0.01; if (on && c.video.paused) c.video.play().catch(() => {}); else if (!on && !c.video.paused) c.video.pause(); } c.beam.visible = n < 4 && Lh > 0.01; const kk = c.on ?? 0; c.beam.material.uniforms.uK.value = 0.034 * Lh * kk; c.dust.visible = c.beam.visible; c.dust.material.uniforms.uK.value = 0.55 * Lh * kk; });
@@ -1183,7 +1199,7 @@ addEventListener('resize', () => { camera.aspect = innerWidth / innerHeight; cam
 
 // запечённый свет (Blender, Cycles): 7 кусков по локациям; когда все на месте — заменяют собой живой расчёт
 const BAKED = { on: false };
-const BAKE_K = { c0: 0.5, c1: 0.6, c2: 0.7, c3: 0.6, c4: 0.11, c5: 0.13, c6: 0.12 };   // экспозиция локаций после нормировки
+const BAKE_K = { c0: 0.28, c1: 0.6, c2: 0.7, c3: 0.6, c4: 0.11, c5: 0.13, c6: 0.12 };   // экспозиция локаций после нормировки
 async function loadBaked() {
   const names = ['c0', 'c1', 'c2', 'c3', 'c4', 'c5', 'c6'], gl = new GLTFLoader(), meshes = [];
   try {
@@ -1263,6 +1279,11 @@ function openCase() {
     <div class="cta"><a class="btn" href="#">хочу так же</a></div>`;
   pageEl.scrollTop = 0; pageEl.classList.add('on'); document.documentElement.classList.add('lock');
 }
+// меню: не катим камеру через все локации, а перескакиваем — шторка, мгновенный переход, шторка
+document.querySelectorAll('[data-jump]').forEach(el => el.addEventListener('click', e => {
+  e.preventDefault(); const k = el.dataset.jump, p = k === 'top' ? 0 : k === 'end' ? 0.985 : SHOTS[0].pOn + 0.002, f = document.getElementById('fade');
+  f.classList.add('on'); setTimeout(() => { window.__mega.go(p); setTimeout(() => f.classList.remove('on'), 120); }, 360);
+}));
 addEventListener('hashchange', openCase);
 pageEl.querySelector('.x').addEventListener('click', () => { history.pushState('', '', location.pathname + location.search); openCase(); });
 addEventListener('keydown', e => { if (e.key === 'Escape' && pageEl.classList.contains('on')) pageEl.querySelector('.x').click(); });
@@ -1273,7 +1294,7 @@ await document.fonts.load('520 64px TT').catch(() => {}); await document.fonts.l
 await buildLogo();
 buildWorld(slot); buildLight(); buildZones(); buildNeon(); buildReel(); buildWetFloor(); buildTimeline();
 // запечённый свет снят с геометрии до 3D-зон (колонны в гипостиле переставлены) — пока живой расчёт; ?baked включает старое запекание
-if (new URLSearchParams(location.search).has('baked')) await loadBaked();
+if (!new URLSearchParams(location.search).has('live')) await loadBaked();
 renderer.compile(scene, camera);
 window.__mega = { cam: camera, composer, bloom, fanMesh: FX.fan.bi, LAMPS, SHAFTS, glows: FX.glows, U, rigAt: q => { camTarget(q); return [camT.toArray(), look.toArray()]; }, go: p => { scrollTo(0, toRaw(p) * (document.documentElement.scrollHeight - innerHeight)); pSm = p; snapCam = true; }, STOPS: () => SHOTS.map(c => [c.id, +c.pMid.toFixed(4)]), SHOTS, CP, renderer, scene };
 const AT = new URLSearchParams(location.search).get('p'); if (AT) window.__mega.go(+AT);

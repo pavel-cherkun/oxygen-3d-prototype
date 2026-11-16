@@ -53,6 +53,7 @@ header a.cta{border:1px solid var(--red);padding:8px 16px;border-radius:40px}
 @keyframes hover{0%,100%{transform:translateY(-6px) rotate(-6deg)}50%{transform:translateY(6px) rotate(8deg)}}
 @keyframes flick{50%{opacity:.93}}
 #loader.done{opacity:0;pointer-events:none}
+#fade{position:fixed;inset:0;z-index:9;background:#010101;opacity:0;pointer-events:none;transition:opacity .35s}#fade.on{opacity:1}
 @media(max-width:760px){header nav a:not(.cta){display:none}.l,.r{left:16px;right:16px;text-align:left}.r p{margin-left:0}}
 </style>
 <script type="importmap">
@@ -62,7 +63,8 @@ header a.cta{border:1px solid var(--red);padding:8px 16px;border-radius:40px}
 <body>
 <div id="loader"><img src="assets/iskra.svg" alt=""><span class="t"><span id="loadPct">000</span>%</span></div>
 <canvas id="gl"></canvas>
-<header><img src="assets/logo.svg" alt="Oxygen"><nav><a href="#">кейсы</a><a href="#">награды</a><a href="#">контакты</a><a href="#" class="cta">есть задача</a></nav></header>
+<header><a href="#" data-jump="top" style="margin:0"><img src="assets/logo.svg" alt="Oxygen"></a><nav><a href="#" data-jump="cases">кейсы</a><a href="#" data-jump="cases">награды</a><a href="#" data-jump="end">контакты</a><a href="#" class="cta" data-jump="end">есть задача</a></nav></header>
+<div id="fade"></div>
 
 <!-- текст живёт в HTML: его видят поисковики, 3D только иллюстрирует -->
 <section class="ov l" data-a="0" data-b="0.045">
