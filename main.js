@@ -55,8 +55,8 @@ const composer = new EffectComposer(renderer, new THREE.WebGLRenderTarget(innerW
 composer.addPass(new RenderPass(scene, camera));
 // контактные тени в углах, под козырьками и у земли — то, чего не даёт один направленный свет
 const gtao = new GTAOPass(scene, camera, innerWidth, innerHeight);
-gtao.updateGtaoMaterial({ radius: 7, distanceExponent: 1.4, thickness: 3, scale: 1.3, samples: 12 });
-gtao.updatePdMaterial({ lumaPhi: 10, depthPhi: 2, normalPhi: 3, radius: 6, rings: 2, samples: 12 });
+gtao.updateGtaoMaterial({ radius: 7, distanceExponent: 1.4, thickness: 3, scale: 1.3, samples: 8 });
+gtao.updatePdMaterial({ lumaPhi: 10, depthPhi: 2, normalPhi: 3, radius: 6, rings: 2, samples: 8 });
 gtao.blendIntensity = 1; composer.addPass(gtao);
 const bloom = new UnrealBloomPass(new THREE.Vector2(innerWidth / 2, innerHeight / 2), 0, 0, 1);
 bloom.enabled = false;   // без ореолов и засветов   // половинное разрешение: быстрее и мягче, без пересветов
@@ -177,11 +177,11 @@ function canvasTexSky() {
 }
 const KEY_DIR = new THREE.Vector3(0.82, 0.5, 0.28).normalize();   // жёсткий боковой ключ вне кадра: одна грань белая, другая чёрная, тени с резким краем
 const sun = new THREE.DirectionalLight(0xffffff, 6.5);   // жёсткий белый ключ: чёрное и белое, чёткие тени sun.castShadow = true;
-sun.shadow.mapSize.set(4096, 4096); Object.assign(sun.shadow.camera, { left: -300, right: 300, top: 300, bottom: -300, near: 1, far: 1300 });
+sun.shadow.mapSize.set(2048, 2048); Object.assign(sun.shadow.camera, { left: -300, right: 300, top: 300, bottom: -300, near: 1, far: 1300 });
 sun.shadow.radius = 0; sun.shadow.bias = -0.0006; sun.shadow.normalBias = 0.6; scene.add(sun, sun.target);
 function updateSun(lookAt) {
   // ось тени — земля под точкой взгляда; шаг привязан к текселю карты, чтобы тени не дрожали при движении
-  const e = 600 / 4096, gx = Math.round(lookAt.x / e) * e, gz = Math.round(lookAt.z / e) * e;
+  const e = 600 / 2048, gx = Math.round(lookAt.x / e) * e, gz = Math.round(lookAt.z / e) * e;
   sun.target.position.set(gx, 0, gz); sun.position.set(gx, 0, gz).addScaledVector(KEY_DIR, 600);
 }
 
@@ -425,7 +425,7 @@ function buildCity() {
   [[-260, -900], [180, -1000], [0, 2250], [-320, 2150], [300, 2300]].forEach(([x, z]) => mega(x, z, 260 + fr() * 200, 400 + fr() * 300, 160));
   // пол — чёрный мокрый камень: снизу настоящее зеркало (Reflector), сверху полупрозрачный тёмный слой с тенями —
   // в нём отражаются цветные кубы брендов, их свет и силуэты домов, как куб в воде на рефе
-  const mirrorFloor = new Reflector(new THREE.PlaneGeometry(5000, 5000), { textureWidth: innerWidth * 0.5, textureHeight: innerHeight * 0.5, color: 0x9a9a9a });
+  const mirrorFloor = new Reflector(new THREE.PlaneGeometry(5000, 5000), { textureWidth: innerWidth * 0.35, textureHeight: innerHeight * 0.35, color: 0x9a9a9a });
   mirrorFloor.rotation.x = -Math.PI / 2; mirrorFloor.position.y = -0.4; scene.add(mirrorFloor); CITY.mirror = mirrorFloor;
   const ground = new THREE.Mesh(new THREE.PlaneGeometry(5000, 5000), new THREE.MeshStandardMaterial({ color: 0x1a1a1a, roughness: 0.45, transparent: true, opacity: 0.55, depthWrite: false }));
   ground.receiveShadow = true; ground.rotation.x = -Math.PI / 2; scene.add(ground); CITY.ground = ground;
@@ -696,7 +696,7 @@ const vsign = (txt, x, y, z, col, bg = '#111111', w = 2.6) => {
 };
 function webtoonInto(mat, aspect) {
   // полотна в порядке, который дал владелец: обложка → кабаны → амулет → кузня → валькирия → 1025 год → постер
-  const W = 512, srcs = [1, 2, 3, 4, 5, 6, 7].map(i => `assets/webtoon/izhora-0${i}.jpg`);
+  const W = 512, srcs = [1, 6, 5, 4, 3, 2, 7].map(i => `assets/webtoon/izhora-0${i}.jpg`);   // по сюжету: обложка → 1025 год → княгиня-валькирия → кузня → амулет → «хряя!» → постер
   Promise.all(srcs.map(src => new Promise(r => { const im = new Image(); im.onload = () => r(im); im.onerror = () => r(null); im.src = src; }))).then(list => {
     const ims = list.filter(Boolean), hs = ims.map(im => Math.round(im.height * W / im.width)), total = hs.reduce((a, b) => a + b, 0);
     const c = document.createElement('canvas'); c.width = W; c.height = total; const g = c.getContext('2d');
@@ -1475,7 +1475,7 @@ function buildWorld() {
   for (const w of WORLD) placeholder(w);
   // люди для масштаба: крошечные чёрные фигуры у кейсов на земле и у монументов
   const body = mergeGeometries([new THREE.CapsuleGeometry(0.26, 1.15, 4, 8).translate(0, 0.84, 0), new THREE.SphereGeometry(0.14, 10, 8).translate(0, 1.66, 0)]);
-  const spots = WORLD.filter(w => w.r === 'btl').flatMap(w => [[w.cube.c.x + 9, w.cube.c.z - 7], [w.cube.c.x + 14, w.cube.c.z + 3]]).concat([[-6, 330], [4, 336], [-140, -20], [0, TAIL.brief + 20]]);
+  const spots = [[-6, 330], [4, 336], [-140, -20], [0, TAIL.brief + 20]];   // люди — только у монументов: у кейсов чёрные фигуры мешали
   const ppl = new THREE.InstancedMesh(body, new THREE.MeshStandardMaterial({ color: 0x0a0a0a, roughness: 0.9 }), spots.length), pd = new THREE.Object3D(); ppl.castShadow = true;
   spots.forEach(([x, z], i) => { pd.position.set(x, 0, z); pd.rotation.set(0, i * 2.3, 0); pd.updateMatrix(); ppl.setMatrixAt(i, pd.matrix); }); ppl.computeBoundingSphere(); scene.add(ppl);
   for (const w of WORLD) { const { c, h } = w.cube, air = w.r === 'atl'; GLOW.pts.push(Object.assign(air ? c.clone().lerp(w.shot.C, 0.25) : V(c.x + 16, Math.min(h * 0.6, 10) + 6, c.z - 14), { col: new THREE.Color(BRAND[w.id] ?? RED) })); }
@@ -1789,7 +1789,7 @@ function hit(e) {
   let o = h.object; while (o && !o.userData.case && !o.userData.modal && !o.userData.go) o = o.parent; return o;
 }
 canvas.addEventListener('click', e => { if (orbitOn) return; const o = hit(e); if (!o) return; if (o.userData.go) return goTo(o.userData.go); o.userData.case ? openModal(renderCase(o.userData.case)) : openModal(MODALS[o.userData.modal]); });
-canvas.addEventListener('pointermove', e => { if (!orbitOn) canvas.style.cursor = hit(e) ? 'pointer' : ''; });
+let hoverT = 0; canvas.addEventListener('pointermove', e => { const now = performance.now(); if (orbitOn || now - hoverT < 120) return; hoverT = now; canvas.style.cursor = hit(e) ? 'pointer' : ''; });   // наведение — не чаще 8 раз в секунду: лучи по тяжёлым моделям зон тормозили кадр
 
 // ---------- 2D-слой: микротекст, простые формы по сетке, вайп заголовка ----------
 const micro = document.getElementById('micro');
@@ -1856,6 +1856,13 @@ document.getElementById('views')?.addEventListener('click', e => { const b = e.t
 
 const ISK_RED = new THREE.Color(RED), ISK_BLACK = new THREE.Color(0x0d0d0f), LOGO_DARK = new THREE.Color(0x1a0707);
 // ---------- цикл ----------
+// стабильный кадр: если кадры тяжелеют, на ходу снижаем плотность пикселей (до 0,7), когда снова легко — возвращаем
+const RES = { pr: Math.min(devicePixelRatio, 1.25), avg: 16, t: 0 };
+function adaptRes(dt) {
+  RES.avg += (dt * 1000 - RES.avg) * 0.05; RES.t += dt; if (RES.t < 1.2) return; RES.t = 0;
+  const max = Math.min(devicePixelRatio, 1.25), want = RES.avg > 24 ? Math.max(0.7, RES.pr - 0.1) : RES.avg < 15 ? Math.min(max, RES.pr + 0.05) : RES.pr;
+  if (Math.abs(want - RES.pr) > 0.01) { RES.pr = want; renderer.setPixelRatio(want); composer.setPixelRatio?.(want); composer.setSize(innerWidth, innerHeight); }
+}
 let unlocked = false, pSm = 0, mouse = new THREE.Vector2(), mouseSm = new THREE.Vector2();
 addEventListener('pointermove', e => mouse.set(e.clientX / innerWidth - .5, e.clientY / innerHeight - .5));
 const clock = new THREE.Clock(), look = new THREE.Vector3();
@@ -1928,7 +1935,8 @@ function frame() {
     const fade = 1 - fin;   // к финалу эффекты мест уступают «сигналу»
     U.wScan.value = W.scan * fade; U.wZoom.value = W.zoom * fade; U.wSpot.value = W.spot * fade; U.wInk.value = W.ink * fade; U.wBars.value = W.bars * fade; U.wGen.value = W.gen * fade; U.wPrint.value = W.print * fade; U.wView.value = W.view * fade; U.wAnime.value = W.anime * fade; U.wLed.value = W.led * fade; U.wDuo.value = W.duo * fade; U.wKeep.value = W.keep * fade; U.wEngr.value = W.engr * fade;
   }
-  renderer.shadowMap.needsUpdate = true; composer.render();
+  if (frameN % 2 === 0) renderer.shadowMap.needsUpdate = true;   // тени — через кадр: сцена почти статична, экономим половину прохода
+  adaptRes(dt); composer.render();
   requestAnimationFrame(frame);
 }
 
@@ -1948,6 +1956,8 @@ buildCity(); buildTower(); await buildLogo(); buildSections(); buildAtmosphere()
 built = true; frame();
 await new Promise(res => { const t0 = performance.now(); let calm = 0; const chk = () => { calm = LD.done >= LD.total ? calm + 1 : 0; if (calm > 4 || performance.now() - t0 > 30000) res(); else setTimeout(chk, 120); }; chk(); });
 await new Promise(r => setTimeout(r, 450));
+// все шейдеры компилируем под шторкой: иначе город и зоны «дёргаются» при первом появлении в кадре
+BR.chunks.forEach(c => { c.g.visible = true; }); try { await renderer.compileAsync(scene, camera); } catch (e) { renderer.compile(scene, camera); }
 clearInterval(ldTick); ldPct.textContent = '100';
 window.__cam = () => ({ p: +pSm.toFixed(4), s: +CS.s.toFixed(1), v: +CS.v.toFixed(1), pos: camera.position.toArray().map(v => +v.toFixed(1)) });
 window.__three = { renderer, scene, CAM, THREE, WORLD, BR, checkPath, go: (p, r) => { INTRO.done = true; document.documentElement.classList.remove('lock'); route = r; scrollTo(0, toScroll(p)); CS.snap = true; } };   // для отладки
