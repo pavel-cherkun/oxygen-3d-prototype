@@ -23,7 +23,12 @@ html.lock,html.lock body{overflow:hidden}
 #zone b{display:block;font:520 clamp(34px,4.4vw,64px)/.95 "TT",sans-serif;letter-spacing:-.01em;margin-top:6px;text-transform:lowercase}
 #zone .t{color:var(--red)}
 #pct{right:28px;bottom:26px;color:var(--red)}
-#route{right:28px;top:28px;pointer-events:auto;background:none;border:0;color:var(--cream);cursor:pointer;text-decoration:underline;display:none}
+#routes{right:28px;top:20px;pointer-events:auto;display:none;gap:4px;padding:4px;border:1px solid rgba(225,217,207,.22);border-radius:60px;background:rgba(10,10,10,.35);backdrop-filter:blur(6px)}
+#routes button{all:unset;cursor:pointer;font:520 clamp(22px,2.2vw,34px)/1 "TT",sans-serif;padding:10px 22px;border-radius:50px;color:var(--cream);opacity:.55;transition:background .25s,opacity .25s}
+#routes button:hover{opacity:1}
+#routes[data-r=btl] [data-to=btl],#routes[data-r=atl] [data-to=atl]{background:var(--red);opacity:1}
+#flash{position:fixed;inset:0;z-index:9;background:#000;opacity:0;pointer-events:none;transition:opacity .28s}
+#flash.on{opacity:1}
 #hint{left:50%;bottom:26px;translate:-50% 0;opacity:.6;transition:opacity .6s}
 #end{position:fixed;left:50%;bottom:9vh;translate:-50% 0;z-index:3;text-align:center;opacity:0;pointer-events:none;transition:opacity .8s}
 #end.on{opacity:1;pointer-events:auto}
@@ -97,7 +102,7 @@ html.lock,html.lock body{overflow:hidden}
 #modal .close{all:unset;position:fixed;top:22px;right:28px;z-index:21;cursor:pointer;color:var(--cream);border:1px solid #444;border-radius:40px;padding:8px 16px;background:#0d0d0d}
 @media(max-width:760px){#modal .steps li{grid-template-columns:1fr;gap:6px}#modal .ti{grid-template-columns:1fr;gap:28px}#modal .wrap{padding:80px 16px}}
 @media(max-width:760px){#card{left:16px;right:16px;top:auto;bottom:18vh;translate:none;width:auto}#card.left{left:16px}#modal .ti{grid-template-columns:1fr}#modal .wrap{padding:80px 16px}}
-@media(max-width:760px){#logo,#zone{left:16px}#pct,#route{right:16px}#fork{grid-template-columns:1fr;grid-template-rows:1fr 1fr}#fork button+button{border-left:0;border-top:1px solid rgba(225,217,207,.16)}}
+@media(max-width:760px){#logo,#zone{left:16px}#pct,#routes{right:16px}#fork{grid-template-columns:1fr;grid-template-rows:1fr 1fr}#fork button+button{border-left:0;border-top:1px solid rgba(225,217,207,.16)}}
 </style>
 <script type="importmap">
 {"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.169.0/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.169.0/examples/jsm/"}}
@@ -111,7 +116,8 @@ html.lock,html.lock body{overflow:hidden}
 <div class="hud" id="zone"><span class="t" id="zoneN"></span><b id="zoneT"></b></div>
 <div class="hud t" id="pct">000%</div>
 <div class="hud t" id="hint">скролл — идти за искрой</div>
-<button class="hud t" id="route"></button>
+<div class="hud" id="routes"><button data-to="btl">btl</button><button data-to="atl">atl</button></div>
+<div id="flash"></div>
 <div id="end"><span class="t">{06} финал</span><h2>добавьте кислорода</h2><button class="t">есть задача →</button></div>
 <div id="card"></div>
 <div id="modal"><button class="close t">закрыть ✕</button><div class="wrap" id="modalBody"></div></div>
