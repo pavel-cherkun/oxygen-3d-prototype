@@ -98,7 +98,7 @@ export const CASES = {
     result: [['недели', 'полный цикл ролика'], ['2–4', 'итерации вместо одной пересъёмки']],
   },
   lion: {
-    dir: 'btl', title: 'синегривый лев', awards: [],
+    dir: 'atl', title: 'синегривый лев', awards: [],
     pass: { клиент: 'ФК «Зенит»', год: '—', отрасль: 'спорт', формат: 'талисман · стратегия, характер, 2D/3D-образ, айдентика, мерч' },
     task: 'маскот был только костюмом для аниматора на матчах — нужно было обратить любовь трибун в медиаактив',
     idea: 'милый талисман стал добрым хулиганом: персонаж, который работает 365 дней в году, а не 90 минут в день матча',
@@ -360,7 +360,28 @@ CASES.aiBeep = {
   result: [],
 };
 
-export const ORDER = { btl: ['fandom', 'tbank', 'robozon', 'selekt', 'lion', 'ironstar', 'gdrive', 'baltika7', 'baltikaPlant', 'megafon', 'mice', 'megafonTravel', 'gdriveMerch', 'oxygenSet', 'lionMerch'], atl: ['treschnutye', 'zaklinateli', 'dino', 'izhora', 'avangard', 'derbent', 'ozonTravel', 'tevredens', 'aiFonbet', 'aiMango', 'aiLavka', 'aiAlfa', 'aiDracondaz', 'aiBeep', 'ai'] };
+
+// ---------- больше кадров в кейсах: из портфолио ATL/BTL 20_26 (материалы/) ----------
+CASES.fandom.how = [...CASES.fandom.how, [C + 'pf-fandom-1.jpg', '', ''], [C + 'pf-fandom-3.jpg', '', ''], [C + 'pf-fandom-4.jpg', '', ''], [C + 'pf-fandom-5.jpg', '', ''], [C + 'pf-fandom-6.jpg', '', ''], [C + 'pf-fandom-8.jpg', '', ''], [C + 'pf-fandom-9.jpg', '', ''], [C + 'pf-fandom-10.jpg', '', ''], [C + 'pf-fandom-11.jpg', '', ''], [C + 'pf-fandom-12.jpg', '', ''], [C + 'pf-fandom-14.jpg', '', ''], [C + 'pf-fandom-15.jpg', '', '']];
+CASES.selekt.how = [...CASES.selekt.how, [C + 'pf-selekt-18.jpg', '', ''], [C + 'pf-selekt-19.jpg', '', ''], [C + 'pf-selekt-20.jpg', '', ''], [C + 'pf-selekt-21.jpg', '', '']];
+CASES.baltikaPlant.how = [...CASES.baltikaPlant.how, [C + 'pf-baltikaPlant-23.jpg', '', ''], [C + 'pf-baltikaPlant-24.jpg', '', ''], [C + 'pf-baltikaPlant-25.jpg', '', ''], [C + 'pf-baltikaPlant-26.jpg', '', '']];
+CASES.megafon.how = [...CASES.megafon.how, [C + 'pf-megafon-29.jpg', '', ''], [C + 'pf-megafon-30.jpg', '', ''], [C + 'pf-megafon-31.jpg', '', ''], [C + 'pf-megafon-32.jpg', '', '']];
+CASES.megafonTravel.how = [...CASES.megafonTravel.how, [C + 'pf-megafonTravel-33.jpg', '', ''], [C + 'pf-megafonTravel-34.jpg', '', '']];
+CASES.baltika7.how = [...CASES.baltika7.how, [C + 'pf-baltika7-35.jpg', '', ''], [C + 'pf-baltika7-36.jpg', '', ''], [C + 'pf-baltika7-37.jpg', '', ''], [C + 'pf-baltika7-38.jpg', '', '']];
+CASES.gdrive.how = [...CASES.gdrive.how, [C + 'pf-gdrive-39.jpg', '', ''], [C + 'pf-gdrive-40.jpg', '', ''], [C + 'pf-gdrive-41.jpg', '', ''], [C + 'pf-gdrive-42.jpg', '', '']];
+CASES.ironstar.how = [...CASES.ironstar.how, [C + 'pf-ironstar-43.jpg', '', '']];
+CASES.izhora.how = [...CASES.izhora.how, [C + 'pf-izhora-44.jpg', '', ''], [C + 'pf-izhora-46.jpg', '', '']];
+CASES.avangard.how = [...CASES.avangard.how, [C + 'pf-avangard-47.jpg', '', ''], [C + 'pf-avangard-48.jpg', '', ''], [C + 'pf-avangard-49.jpg', '', '']];
+CASES.mice.how = [...CASES.mice.how, [C + 'pf-mice-50.jpg', '', ''], [C + 'pf-mice-51.jpg', '', ''], [C + 'pf-mice-52.jpg', '', ''], [C + 'pf-mice-53.jpg', '', '']];
+CASES.zaklinateli.how = [...CASES.zaklinateli.how, [C + 'pf-zaklinateli-2.jpg', '', ''], [C + 'pf-zaklinateli-3.jpg', '', ''], [C + 'pf-zaklinateli-4.jpg', '', '']];
+CASES.derbent.how = [...CASES.derbent.how, [C + 'pf-derbent-6.jpg', '', '']];
+CASES.tevredens.how = [...CASES.tevredens.how, [C + 'pf-tevredens-14.jpg', '', '']];
+CASES.oxygenSet.how = [...CASES.oxygenSet.how, [C + 'pf-oxygenSet-15.jpg', '', ''], [C + 'pf-oxygenSet-16.jpg', '', ''], [C + 'pf-oxygenSet-17.jpg', '', '']];
+CASES.gdriveMerch.how = [...CASES.gdriveMerch.how, [C + 'pf-gdriveMerch-19.jpg', '', ''], [C + 'pf-gdriveMerch-20.jpg', '', '']];
+// «паттерн, а не логотип на груди» — только мерч G-Drive для ралли «Шёлковый путь»; дождевик ГПН (gdrive-merch-1) — другой кейс, без текста не публикуем
+CASES.gdriveMerch.how = CASES.gdriveMerch.how.filter(h => !h[0].includes('gdrive-merch-1'));
+CASES.gdriveMerch.pass = { ...CASES.gdriveMerch.pass, формат: 'мерч для ралли «Шёлковый путь»' };
+export const ORDER = { btl: ['fandom', 'tbank', 'robozon', 'selekt', 'ironstar', 'gdrive', 'baltika7', 'baltikaPlant', 'megafon', 'mice', 'megafonTravel', 'gdriveMerch', 'oxygenSet', 'lionMerch'], atl: ['treschnutye', 'zaklinateli', 'dino', 'izhora', 'avangard', 'lion', 'derbent', 'tevredens', 'aiFonbet', 'aiMango', 'aiLavka', 'aiAlfa', 'aiDracondaz', 'aiBeep', 'ai'] };
 
 export function renderCase(id) {
   const c = CASES[id], list = ORDER[c.dir], next = list[(list.indexOf(id) + 1) % list.length], nn = i => String(i + 1).padStart(2, '0');
@@ -371,7 +392,7 @@ export function renderCase(id) {
   <div class="pass">${Object.entries(c.pass).map(([k, v]) => `<div><span class="t">${k}</span><br>${v}</div>`).join('')}</div>
   <div class="ti"><div><span class="t">{задача}</span><p>${c.task}</p></div><div><span class="t">{идея}</span><p>${c.idea}</p></div></div>
   ${c.steps ? `<span class="t">{как сделали}</span><ol class="steps">${c.steps.map(([h, d], i) => `<li><span class="n">${nn(i)}</span><span class="t">{${nn(i)}}</span><b>${h}</b><p>${d}</p></li>`).join('')}</ol>` : ''}
-  ${c.how && c.how.length ? `<div class="gal">${c.how.map(([src, h, d]) => `<figure><img src="${src}" alt="${c.title}: ${h}" loading="lazy"><figcaption><b>${h}</b><br><span class="t">${d}</span></figcaption></figure>`).join('')}</div>` : ''}
+  ${c.how && c.how.length ? `<div class="gal">${c.how.map(([src, h, d]) => `<figure><img src="${src}" alt="${c.title}: ${h}" loading="lazy">${h ? `<figcaption><b>${h}</b><br><span class="t">${d}</span></figcaption>` : ''}</figure>`).join('')}</div>` : ''}
   ${c.result && c.result.length && c.result[0][0] !== '—' ? `<span class="t">{результат}</span><div class="res">${c.result.map(([n, d]) => `<div><b>${n}</b><span>${d}</span></div>`).join('')}</div>` : ''}
   ${c.quotes ? c.quotes.map(([q, a]) => `<blockquote class="q"><p>«${q.replace(/^«|»$/g, '')}»</p><cite class="t">— ${a}</cite></blockquote>`).join('') : ''}
   <div class="cta"><p class="lead">нужен похожий результат?</p>

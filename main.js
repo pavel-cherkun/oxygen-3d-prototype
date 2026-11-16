@@ -96,8 +96,8 @@ const grain = new ShaderPass({ uniforms: { tDiffuse: { value: null }, t: { value
         float ex = length(vec2(lum(uv + vec2(px.x, 0.)) - lum(uv - vec2(px.x, 0.)), lum(uv + vec2(0., px.y)) - lum(uv - vec2(0., px.y))));
         float L = dot(c.rgb, vec3(0.299, 0.587, 0.114)); vec3 flat_ = c.rgb / max(L, 0.001) * (floor(L * 3.0 + 0.5) / 3.0);
         vec2 r45 = mat2(0.7071, -0.7071, 0.7071, 0.7071) * gl_FragCoord.xy / 5.0; float tone = step(length(fract(r45) - 0.5), 0.32);
-        flat_ *= mix(1.0, tone, step(L, 0.33) * step(0.06, L));
-        c.rgb = mix(c.rgb, flat_ * (1.0 - smoothstep(0.05, 0.14, ex)), wAnime); }
+        flat_ *= mix(1.0, mix(1.0, tone, 0.35), step(L, 0.22) * step(0.06, L)); flat_ = max(flat_ * 1.18, c.rgb * 0.9);   // светлая манга: тушь по граням, скринтон только в глубоких тенях
+        c.rgb = mix(c.rgb, flat_ * (1.0 - 0.55 * smoothstep(0.05, 0.14, ex)), wAnime * 0.7); }
       if (wDuo > 0.01) {                                                                 // шёлковый путь: пустыня в два цвета — чёрный и оранжевый g-drive
         float L = smoothstep(0.03, 0.75, dot(c.rgb, vec3(0.299, 0.587, 0.114))); c.rgb = mix(c.rgb, mix(vec3(0.02), vec3(1.0, 0.42, 0.07), L), wDuo * 0.9); }
       if (wKeep > 0.01) {                                                                // bullet time: стоп-кадр — мир серый, цвет остаётся только у бренда
@@ -318,7 +318,7 @@ function brutalBlock(c, r) {
   for (let i = n0; i < BR.boxes.length; i++) BR.boxes[i][7] = glass ? 1 : 0;
   const side = Math.sign(c.x) || 1, fx = c.x - side * c.w / 2;
   if (!glass && BR.boxes.length - n0 === 1 && Math.abs(c.x) < 160 && r() < 0.32) {   // кадр кейса врезан в грань монолита: без рамки, как проём
-    const fw = c.d * 0.78, fh = fw * 0.5625; BR.frames.push([fx - side * 0.06, Math.min(c.h * 0.42, 40) + fh / 2, c.z, fw, fh, side, BR.frames.length]); return;
+    const fw = c.d * 0.78, fh = fw * 0.5625; void fw; void fh; return;   // кадры кейсов в гранях домов убраны: баннеры — только у самих кейсов
   }
   if (!glass && BR.boxes.length - n0 === 1 && Math.abs(c.x) < 200 && r() < 0.7) {
     const k = 1 + (r() * 3 | 0);
@@ -703,7 +703,7 @@ function webtoonInto(mat, aspect) {
     let y = 0; webtoon.tops = ims.map((im, i) => { g.drawImage(im, 0, y, W, hs[i]); const t = y; y += hs[i]; return t; });
     const tex = new THREE.CanvasTexture(c); tex.colorSpace = THREE.SRGBColorSpace; tex.wrapT = THREE.RepeatWrapping; tex.anisotropy = 8;
     webtoon.win = W / aspect; webtoon.total = total; tex.repeat.set(1, webtoon.win / total);
-    mat.map = tex; mat.color.setScalar(0.62); mat.needsUpdate = true; webtoon.tex = tex;
+    mat.map = tex; mat.color.setScalar(0.95); mat.needsUpdate = true; webtoon.tex = tex;
   });
 }
 function updateWebtoon(time) {
@@ -739,7 +739,6 @@ const WORLD = [
   { id: 'tbank', r: 'btl', zone: 'asia', kind: 'station', hero: [16, 16, 10], imgs: ['tbank-zone-1', 'tbank-zone-top-1', 'tbank-road-1', 'tbank-cover-1'], nav: 'чёрный пояс по it', moment: 'tbank' },
   { id: 'robozon', r: 'btl', zone: 'joint', kind: 'station', hero: [16, 12, 6], imgs: ['robozone-1', 'robozone-2', 'robozone-3'], nav: 'робозон' },
   { id: 'selekt', r: 'btl', zone: 'joint', kind: 'station', hero: [14, 4, 10], imgs: ['ozon-select-1', 'ozon-select-0', 'ozon-select-2', 'ozon-select-3'], nav: 'ozon селект' },
-  { id: 'lion', r: 'btl', zone: 'sport', kind: 'station', hero: [14, 14, 16], imgs: ['../dp/lion-2', '../dp/lion-1', '../dp/lion-cover'], nav: 'синегривый лев', moment: 'lion' },
   { id: 'ironstar', r: 'btl', zone: 'sport', kind: 'station', hero: [12, 12, 4], imgs: ['gdrive-ironstar-1'], nav: 'ironstar', moment: 'ironstar' },
   { id: 'gdrive', r: 'btl', zone: 'sport', kind: 'station', hero: [30, 8, 4], imgs: ['gdrive-silk-1', 'gdrive-silk-road-1', 'gdrive-silk-road-2', 'gdrive-finish-1'], nav: 'шёлковый путь' },
   { id: 'baltika7', r: 'btl', zone: 'sport', kind: 'station', hero: [12, 10, 5], imgs: ['baltika7-1', 'baltika7-zone-1', 'baltika7-zone-2', 'baltika7-prizes-1'], nav: 'балтика 7' },
@@ -752,12 +751,12 @@ const WORLD = [
   { id: 'lionMerch', r: 'btl', zone: 'merch', kind: 'vitrine', imgs: ['../dp/lion-cover'], nav: 'мерч льва' },
   { id: 'izhora', r: 'atl', zone: 'asiaAir', kind: 'screen', s: 1, webtoon: true, nav: 'хроники ижоры', also: ['sport'], moment: 'izhora' },
   { id: 'treschnutye', r: 'atl', zone: 'dixy', kind: 'roof', img: 'treschnutye-1', nav: 'треснутые', also: ['asia'], moment: 'treschnutye' },
-  { id: 'zaklinateli', r: 'atl', zone: 'dixy', kind: 'roof', img: 'zaklinateli-kv-1', video: 'zaklinateli', nav: 'заклинатели' },
+  { id: 'zaklinateli', r: 'atl', zone: 'dixy', kind: 'roof', img: 'zaklinateli-1', video: 'zaklinateli', nav: 'заклинатели' },
   { id: 'dino', r: 'atl', zone: 'dixy', kind: 'roof', img: 'dino-1', nav: 'дино' },
   { id: 'avangard', r: 'atl', zone: 'arena', kind: 'screen', s: -1, img: 'avangard-1', nav: 'время авангарда' },
+  { id: 'lion', r: 'atl', zone: 'arena', kind: 'screen', s: 1, img: '../dp/lion-2', nav: 'синегривый лев', giant: true },
   { id: 'derbent', r: 'atl', zone: 'city', kind: 'screen', s: 1, img: 'derbent-1', nav: 'дербент' },
   { id: 'tevredens', r: 'atl', zone: 'city', kind: 'screen', s: -1, img: 'tevredens-1', video: 'tevredens', nav: 'tevredens' },
-  { id: 'ozonTravel', r: 'atl', zone: 'city', kind: 'screen', s: 1, img: null, nav: 'ozon travel' },
   { id: 'aiFonbet', r: 'atl', zone: 'ai', kind: 'screen', s: 1, img: 'ai-fonbet', video: 'ai-fonbet', nav: 'ai · fonbet' },
   { id: 'aiMango', r: 'atl', zone: 'ai', kind: 'screen', s: -1, img: 'ai-mango', video: 'ai-mango', nav: 'ai · mango' },
   { id: 'aiLavka', r: 'atl', zone: 'ai', kind: 'screen', s: 1, img: 'ai-lavka', video: 'ai-lavka', nav: 'ai · лавка' },
@@ -1351,7 +1350,9 @@ function placeholder(w) {
     const ex = span * 0.5, bb = new THREE.Mesh(new THREE.BoxGeometry(sx + (along === 'x' ? ex : 0), sy * 1.5, sz + (along === 'z' ? ex : 0)));
     bb.position.copy(g.position).addScaledVector(ax, away * ex / 2); bb.rotation.y = ry; return solid(bb);
   };
+  if (w.giant) return giantLion(w);
   if (w.r === 'atl') return banner(w);
+  if (w.id === 'ironstar' || w.id === 'gdrive') return carStand(w);
   if (ZONE3D[w.id]) return zone3d(w);
   const onRock = w.kind === 'screen' && (w.zone === 'city' || w.zone === 'arena');
   if (onRock) {   // баннер на скале: вместо башни — скальный массив, плита кейса висит на его грани к улице
@@ -1371,6 +1372,35 @@ function placeholder(w) {
 // atl — большие баннеры-превью с кадром кейса: на фасаде башни, на грани скалы или на крыше «дикси».
 // для каждого заранее считается точка съёмки, и всё, что стоит между ней и баннером или режет баннер, убирается (clearBanners)
 const BANNERS = [];
+// синегривый лев — персонаж и айдентика, поэтому в atl: танцующая 3D-модель размером с дом вместо баннера
+function giantLion(w) {
+  const sd = Math.sign(w.tower.x), Hh = 48, B = V(sd * 48, Hh * 0.5, w.z), N = V(-sd * 0.92, 0, -0.4).normalize();
+  const g = new THREE.Group(); g.position.set(B.x, 0, B.z); scene.add(g);
+  gltfLoader.loadAsync('assets/models/lion-dance.glb').then(gltf => {
+    const m = gltf.scene, bb = new THREE.Box3().setFromObject(m), k = Hh / (bb.max.y - bb.min.y);
+    m.scale.setScalar(k); m.position.set(0, -bb.min.y * k, 0); m.rotation.y = Math.atan2(N.x, N.z);
+    m.traverse(o => { if (o.isMesh) { o.castShadow = true; o.frustumCulled = false; o.userData.case = w.id; clickable.push(o); } });
+    g.add(m); lionDance.mixer = new THREE.AnimationMixer(m); gltf.animations.forEach(a => lionDance.mixer.clipAction(a).setEffectiveTimeScale(0.8).play());
+  }).catch(e => console.warn('lion', e));
+  const D = Hh / (0.7 * 0.93), cx = Math.max(-9, Math.min(9, B.x + N.x * D)), C = V(cx, Hh * 0.42, B.z - Math.sqrt(Math.max(D * D - (B.x - cx) ** 2, 100)));   // лев целиком в кадре: камера отходит назад по оси проспекта
+  const F = B.clone().sub(C).normalize(), R = F.clone().cross(V(0, 1, 0)).normalize(), L = B.clone().addScaledVector(R, -0.3 * B.distanceTo(C));
+  w.cube = { c: B, h: Hh, w: 30 }; w.shot = { C, L };
+  const box = new THREE.Box3(V(B.x - 18, 0, B.z - 18), V(B.x + 18, Hh, B.z + 18)); BANNERS.push({ B, C, box }); SOLIDS.push({ box, name: 'лев' });
+}
+// ironstar и шёлковый путь: машина без брендинга (мустанг / пресс-кар) и большой экран-баннер с превью кейса за ней
+function carStand(w) {
+  const c = w.heroPos, img = w.imgs[0], car = carModel(w.id === 'ironstar' ? 'mustang' : 'tiggo8', 7.6, false);
+  car.position.set(c.x + 2, 0, c.z); car.rotation.y = 0.6; scene.add(car);
+  car.traverse(o => { if (o.isMesh) o.castShadow = true; }); setTimeout(() => car.traverse(o => { if (o.isMesh) { o.castShadow = o.receiveShadow = true; o.userData.case = w.id; clickable.push(o); } }), 4000);
+  const cam = V(c.x + 22, 6, c.z - 34), g = new THREE.Group(); g.position.set(c.x - 8, 0, c.z + 8); g.rotation.y = Math.atan2(cam.x - g.position.x, cam.z - g.position.z); scene.add(g);
+  const W = 24, H = 13.5, y = 3 + H / 2;
+  const back = new THREE.Mesh(new THREE.BoxGeometry(W + 1.2, H + 1.2, 1), CONC.wall); back.position.set(0, y, -0.6); back.castShadow = true; g.add(back);
+  [-W / 3, W / 3].forEach(x => { const leg = new THREE.Mesh(new THREE.BoxGeometry(1, 3.2, 1), CONC.wall); leg.position.set(x, 1.6, -0.6); g.add(leg); });
+  const pic = new THREE.Mesh(new THREE.PlaneGeometry(W, H), new THREE.MeshBasicMaterial({ map: caseTexture(`assets/cases/${img}.jpg`, false, 1024, 576), toneMapped: false }));
+  pic.position.y = y; pic.userData.case = w.id; g.add(pic); clickable.push(pic);
+  g.updateMatrixWorld(true); SOLIDS.push({ box: new THREE.Box3().setFromObject(back), name: w.id }); SOLIDS.push({ box: new THREE.Box3(V(c.x - 4, 0, c.z - 4), V(c.x + 8, 3, c.z + 4)), name: w.id });
+  w.cube = { c: V(c.x - 3, 7, c.z + 4), h: 14, w: 24 };
+}
 // 3D-зоны кейсов по визуализациям (модуль zones/zones.js): Т-Банк — додзё, Ozon Tech — Робозон, Ozon Corp — переулок вокруг модели зоны
 const ZONE3D = { tbank: 'dojo', robozon: 'robo', fandom: 'corp', selekt: 'select' }, ZLIVE = [];
 function zone3d(w) {
@@ -1384,6 +1414,7 @@ function zone3d(w) {
   scene.add(g); g.updateMatrixWorld(true);
   Z.solids.forEach(sd => { const m = new THREE.Mesh(new THREE.BoxGeometry(sd.w, sd.h, sd.d)); m.position.set(sd.x, sd.h / 2, sd.z); g.add(m); m.updateMatrixWorld(true); SOLIDS.push({ box: new THREE.Box3().setFromObject(m), name: w.id }); g.remove(m); });
   if (kind === 'corp') {   // модель зоны Ozon Corp в центре переулка и стена ретро-телевизоров с кадрами кейса у входа
+    { const rm = []; g.traverse(o => { const p = o.geometry?.parameters; if (o.isMesh && p && ((p.depth === 30 && p.width < 1) || (p.width === 30 && o.geometry.type === 'PlaneGeometry'))) rm.push(o); }); rm.forEach(o => o.parent.remove(o)); }   // боковых граффити-стен в кейсе не было
     const corp = buildOzonCorpGen(THREE, gltfLoader); g.add(corp.group);   // новая модель зоны (генерация по ракурсам 3D-макета), фасад к входу в переулок
     { const pl = []; corp.group.traverse(o => { if (o.isPointLight) pl.push(o); }); pl.forEach(o => o.parent.remove(o)); }   // цвет даёт неон переулка — лишние источники не нужны
     corp.ready?.then(() => corp.group.traverse(o => { if (o.isMesh) { o.castShadow = o.receiveShadow = true; o.userData.case = w.id; clickable.push(o); } }));
@@ -1416,6 +1447,8 @@ function banner(w) {
     if (c.quotes) { g2.font = '400 30px TT, sans-serif'; g2.fillText('«' + c.quotes[0][0] + '»', 56, 470); g2.font = '22px AP, monospace'; g2.fillStyle = '#F40709'; g2.fillText('— ' + c.quotes[0][1], 56, 512); } });
   const pic = new THREE.Mesh(new THREE.PlaneGeometry(W, H), new THREE.MeshBasicMaterial({ map: img ? caseTexture(`assets/cases/${img}.jpg`, false, vert ? 576 : 1024, vert ? 1024 : 576) : typeBanner(), toneMapped: false }));
   pic.material.color.setScalar(0.95); pic.userData.case = w.id; g.add(pic); clickable.push(pic);
+  if (w.id === 'izhora') webtoonInto(pic.material, W / H);   // длинный экран листает вебтун
+  if (w.video) clips.push({ g, v: videoOn(pic, w.video) });   // ролик кейса играет на баннере, когда камера рядом
   // точка съёмки почти в лоб: баннер ~половина ширины кадра, в правой части; камера не выходит из коридора между башнями
   const D = Math.max(W / (0.5 * 1.48), H / (0.72 * 0.93)), C = B.clone().addScaledVector(N, D).add(V(0, 3, 0));
   C.x = Math.max(-9, Math.min(9, C.x));   // камера держится оси проспекта: без мотания от борта к борту
@@ -1450,7 +1483,7 @@ function buildWorld() {
 }
 const CUBES = [];
 // эффект по смыслу кейса (важнее квартального): манга, видоискатель, табло, пустыня, стоп-кадр, гравюра
-const CFX = { tbank: 'anime', treschnutye: 'anime', selekt: 'view', lion: 'led', gdrive: 'duo', megafon: 'keep', derbent: 'engr' };
+const CFX = { tbank: 'anime', selekt: 'view', megafon: 'keep', izhora: null, treschnutye: null, derbent: null };   // на баннерах с готовой картинкой эффект не нужен
 const ZFX = { asia: 'scan', joint: 'spot', sport: 'zoom', event: 'spot', merch: 'print', asiaAir: 'ink', dixy: null, arena: 'bars', city: 'bars', ai: 'gen' };   // какой эффект у какого квартала
 function updateCubes() {
   for (const q of CUBES) {
@@ -1710,6 +1743,30 @@ document.addEventListener('click', e => {
   goTo(el.dataset.go);
 });
 
+// ---------- магнит и стрелки ----------
+// после того как колесо остановилось, скролл мягко доезжает до ближайшей остановки, если до неё рукой подать;
+// стрелки, PageUp/PageDown и пробел листают ровно по кейсам
+const stopsOf = () => [P0, 0.49, FORK, ...WORLD.filter(w => w.r === (route || 'btl')).map(w => w.p), 0.995].sort((a, b) => a - b);
+const pNow = () => P0 + clamp01(scrollY / Math.max(1, document.documentElement.scrollHeight - innerHeight)) * (1 - P0);
+let snapT = 0;
+addEventListener('scroll', () => {
+  if (!INTRO.done || orbitOn) return; clearTimeout(snapT);
+  snapT = setTimeout(() => {
+    const p = pNow(), st = stopsOf(); let i = 0; st.forEach((v, k) => { if (Math.abs(v - p) < Math.abs(st[i] - p)) i = k; });
+    const gap = Math.min(...[st[i] - st[i - 1], st[i + 1] - st[i]].filter(x => x > 0)), d = Math.abs(st[i] - p);
+    if (d > 0.0004 && d < gap * 0.42 && (route || st[i] <= FORK)) scrollTo({ top: toScroll(st[i]), behavior: 'smooth' });
+  }, 170);
+}, { passive: true });
+addEventListener('keydown', e => {
+  if (!INTRO.done || orbitOn || modal.classList.contains('on') || /INPUT|TEXTAREA|SELECT/.test(e.target.tagName)) return;
+  const next = ['ArrowDown', 'ArrowRight', 'PageDown', ' '].includes(e.key), prev = ['ArrowUp', 'ArrowLeft', 'PageUp'].includes(e.key);
+  if (!next && !prev) return; e.preventDefault();
+  const p = pNow(), st = stopsOf(), t = next ? st.find(v => v > p + 0.002) : [...st].reverse().find(v => v < p - 0.002);
+  if (t === undefined) return;
+  if (!route && t > FORK) { const f = document.getElementById('fork'); f.classList.add('pulse'); setTimeout(() => f.classList.remove('pulse'), 1100); return; }
+  scrollTo({ top: toScroll(t), behavior: 'smooth' });
+});
+
 // клик по экрану в 3D открывает кейс
 const ray = new THREE.Raycaster(), ptr = new THREE.Vector2();
 function hit(e) {
@@ -1805,8 +1862,8 @@ function frame() {
     const k = CAM[route || 'btl'], sT = sOfP(k, p);
     if (!CS.init || CS.snap || !INTRO.done) { CS.s = sT; CS.v = 0; }   // вступление и прыжки по меню (под шторкой) — без догона
     else {   // догон цели: предел скорости растёт с высотой, разгон и торможение ограничены
-      const vmax = 30 + Math.max(0, camera.position.y) * 0.22, amax = 20;
-      const dS = sT - CS.s, want = Math.sign(dS) * Math.min(vmax, Math.abs(dS) * 1.6, Math.sqrt(2 * amax * Math.abs(dS)) * 0.92);   // тормозит заранее, без проскока
+      const vmax = 60 + Math.max(0, camera.position.y) * 0.3, amax = 48;   // отзывчивее: догоняет скролл быстрее, но без рывков
+      const dS = sT - CS.s, want = Math.sign(dS) * Math.min(vmax, Math.abs(dS) * 2.6, Math.sqrt(2 * amax * Math.abs(dS)) * 0.92);   // тормозит заранее, без проскока
       CS.v += Math.max(-amax * dt, Math.min(amax * dt, want - CS.v)); CS.s += CS.v * dt;
     }
     camAt(k, CS.s, camera.position, look);
@@ -1815,7 +1872,7 @@ function frame() {
     // взгляд: мягкое догоняние с пределом угловой скорости (50°/с, во вступлении — быстрее)
     CS.m.lookAt(camera.position, look, camera.up); CS.dq.setFromRotationMatrix(CS.m);
     if (!CS.init || CS.snap) CS.q.copy(CS.dq);
-    else { const ang = CS.q.angleTo(CS.dq), wmax = INTRO.done ? 0.87 : 3.5; CS.q.rotateTowards(CS.dq, Math.min(ang * (1 - Math.exp(-dt * 3.2)), wmax * dt)); }
+    else { const ang = CS.q.angleTo(CS.dq), wmax = INTRO.done ? 1.4 : 3.5; CS.q.rotateTowards(CS.dq, Math.min(ang * (1 - Math.exp(-dt * 4.5)), wmax * dt)); }
     camera.quaternion.copy(CS.q); CS.init = true; CS.snap = false;
     pSm = INTRO.done ? pOfS(k, CS.s) : p;   // тексты, искра и финал привязаны к тому, где камера на самом деле
   }
@@ -1855,7 +1912,7 @@ function frame() {
     const U = grain.uniforms; U.fin.value = fin; U.spd.value = spd;
     U.uA.value = ss(0, 0.35, fin); U.uB.value = ss(0.3, 0.7, fin); U.uC.value = ss(0.62, 0.95, fin); U.uW.value = ss(0.985, 1.0, pSm);   // «сигнал» — только финал
     const W = { scan: 0, zoom: 0, spot: 0, ink: 0, bars: 0, gen: 0, print: 0, view: 0, anime: 0, led: 0, duo: 0, keep: 0, engr: 0 };
-    if (route && !orbitOn) for (const w of WORLD) { if (w.r !== route) continue; const b = ss(0, 1, 1 - Math.abs(pSm - w.p) / (w.span * 0.95)) * (w.r === 'atl' ? 0.5 : 1), k = CFX[w.id] || ZFX[w.zone]; if (k) W[k] = Math.max(W[k], b); }   // на баннерах эффект вдвое тише — кадр кейса должен читаться
+    if (route && !orbitOn) for (const w of WORLD) { if (w.r !== route) continue; const b = ss(0, 1, 1 - Math.abs(pSm - w.p) / (w.span * 0.95)) * (w.r === 'atl' ? 0.5 : 1), k = w.id in CFX ? CFX[w.id] : ZFX[w.zone]; if (k) W[k] = Math.max(W[k], b); }   // на баннерах эффект вдвое тише — кадр кейса должен читаться
     const fade = 1 - fin;   // к финалу эффекты мест уступают «сигналу»
     U.wScan.value = W.scan * fade; U.wZoom.value = W.zoom * fade; U.wSpot.value = W.spot * fade; U.wInk.value = W.ink * fade; U.wBars.value = W.bars * fade; U.wGen.value = W.gen * fade; U.wPrint.value = W.print * fade; U.wView.value = W.view * fade; U.wAnime.value = W.anime * fade; U.wLed.value = W.led * fade; U.wDuo.value = W.duo * fade; U.wKeep.value = W.keep * fade; U.wEngr.value = W.engr * fade;
   }
