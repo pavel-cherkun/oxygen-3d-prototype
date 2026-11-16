@@ -13,8 +13,8 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { DRACOLoader } from 'three/addons/loaders/DRACOLoader.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 const gltfLoader = new GLTFLoader().setDRACOLoader(new DRACOLoader().setDecoderPath('https://cdn.jsdelivr.net/npm/three@0.169.0/examples/jsm/libs/draco/gltf/'));
-import { CASES, renderCase, MODALS } from './cases.js?v=1116b';
-import { buildRobozoneGen, buildTdojoGen, buildOzonCorpAlley, buildOzonCorpGen, buildSelectGen, buildBaltika7Gen, buildMerchGen } from './zones/zones.js?v=1116b';
+import { CASES, renderCase, MODALS } from './cases.js?v=1116c';
+import { buildRobozoneGen, buildTdojoGen, buildOzonCorpAlley, buildOzonCorpGen, buildSelectGen, buildBaltika7Gen, buildMerchGen } from './zones/zones.js?v=1116c';
 // учёт загрузки для прелоадера-искры: каждый файл через общий менеджер, картинки кейсов — вручную в caseTexture
 const LD = { done: 0, total: 0 }, LM = THREE.DefaultLoadingManager, lmStart = LM.itemStart, lmEnd = LM.itemEnd;
 LM.itemStart = u => { LD.total++; lmStart.call(LM, u); }; LM.itemEnd = u => { LD.done++; lmEnd.call(LM, u); };
@@ -1503,7 +1503,9 @@ function updateGlow() {
 function updateWorld(time) {
   updateGlow();
   if (lionDance.mixer) { const dt = Math.min(0.05, time - (lionDance.t || time)); lionDance.t = time; lionDance.mixer.update(dt); }
-  clips.forEach(c => { const near = c.g.position.distanceTo(camera.position) < 220; if (near && c.v.paused) c.v.play().catch(() => {}); else if (!near && !c.v.paused) c.v.pause(); });
+  // играет только один ближайший ролик: несколько видео сразу давали фриз при развороте на проспект
+  if (frameN % 10 === 0) { let best = null, bd = 160; clips.forEach(c => { const d = c.g.position.distanceTo(camera.position); if (d < bd) { bd = d; best = c; } });
+    clips.forEach(c => { if (c === best) { if (c.v.paused) { c.v.preload = 'auto'; c.v.play().catch(() => {}); } } else if (!c.v.paused) c.v.pause(); }); }
 }
 // проверка: камера обоих маршрутов не должна заходить ни в один объект (в консоли при ?dev)
 function checkPath() {
@@ -1705,7 +1707,7 @@ function updateOverlay(p) {
     o.el.style.opacity = op; o.el.classList.toggle('on', op > 0.5);
     o.el.style.translate = `0 ${(1 - op) * 18}px`;
   });
-  routeBtn.style.display = route ? '' : 'none'; routeBtn.textContent = `маршрут: ${route} · сменить ↺`;
+  routeBtn.style.display = route && p < 0.97 ? '' : 'none'; routeBtn.querySelectorAll('button').forEach(b => b.classList.toggle('on', b.dataset.go === route));
   micro?.classList.toggle('dim', ovs.some(o => o.el.classList.contains('right') && o.el.classList.contains('panel') && o.el.classList.contains('on')));
 }
 const modal = document.getElementById('modal'), modalBody = document.getElementById('modalBody');
@@ -1747,24 +1749,29 @@ document.addEventListener('click', e => {
 // ---------- магнит и стрелки ----------
 // после того как колесо остановилось, скролл мягко доезжает до ближайшей остановки, если до неё рукой подать;
 // стрелки, PageUp/PageDown и пробел листают ровно по кейсам
-const stopsOf = () => [P0, 0.417, 0.452, 0.49, FORK, ...WORLD.filter(w => w.r === (route || 'btl')).map(w => w.p), 0.995].sort((a, b) => a - b);
+const stopsOf = () => [P0, 0.417, 0.452, 0.49, FORK, ...WORLD.filter(w => w.r === (route || 'btl')).map(w => w.p), 1.0].sort((a, b) => a - b);
 const pNow = () => P0 + clamp01(scrollY / Math.max(1, document.documentElement.scrollHeight - innerHeight)) * (1 - P0);
-let snapT = 0;
+let snapT = 0, dragging = false;
+addEventListener('pointerdown', e => { if (e.clientX > document.documentElement.clientWidth - 2) dragging = true; });   // захват полосы прокрутки
+addEventListener('pointerup', () => { dragging = false; });
 addEventListener('scroll', () => {
-  if (!INTRO.done || orbitOn) return; clearTimeout(snapT);
-  snapT = setTimeout(() => {
+  if (!INTRO.done || orbitOn || performance.now() < STEPS.until) return; clearTimeout(snapT);   // во время шага магнит молчит: иначе на подвисании он тянул камеру назад
+  snapT = setTimeout(() => { if (dragging || performance.now() < STEPS.until) return;
     const p = pNow(), st = stopsOf(); let i = 0; st.forEach((v, k) => { if (Math.abs(v - p) < Math.abs(st[i] - p)) i = k; });
     const gap = Math.min(...[st[i] - st[i - 1], st[i + 1] - st[i]].filter(x => x > 0)), d = Math.abs(st[i] - p);
     if (d > 0.0004 && d < gap * 0.5 && (route || st[i] <= FORK)) scrollTo({ top: toScroll(st[i]), behavior: 'smooth' });   // ползунок отпустили — доезжаем до ближайшей остановки
   }, 170);
 }, { passive: true });
 // один жест колеса, свайп или стрелка — ровно одна остановка: камера всегда приезжает в кейс, целиться не нужно
-let stepLock = 0, wheelAcc = 0, touchY = null;
+let stepLock = 0, wheelAcc = 0, touchY = null; const STEPS = { target: null, until: 0 };
 const free = () => INTRO.done && !orbitOn && !modal.classList.contains('on');
 function stepTo(dir) {
-  const p = pNow(), st = stopsOf(), t = dir > 0 ? st.find(v => v > p + 0.002) : [...st].reverse().find(v => v < p - 0.002);
+  // шаг считается от цели прошлого шага, пока до неё едем, — так быстрые жесты всегда идут вперёд, а не возвращают к уже пройденному
+  const base = performance.now() < STEPS.until && STEPS.target !== null ? STEPS.target : pNow();
+  const st = stopsOf(), t = dir > 0 ? st.find(v => v > base + 0.002) : [...st].reverse().find(v => v < base - 0.002);
   if (t === undefined) return;
   if (!route && t > FORK) { const f = document.getElementById('fork'); f.classList.add('pulse'); setTimeout(() => f.classList.remove('pulse'), 1100); return; }
+  STEPS.target = t; STEPS.until = performance.now() + 1600;
   scrollTo({ top: toScroll(t), behavior: 'smooth' });
 }
 addEventListener('wheel', e => {
@@ -1863,6 +1870,7 @@ function adaptRes(dt) {
   const max = Math.min(devicePixelRatio, 1.25), want = RES.avg > 24 ? Math.max(0.7, RES.pr - 0.1) : RES.avg < 15 ? Math.min(max, RES.pr + 0.05) : RES.pr;
   if (Math.abs(want - RES.pr) > 0.01) { RES.pr = want; renderer.setPixelRatio(want); composer.setPixelRatio?.(want); composer.setSize(innerWidth, innerHeight); }
 }
+const WHITE = { k: 0 };
 let unlocked = false, pSm = 0, mouse = new THREE.Vector2(), mouseSm = new THREE.Vector2();
 addEventListener('pointermove', e => mouse.set(e.clientX / innerWidth - .5, e.clientY / innerHeight - .5));
 const clock = new THREE.Clock(), look = new THREE.Vector3();
@@ -1924,12 +1932,12 @@ function frame() {
   updateAtmosphere(time, dt);
   if (promo.v && !promo.started && pSm > 0.3) { promo.started = true; promo.v.play().catch(() => addEventListener('pointerdown', () => promo.v.play(), { once: true })); }
   hud2d(pSm, time);
-  updateOverlay(pSm);
+  updateOverlay(WHITE.k > 0.9 ? Math.max(pSm, 0.996) : pSm);
   CITY.sky.position.copy(camera.position); grain.uniforms.t.value = time % 100; {
     const fin = clamp01((pSm - 0.928) / 0.068), ss = (a, b, x) => { const t = clamp01((x - a) / (b - a)); return t * t * (3 - 2 * t); };
     const spd = INTRO.done && !orbitOn ? clamp01((Math.abs(CS.v) - 6) / 26) : 0;
     const U = grain.uniforms; U.fin.value = fin; U.spd.value = spd;
-    U.uA.value = ss(0, 0.35, fin); U.uB.value = ss(0.3, 0.7, fin); U.uC.value = ss(0.62, 0.95, fin); U.uW.value = ss(0.985, 1.0, pSm);   // «сигнал» — только финал
+    U.uA.value = ss(0, 0.35, fin); U.uB.value = ss(0.3, 0.7, fin); U.uC.value = ss(0.62, 0.95, fin); WHITE.k += ((p > 0.985 && pSm > 0.95 ? 1 : ss(0.975, 0.995, pSm)) - WHITE.k) * Math.min(1, dt * 3); U.uW.value = WHITE.k > 0.995 ? 1 : WHITE.k;   // «сигнал» — только финал; на последнем шаге экран гарантированно уходит в чистый белый
     const W = { scan: 0, zoom: 0, spot: 0, ink: 0, bars: 0, gen: 0, print: 0, view: 0, anime: 0, led: 0, duo: 0, keep: 0, engr: 0 };
     if (route && !orbitOn) for (const w of WORLD) { if (w.r !== route) continue; const b = ss(0, 1, 1 - Math.abs(pSm - w.p) / (w.span * 0.95)) * (w.r === 'atl' ? 0.5 : 1), k = w.id in CFX ? CFX[w.id] : ZFX[w.zone]; if (k) W[k] = Math.max(W[k], b); }   // на баннерах эффект вдвое тише — кадр кейса должен читаться
     const fade = 1 - fin;   // к финалу эффекты мест уступают «сигналу»
@@ -1958,6 +1966,8 @@ await new Promise(res => { const t0 = performance.now(); let calm = 0; const chk
 await new Promise(r => setTimeout(r, 450));
 // все шейдеры компилируем под шторкой: иначе город и зоны «дёргаются» при первом появлении в кадре
 BR.chunks.forEach(c => { c.g.visible = true; }); try { await renderer.compileAsync(scene, camera); } catch (e) { renderer.compile(scene, camera); }
+{ const seen = new Set(); scene.traverse(o => { const ms = o.material ? (Array.isArray(o.material) ? o.material : [o.material]) : [];   // все картинки кейсов — в видеокарту заранее
+  ms.forEach(m => ['map', 'normalMap', 'emissiveMap', 'alphaMap', 'lightMap', 'aoMap'].forEach(k => { const t = m[k]; if (t && !seen.has(t) && !t.isVideoTexture && t.image) { seen.add(t); try { renderer.initTexture(t); } catch (e) {} } })); }); }
 clearInterval(ldTick); ldPct.textContent = '100';
 window.__cam = () => ({ p: +pSm.toFixed(4), s: +CS.s.toFixed(1), v: +CS.v.toFixed(1), pos: camera.position.toArray().map(v => +v.toFixed(1)) });
 window.__three = { renderer, scene, CAM, THREE, WORLD, BR, checkPath, go: (p, r) => { INTRO.done = true; document.documentElement.classList.remove('lock'); route = r; scrollTo(0, toScroll(p)); CS.snap = true; } };   // для отладки
