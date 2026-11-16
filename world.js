@@ -13,7 +13,7 @@ import { RGBELoader } from 'three/addons/loaders/RGBELoader.js';
 import { Reflector } from 'three/addons/objects/Reflector.js';
 import { Pass, FullScreenQuad } from 'three/addons/postprocessing/Pass.js';
 import { CASES, renderCase } from './cases.js';
-import { buildRobozoneGen, buildTdojoGen, buildOzonCorpAlley, buildOzonCorpGen, buildSelectGen } from './zones/zones.js';
+import { buildRobozoneGen, buildTdojoGen, buildOzonCorpAlley, buildOzonCorpGen, buildSelectGen, buildMerchGen, buildBaltika7Gen } from './zones/zones.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { DRACOLoader } from 'three/addons/loaders/DRACOLoader.js';
 
@@ -346,6 +346,15 @@ function caseZone(q, s, zc, half, kind) {
   q.cubes.push({ p, title, r: 'btl', s: 6, corners, zone: true, half: 0.62 });
 }
 
+// модель зоны у рельсов: фасадом (+z модели) к дороге, сбоку от неё; title — остановка с карточкой кейса (без title — просто экспонат)
+function zoneAt(q, Zn, x, z, sc = 1, title, light = 60) {
+  const g = Zn.group, s = Math.sign(x), W = Zn.size.w * sc, D = Zn.size.d * sc, H = Zn.size.h * sc, fx = x - s * D / 2;   // fx — линия фасада
+  g.traverse(o => { if (o.isLight) o.visible = false; }); g.scale.setScalar(sc); g.rotation.y = -s * Math.PI / 2; g.position.set(x, 0, z); q.g.add(g);
+  ZONES.push({ Zn, q, at: V(x, 2, z) });
+  q.anchors.push({ p: V(fx - s * 6, H + 4, z), c: 0xfff4ea, i: light, d: 26, pr: 6 });
+  if (title) q.cubes.push({ p: V(x, H / 2, z), title, r: 'btl', s: 5, zone: true, half: 0.62, corners: [[fx, 0], [fx, H]].flatMap(([cx, y]) => [-1, 1].map(b => V(cx, y, z + b * W / 2))) });
+}
+
 // {02} азия — прорезь в поверхности города: крыши башен вровень с нейтральной поверхностью, переулок уходит вниз.
 // btl спускается по монументальной лестнице на улицу, atl ныряет в прорезь и идёт по уровню зданий
 function asia(z0) {
@@ -401,7 +410,8 @@ function sport(z0) {
   }
   [[1, 1], [1, -1], [-1, 1], [-1, -1]].forEach(([sx, sz]) => { const x = sx * A * 1.95, z = cz + sz * Bz * 1.05; k.box(steel, 2.4, 78, 2.4, x, 0, z); k.box(D, 16, 9, 2, x - sx * 1.5, 74, z - sz * 1.2, Math.atan2(-x, cz - z)); const p = new THREE.Mesh(new THREE.PlaneGeometry(14, 7), glow(0xffffff, 2.2)); p.position.set(x - sx * 3, 78.5, z - sz * 2.6); p.lookAt(0, 0, cz); q.g.add(p); });
   [[z0, z0 + 40], [z1 - 40, z1]].forEach(([a, b]) => { for (const s of [-1, 1]) k.box(C, 2, 12, b - a, s * 9, 0, (a + b) / 2); k.box(D, 20, 1.6, b - a, 0, 12, (a + b) / 2); q.anchors.push({ p: V(0, 9, (a + b) / 2), c: 0xe8eef4, i: 30 }); });
-  [['ironstar', -70], ['шёлковый путь', 0], ['балтика 7', 70]].forEach(([t, dz], i) => cube(q, i % 2 ? 14 : -14, 0, cz + dz, t, 'btl'));
+  [['ironstar', -70], ['шёлковый путь', 0]].forEach(([t, dz], i) => cube(q, i % 2 ? 14 : -14, 0, cz + dz, t, 'btl'));
+  zoneAt(q, buildBaltika7Gen(THREE, GLTF), -16, cz + 70, 1, 'балтика 7', 35);   // промозона «#футболеем всей страной» — модель по рендеру из портфолио
   // наверху чаши, на мачтах: синегривый лев и время авангарда
   banner(q, 21, 42, cz - 60, 'синегривый лев', { w: 24, leg: 'mast', img: 'dp/lion-cover.jpg' }); banner(q, -21, 42, cz + 50, 'время авангарда', { w: 24, leg: 'mast', img: 'cases/avangard-1.jpg' });
   path(q, 'btl', [0, 5, z0 + 4], [0, 6, z0 + 50], [1, 8, cz - 80], [-1, 10, cz], [1, 8, cz + 80], [0, 6, z1 - 50], [0, 5, z1]);
@@ -430,7 +440,9 @@ function merch(z0) {
       for (let j = 0; j < 9; j++) k.box(clothes[(j + i + (s > 0 ? 1 : 0)) % 3 === 0 && j === 4 ? 3 : (j + i) % 3], 0.35, 4.4, 1.3, s * 16.6, y0 + 4.5, zc - 7 + j * 1.75);
     }
   }
-  [['мерч g-drive', 1], ['набор креатора', 2], ['мерч льва', 3]].forEach(([t, i]) => { const x = i % 2 ? 6 : -6, z = z0 + i * L + L / 2; k.box(red, 7.6, 0.05, 7.6, x, 0, z); cube(q, x, 0, z, t, 'btl', { plinth: blk }); });
+  // мерч — витрины из моделей вещей: дождевик ГПН (отдельного кейса пока нет — экспонат без карточки), капсула G-Drive, бокс «Простора», капсула льва
+  [['gpn', 0], ['gdrive', 1, 'мерч g-drive'], ['prostor', 2, 'набор креатора'], ['lion', 3, 'мерч льва']].forEach(([kind, i, t]) => { const x = i % 2 ? 8 : -8, z = z0 + i * L + L / 2;
+    k.box(red, 0.12, 0.05, 12, x - Math.sign(x) * 3.2, 0, z); zoneAt(q, buildMerchGen(THREE, GLTF, kind), x, z, 1.6, t, 45); });
   path(q, 'btl', [0, 5, z0 - 14], [0, 5, z0 + 6], [0, 5, z0 + 90], [0, 5, z1]);
   path(q, 'atl', [0, 36, z0 - 22], [0, 23.5, z0 - 6], [0, 23.5, z0 + 90], [0, 23.5, z1]);
   return z1;
