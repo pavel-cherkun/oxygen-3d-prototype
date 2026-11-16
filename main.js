@@ -402,15 +402,16 @@ function solveShot(sh, aspect) {
   const corners = [[-1, -1], [1, -1], [1, 1], [-1, 1]].map(([a, b]) => sh.C.clone().addScaledVector(T0, a * sh.W / 2).addScaledVector(up, b * sh.H / 2));
   const yaw = sh.a != null ? THREE.MathUtils.degToRad(sh.a) : ZP[sh.zone].a ? THREE.MathUtils.degToRad(ZP[sh.zone].a) : SOLVE_A, dh = sh.n.clone().negate().multiplyScalar(Math.cos(yaw)).addScaledVector(f, Math.sin(yaw)).normalize(), right = dh.clone().cross(up).normalize();
   let D = sh.W * 1.3, lat = -tx * D * 0.6, pitch = 0; const yc = LOW + (sh.yc || ZP[sh.zone].yc);
-  for (let it = 0; it < 80; it++) {
+  for (let it = 0; it < 120; it++) {
     const pos = sh.C.clone().addScaledVector(dh, -D).addScaledVector(right, lat); pos.y = yc;
     const dir = dh.clone(); dir.y = Math.tan(pitch); dir.normalize();
     cam.position.copy(pos); cam.lookAt(pos.clone().add(dir)); cam.updateMatrixWorld();
-    let x0 = 1e9, x1 = -1e9, y0 = 1e9, y1 = -1e9;
-    corners.forEach(c => { const q = c.clone().project(cam); x0 = Math.min(x0, q.x); x1 = Math.max(x1, q.x); y0 = Math.min(y0, q.y); y1 = Math.max(y1, q.y); });
+    let x0 = 1e9, x1 = -1e9, y0 = 1e9, y1 = -1e9, behind = false;
+    corners.forEach(c => { const v = c.clone().applyMatrix4(cam.matrixWorldInverse); if (v.z > -1) behind = true; const q = c.clone().project(cam); x0 = Math.min(x0, q.x); x1 = Math.max(x1, q.x); y0 = Math.min(y0, q.y); y1 = Math.max(y1, q.y); });
+    if (behind || !isFinite(x0 + x1 + y0 + y1)) { D *= 1.25; lat *= 0.8; continue; }   // угол картинки за камерой — отходим (на узких экранах иначе расчёт уходил в NaN)
     sh.cam = { pos, dir, s, f, D };
-    D *= Math.pow(Math.max((x1 - x0) / tw, (y1 - y0) / th), 0.6);
-    lat += ((x0 + x1) / 2 - tx) * D * 0.3; pitch += ((y0 + y1) / 2 - ty) * 0.2;
+    D *= Math.min(1.4, Math.max(0.7, Math.pow(Math.max((x1 - x0) / tw, (y1 - y0) / th), 0.6)));
+    lat += Math.max(-0.3, Math.min(0.3, (x0 + x1) / 2 - tx)) * D * 0.3; pitch = Math.max(-0.6, Math.min(0.6, pitch + ((y0 + y1) / 2 - ty) * 0.2));
   }
 }
 SHOTS.forEach(c => solveShot(c, innerWidth / innerHeight));
@@ -427,7 +428,8 @@ function lockDir(c, pos, aspect = innerWidth / innerHeight) {
 }
 const CAM0 = { pos: V(104, 34, -236), look: V(90, -120, -900) };   // кадр на парапете — отсюда начинается путь по кейсам
 function camKeys(endKeys) {
-  const K = [{ pos: CAM0.pos.clone(), dir: CAM0.look.clone().sub(CAM0.pos).normalize() }, { pos: V(40, 6, -400) }];
+  const K = [{ pos: CAM0.pos.clone(), dir: CAM0.look.clone().sub(CAM0.pos).normalize() },   // с парапета — вниз над лестницей (между её бортами), из лестницы — в зал
+    { pos: V(108, -40, -420), dir: V(-14, -70, -480).normalize() }, { pos: V(104, LOW + 48, -585), dir: V(-60, -8, -300).normalize(), stair: true }, { pos: V(80, LOW + 46, -690) }];   // взгляд — вперёд вниз по лестнице, не в её борт
   SHOTS.forEach((c, i) => {
     // проход мимо кадра: камера едет вдоль стены (по ходу), взгляд всё это время прикован к картинке
     const zr = ZR[c.zone], L = c.cam.D * 0.5, cz = z => Math.min(zr[0], Math.max(zr[1], z));
@@ -1007,7 +1009,7 @@ function buildTimeline() {
   const tanS0 = tan.map((_, j) => { const a = V(0, 0, 0); for (let k = -40; k <= 40; k += 4) a.add(tan[Math.min(N, Math.max(0, j + k))]); return a.normalize(); });
   // между кейсами камера идёт за лучом: смотрит на неон впереди (≈200 м по ленте) и чуть вверх — виден масштаб, луч остаётся в кадре
   const nearS = []; { let ss = sv[9]; for (let j = 0; j <= N; j++) { let best = ss, bd = 1e9; for (let x = ss - 100; x <= ss + 700; x += 6) { const d = hd(x).distanceTo(cp[j]); if (d < bd) { bd = d; best = x; } } ss = Math.max(ss, best); nearS.push(ss); } }
-  const tanS1 = cp.map((p, j) => { const t = hd(nearS[j] + 360), d = t.sub(p); const hz = Math.hypot(d.x, d.z) || 1; d.y = Math.max(-0.25, Math.min(0.12, d.y / hz)) * hz + hz * 0.2; return d.normalize().lerp(tanS0[j], 0.3).normalize(); });
+  const tanS1 = cp.map((p, j) => { const t = hd(nearS[j] + 360), d = t.sub(p); const hz = Math.hypot(d.x, d.z) || 1; d.y = Math.max(-0.25, Math.min(0.12, d.y / hz)) * hz + hz * 0.12; return d.normalize().lerp(tanS0[j], 0.3).normalize(); });
   const tanS = tanS1.map((_, j) => { const a = V(0, 0, 0); for (let k = -48; k <= 48; k += 4) a.add(tanS1[Math.min(N, Math.max(0, j + k))]); return a.normalize(); });
   const anc = KK.filter(k => k.dir), RT = 150, dirs = [];
   for (let j = 0, ai = 0; j <= N; j++) {
@@ -1026,17 +1028,31 @@ function buildTimeline() {
   const trs = KK.filter(k => k.hold === 'B').map(k => { const nx = KK.slice(KK.indexOf(k) + 1).find(q => q.hold === 'A') || KK[KK.length - 1]; let ang = 0; for (let j = k.j + 1; j <= nx.j; j++) ang += dirs[j].angleTo(dirs[j - 1]); return [k.j, nx.j, ang * 57.3]; });   // весь поворот на переходе (через «вперёд»)
   for (let it = 0; it < 4; it++) { const U = w0.reduce((a, b) => a + b, 0), ppu = (P_B - P_A) / U;
     trs.forEach(([a, b, ang]) => { let u = 0; for (let j = a + 1; j <= b; j++) u += w0[j]; const need = ang / 9 * 0.0005 / ppu; if (u < need && b > a) { const add = (need - u) / (b - a); for (let j = a + 1; j <= b; j++) w0[j] += add; } }); }
+  // спуск с парапета к первому кейсу — не меньше 0,02 p (≈150 vh): камера идёт над лестницей, а не падает в зал
+  { const jA = KK.find(k => k.hold === 'A').j; for (let it = 0; it < 4; it++) { const U = w0.reduce((a, b) => a + b, 0), ppu = (P_B - P_A) / U; let u = 0; for (let j = 1; j <= jA; j++) u += w0[j];
+    const need = 0.02 / ppu; if (u < need) for (let j = 1; j <= jA; j++) w0[j] *= need / u; } }
   const cum = [0]; for (let j = 1; j <= N; j++) cum.push(cum[j - 1] + w0[j]);
-  // голова ленты: ближайшая к камере точка ленты, только вперёд, с запасом
-  let sh = sv[9];
-  CP.p = []; CP.pos = cp; CP.dir = dirs; CP.s = [];
-  for (let j = 0; j <= N; j++) {
-    CP.p.push(P_A + (P_B - P_A) * cum[j] / cum[N]);
-    let best = sh, bd = 1e9; for (let x = sh - 100; x <= sh + 900; x += 4) { const d = hd(x).distanceTo(cp[j]); if (d < bd) { bd = d; best = x; } }
-    sh = Math.max(sh, best);
-    let sv_ = Math.min(sJoin, sh + 260);   // лента бежит впереди камеры и уже лежит под кадром sv_ = sv[8] + (sv_ - sv[8]) * sm(clamp01(arc[j] / 260)); sv_ += (sJoin - sv_) * sm(clamp01((j - (N - 600)) / 600));
-    CP.s.push(j ? Math.max(CP.s[j - 1], sv_) : sv_);
-  }
+  CP.p = []; CP.s = []; for (let j = 0; j <= N; j++) CP.p.push(P_A + (P_B - P_A) * cum[j] / cum[N]);
+  CP.pos = cp; CP.dir = dirs;
+  // голова ленты — по опорам, а не «ближайшая к камере точка» (та прыгала между стенами): спуск по лестнице вместе с камерой,
+  // у каждого кейса лента доходит до его картинки к началу кадра и чуть проходит дальше к концу; в колодце ждёт на середине моста,
+  // пока идут Дербент и Tevredens; между опорами — монотонный кубический сплайн по скроллу: без скачков и без рывков скорости
+  { const pJ = j => CP.p[Math.max(0, Math.min(N, j))];
+    const sNear = (pt, a, b) => { let best = a, bd = 1e9; for (let x = a; x <= b; x += 2) { const d = hd(x).distanceTo(pt); if (d < bd) { bd = d; best = x; } } return best; };
+    const sBridge = sNear(V(0, LOW + 0.25, SHC.z), sv[9], sJoin);
+    const X = [P_A], Y = [sv[8]], add = (p, sx) => { if (p > X[X.length - 1] + 1e-5) { X.push(p); Y.push(Math.min(sJoin, Math.max(Y[Y.length - 1], sx))); } };
+    add(pJ(KK.find(k => k.stair).j), sv[9]);
+    KK.forEach((k, i) => { if (k.hold !== 'A') return; const c = k.shot, b = KK[i + 1];
+      const sc = c.zone === 'shaft' ? sBridge : sNear(V(c.C.x, LOW + 0.25, c.C.z), Y[Y.length - 1], Math.min(sJoin, Y[Y.length - 1] + 2600));
+      add(pJ(k.j), c.zone === 'shaft' ? sc : sc - 20); add(pJ(b.j), c.zone === 'shaft' ? sc : sc + 30); });
+    add(P_B, sJoin);
+    const n_ = X.length, h = [], d = [], m = [];
+    for (let i = 0; i < n_ - 1; i++) { h.push(X[i + 1] - X[i]); d.push((Y[i + 1] - Y[i]) / h[i]); }
+    for (let i = 0; i < n_; i++) m.push(i === 0 ? d[0] : i === n_ - 1 ? d[n_ - 2] : d[i - 1] * d[i] <= 0 ? 0 : (3 * h[i] + 3 * h[i - 1]) / ((2 * h[i] + h[i - 1]) / d[i - 1] + (h[i] + 2 * h[i - 1]) / d[i]));
+    let i = 0; for (let j = 0; j <= N; j++) { const x = CP.p[j]; while (i < n_ - 2 && x > X[i + 1]) i++;
+      const t = clamp01((x - X[i]) / h[i]), t2 = t * t, t3 = t2 * t;
+      CP.s.push((2 * t3 - 3 * t2 + 1) * Y[i] + (t3 - 2 * t2 + t) * h[i] * m[i] + (-2 * t3 + 3 * t2) * Y[i + 1] + (t3 - t2) * h[i] * m[i + 1]); }
+    CP.sAnch = X.map((x, k) => [+x.toFixed(4), Math.round(Y[k])]); }
   // предел скорости поворота по скроллу (14° на 0,0005 p): на проходе у кадра взгляд не трогаем — весь разворот идёт между кадрами;
   // вперёд от прошлого кадра и назад от следующего, затем смесь по доле пути перехода — без скачков на стыках
   { const inH = arc.map(x => holds.some(([a, b]) => x >= a && x <= b)), MR = THREE.MathUtils.degToRad(14) / 0.0005;
@@ -1280,10 +1296,26 @@ function openCase() {
   pageEl.scrollTop = 0; pageEl.classList.add('on'); document.documentElement.classList.add('lock');
 }
 // меню: не катим камеру через все локации, а перескакиваем — шторка, мгновенный переход, шторка
+const jumpTo = p => { const f = document.getElementById('fade'); f.classList.add('on'); setTimeout(() => { window.__mega.go(p); setTimeout(() => f.classList.remove('on'), 120); }, 360); };
 document.querySelectorAll('[data-jump]').forEach(el => el.addEventListener('click', e => {
-  e.preventDefault(); const k = el.dataset.jump, p = k === 'top' ? 0 : k === 'end' ? 0.985 : SHOTS[0].pOn + 0.002, f = document.getElementById('fade');
-  f.classList.add('on'); setTimeout(() => { window.__mega.go(p); setTimeout(() => f.classList.remove('on'), 120); }, 360);
-}));
+  e.preventDefault(); el.blur(); jumpTo(el.dataset.jump === 'top' ? 0 : SHOTS[0].pMid); }));
+// список кейсов по наведению на «кейсы»: по локациям, в порядке прохода; клик — сразу к кадру кейса
+{ const groups = []; SHOTS.forEach((t, k) => { const c = CASES[t.id] || {}; let g = groups.find(g => g.loc === t.loc); if (!g) groups.push(g = { loc: t.loc, items: [] }); g.items.push({ t, k, title: c.title || t.id }); });
+  const menu = document.getElementById('caseMenu');
+  menu.innerHTML = groups.map(g => `<div class="g"><span class="t">${g.loc}</span>${g.items.map(i => `<a href="#" data-k="${i.k}"><i>${String(i.k + 1).padStart(2, '0')}</i>${i.title}</a>`).join('')}</div>`).join('');
+  menu.addEventListener('click', e => { const a = e.target.closest('a[data-k]'); if (!a) return; e.preventDefault(); a.blur(); const dd = menu.closest('.dd'); dd.classList.add('shut'); dd.addEventListener('mouseleave', () => dd.classList.remove('shut'), { once: true }); jumpTo(SHOTS[+a.dataset.k].pMid); }); }
+// «контакты» — короткая форма; отправка пока через почтовую программу (сервера под заявки ещё нет)
+{ const fm = document.getElementById('form'), form = fm.querySelector('form'), html = document.documentElement;
+  const open = () => { fm.classList.remove('sent'); fm.classList.add('on'); html.classList.add('lock'); setTimeout(() => form.elements.name.focus(), 50); };
+  const close = () => { fm.classList.remove('on'); if (!pageEl.classList.contains('on')) html.classList.remove('lock'); };
+  document.getElementById('contactsBtn').addEventListener('click', e => { e.preventDefault(); open(); });
+  fm.querySelector('.x').addEventListener('click', close);
+  fm.addEventListener('click', e => { if (e.target === fm) close(); });
+  addEventListener('keydown', e => { if (e.key === 'Escape' && fm.classList.contains('on')) close(); });
+  form.addEventListener('submit', e => { e.preventDefault(); const d = form.elements;
+    let bad = false; [d.name, d.contact].forEach(i => { const v = !i.value.trim(); i.style.borderColor = v ? 'var(--red)' : ''; bad ||= v; }); if (bad) return;
+    const body = `Имя: ${d.name.value.trim()}\nКонтакт: ${d.contact.value.trim()}\n\n${d.task.value.trim()}`;
+    location.href = `mailto:ask@oxygen-agency.ru?subject=${encodeURIComponent('Задача с сайта')}&body=${encodeURIComponent(body)}`; fm.classList.add('sent'); }); }
 addEventListener('hashchange', openCase);
 pageEl.querySelector('.x').addEventListener('click', () => { history.pushState('', '', location.pathname + location.search); openCase(); });
 addEventListener('keydown', e => { if (e.key === 'Escape' && pageEl.classList.contains('on')) pageEl.querySelector('.x').click(); });

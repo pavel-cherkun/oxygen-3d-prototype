@@ -17,10 +17,31 @@ body{font:400 17px/1.45 "TT",system-ui,sans-serif;font-variation-settings:"opsz"
 canvas#gl{position:fixed;inset:0;width:100vw;height:100vh;display:block;z-index:0}
 #scroll{height:7500vh;position:relative;z-index:-1}
 .t{font-family:"AP",monospace;font-size:13px;letter-spacing:.04em}
-header{position:fixed;top:0;left:0;right:0;z-index:5;display:flex;align-items:center;justify-content:space-between;padding:22px 28px}
-header img{height:22px}
-header a{color:var(--cream);text-decoration:none;font-size:14px;margin-left:22px}
-header a.cta{border:1px solid var(--red);padding:8px 16px;border-radius:40px}
+header{position:fixed;top:0;left:0;right:0;z-index:8;display:flex;align-items:center;justify-content:space-between;padding:22px 28px}
+header img{height:22px;display:block}
+header nav{display:flex;gap:12px;align-items:flex-start}
+.pill{display:inline-block;color:var(--cream);text-decoration:none;font:14px "TT",sans-serif;border:1px solid var(--red);padding:8px 18px;border-radius:40px;background:rgba(1,1,1,.35);backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);cursor:pointer;transition:background .25s}
+.pill:hover,.dd:hover>.pill,.dd:focus-within>.pill{background:var(--red)}
+.dd{position:relative}
+.dd .menu{position:absolute;right:0;top:100%;padding-top:10px;opacity:0;visibility:hidden;transform:translateY(-6px);transition:opacity .25s,transform .25s,visibility 0s .25s}
+.dd:hover .menu,.dd:focus-within .menu{opacity:1;visibility:visible;transform:none;transition:opacity .25s,transform .25s}
+.dd.shut .menu{opacity:0;visibility:hidden}
+.menu .in{width:min(560px,calc(100vw - 32px));max-height:calc(100vh - 110px);overflow-y:auto;background:rgba(1,1,1,.92);border:1px solid #2a2724;border-radius:18px;padding:18px 22px;columns:2;column-gap:28px}
+.menu .g{break-inside:avoid;margin-bottom:14px}.menu .g>span{display:block;color:var(--red);margin-bottom:4px}
+.menu a{display:block;color:var(--cream);text-decoration:none;font-size:14px;line-height:1.25;padding:4px 0;transition:color .2s}.menu a:hover{color:var(--red)}
+.menu a i{font-style:normal;color:var(--mute);font-family:"AP",monospace;font-size:12px;margin-right:8px}
+#form{position:fixed;inset:0;z-index:30;display:flex;align-items:center;justify-content:center;background:rgba(1,1,1,.72);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);opacity:0;pointer-events:none;transition:opacity .35s}
+#form.on{opacity:1;pointer-events:auto}
+#form form{width:min(480px,calc(100vw - 32px));transform:translateY(12px);transition:transform .35s}#form.on form{transform:none}
+#form h2{font-weight:520;font-size:clamp(34px,3.6vw,52px);line-height:.95;letter-spacing:-.01em;margin:10px 0 28px}
+#form .t{color:var(--red)}
+#form label{display:block;margin-bottom:18px}#form label span{display:block;color:var(--mute);margin-bottom:6px}
+#form input,#form textarea{width:100%;background:none;border:0;border-bottom:1px solid #3a3632;color:var(--cream);font:17px/1.4 "TT",sans-serif;padding:6px 0 10px;outline:none;resize:none;transition:border-color .25s}
+#form input:focus,#form textarea:focus{border-color:var(--red)}
+#form .row{display:flex;align-items:center;justify-content:space-between;gap:16px;margin-top:10px}
+#form button{font:15px "TT",sans-serif;color:var(--cream);background:none;border:1px solid var(--red);border-radius:40px;padding:11px 24px;cursor:pointer;transition:background .25s}#form button:hover{background:var(--red)}
+#form .x{position:fixed;top:22px;right:28px;border-color:var(--mute);font-size:14px;padding:8px 16px}#form .x:hover{background:none;border-color:var(--cream)}
+#form .ok{display:none;color:var(--mute)}#form.sent .ok{display:block}#form.sent label,#form.sent .row{display:none}
 .ov{position:fixed;z-index:4;max-width:520px;opacity:0;transition:opacity .5s;pointer-events:none}
 .ov.on{opacity:1}
 .ov h1{font-weight:520;font-size:clamp(56px,7.4vw,124px);line-height:.9;letter-spacing:-.02em}
@@ -54,7 +75,7 @@ header a.cta{border:1px solid var(--red);padding:8px 16px;border-radius:40px}
 @keyframes flick{50%{opacity:.93}}
 #loader.done{opacity:0;pointer-events:none}
 #fade{position:fixed;inset:0;z-index:9;background:#010101;opacity:0;pointer-events:none;transition:opacity .35s}#fade.on{opacity:1}
-@media(max-width:760px){header nav a:not(.cta){display:none}.l,.r{left:16px;right:16px;text-align:left}.r p{margin-left:0}}
+@media(max-width:760px){header{padding:16px}.menu .in{columns:1}.l,.r{left:16px;right:16px;text-align:left}.r p{margin-left:0}}
 </style>
 <script type="importmap">
 {"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.169.0/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.169.0/examples/jsm/"}}
@@ -63,7 +84,21 @@ header a.cta{border:1px solid var(--red);padding:8px 16px;border-radius:40px}
 <body>
 <div id="loader"><img src="assets/iskra.svg" alt=""><span class="t"><span id="loadPct">000</span>%</span></div>
 <canvas id="gl"></canvas>
-<header><a href="#" data-jump="top" style="margin:0"><img src="assets/logo.svg" alt="Oxygen"></a><nav><a href="#" data-jump="cases">кейсы</a><a href="#" data-jump="cases">награды</a><a href="#" data-jump="end">контакты</a><a href="#" class="cta" data-jump="end">есть задача</a></nav></header>
+<header><a href="#" data-jump="top"><img src="assets/logo.svg" alt="Oxygen"></a><nav>
+  <div class="dd"><a href="#" class="pill" data-jump="cases">кейсы</a><div class="menu"><div class="in" id="caseMenu"></div></div></div>
+  <a href="#" class="pill" id="contactsBtn">контакты</a>
+</nav></header>
+<div id="form" role="dialog" aria-modal="true" aria-labelledby="formH"><button type="button" class="x">закрыть</button>
+  <form novalidate>
+    <span class="t">контакты</span>
+    <h2 id="formH">есть задача?</h2>
+    <label><span class="t">имя</span><input name="name" autocomplete="name" required></label>
+    <label><span class="t">как связаться</span><input name="contact" placeholder="телефон, почта или телеграм" required></label>
+    <label><span class="t">задача</span><textarea name="task" rows="3" placeholder="коротко, что нужно"></textarea></label>
+    <div class="row"><button type="submit">отправить</button><a class="t" href="mailto:ask@oxygen-agency.ru" style="color:var(--mute);text-decoration:none">ask@oxygen-agency.ru</a></div>
+    <p class="ok">письмо с заявкой открылось в почте — отправьте его, и мы ответим</p>
+  </form>
+</div>
 <div id="fade"></div>
 
 <!-- текст живёт в HTML: его видят поисковики, 3D только иллюстрирует -->
