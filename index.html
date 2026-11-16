@@ -21,15 +21,25 @@ header{position:fixed;top:0;left:0;right:0;z-index:8;display:flex;align-items:ce
 header img{height:22px;display:block}
 header nav{display:flex;gap:12px;align-items:flex-start}
 .pill{display:inline-block;color:var(--cream);text-decoration:none;font:14px "TT",sans-serif;border:1px solid var(--red);padding:8px 18px;border-radius:40px;background:rgba(1,1,1,.35);backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);cursor:pointer;transition:background .25s}
-.pill:hover,.dd:hover>.pill,.dd:focus-within>.pill{background:var(--red)}
-.dd{position:relative}
-.dd .menu{position:absolute;right:0;top:100%;padding-top:10px;opacity:0;visibility:hidden;transform:translateY(-6px);transition:opacity .25s,transform .25s,visibility 0s .25s}
-.dd:hover .menu,.dd:focus-within .menu{opacity:1;visibility:visible;transform:none;transition:opacity .25s,transform .25s}
-.dd.shut .menu{opacity:0;visibility:hidden}
-.menu .in{width:min(560px,calc(100vw - 32px));max-height:calc(100vh - 110px);overflow-y:auto;background:rgba(1,1,1,.92);border:1px solid #2a2724;border-radius:18px;padding:18px 22px;columns:2;column-gap:28px}
-.menu .g{break-inside:avoid;margin-bottom:14px}.menu .g>span{display:block;color:var(--red);margin-bottom:4px}
-.menu a{display:block;color:var(--cream);text-decoration:none;font-size:14px;line-height:1.25;padding:4px 0;transition:color .2s}.menu a:hover{color:var(--red)}
-.menu a i{font-style:normal;color:var(--mute);font-family:"AP",monospace;font-size:12px;margin-right:8px}
+.pill:hover{background:var(--red)}
+#list{position:fixed;inset:0;z-index:25;background:rgba(1,1,1,.985);overflow-y:auto;opacity:0;pointer-events:none;transition:opacity .35s}#list.on{opacity:1;pointer-events:auto}
+#list .in{max-width:1280px;margin:0 auto;padding:110px 28px 80px;display:grid;grid-template-columns:1fr 1fr;gap:40px 64px}
+#list h3{font:13px "AP",monospace;color:var(--red);font-weight:400;margin-bottom:14px;display:flex;justify-content:space-between;border-bottom:1px solid #2a2724;padding-bottom:12px}#list h3 i{font-style:normal;color:var(--mute)}
+#list a{display:grid;grid-template-columns:3ch 1fr;gap:0 16px;align-items:baseline;color:var(--cream);text-decoration:none;padding:9px 0;border-bottom:1px solid #1b1917;transition:color .2s}
+#list a b{font-weight:520;font-size:clamp(22px,2.3vw,36px);line-height:1.05;letter-spacing:-.01em}#list a i{font-style:normal;font:12px "AP",monospace;color:var(--mute)}#list a span{grid-column:2;color:var(--mute);font-size:14px;margin-top:3px}
+#list a:hover{color:var(--red)}#list a.cur b::after{content:" ●";color:var(--red);font-size:.5em;vertical-align:middle}
+#list .x{position:fixed;top:22px;right:28px;z-index:26}
+#peek{position:fixed;z-index:27;width:260px;aspect-ratio:16/10;object-fit:cover;pointer-events:none;opacity:0;transform:translate(24px,-50%) scale(.96);transition:opacity .2s,transform .2s;border-radius:6px;box-shadow:0 20px 50px rgba(0,0,0,.6)}#peek.on{opacity:1;transform:translate(24px,-50%) scale(1)}
+@media(max-width:760px){#list .in{grid-template-columns:1fr}#peek{display:none}}
+#route{position:fixed;left:50%;bottom:9vh;z-index:6;transform:translate(-50%,16px);text-align:center;opacity:0;pointer-events:none;transition:opacity .6s,transform .6s}#route.on{opacity:1;transform:translate(-50%,0);pointer-events:auto}
+#route .t{color:var(--red);display:block;margin-bottom:16px}#route div{display:flex;gap:14px;justify-content:center}
+#route button{background:rgba(1,1,1,.45);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);border:1px solid var(--red);color:var(--cream);border-radius:28px;padding:16px 28px 14px;cursor:pointer;text-align:left;min-width:220px;transition:background .25s}#route button:hover{background:var(--red)}
+#route button b{display:block;font-weight:520;font-size:34px;line-height:1;letter-spacing:-.01em}#route button span{display:block;margin-top:6px;font:12px "AP",monospace;opacity:.75}
+#nshade{position:fixed;inset:0;z-index:3;pointer-events:none;opacity:0;transition:opacity .7s;background:linear-gradient(to right,rgba(1,1,1,.82),rgba(1,1,1,.55) 30%,rgba(1,1,1,0) 55%)}#nshade.on{opacity:1}
+#note{position:fixed;left:28px;bottom:14vh;z-index:4;max-width:520px;opacity:0;transform:translateY(14px);transition:opacity .7s,transform .7s;pointer-events:none}#note.on{opacity:1;transform:none}
+#note .t{color:var(--red)}#note h2{font-weight:520;font-size:clamp(30px,3vw,48px);line-height:.98;letter-spacing:-.01em;margin-top:10px}#note p{margin-top:12px;font-size:17px;max-width:40ch}
+#note .num{display:grid;grid-template-columns:auto 1fr;gap:6px 18px;margin-top:14px;align-items:baseline}#note .num b{font-weight:520;font-size:clamp(34px,3.4vw,54px);line-height:1;letter-spacing:-.02em}#note .num span{color:#b4aca3;font-size:15px}
+@media(max-width:760px){#note{left:16px;right:16px}#route button{min-width:0;padding:12px 18px}#route button b{font-size:26px}}
 #form{position:fixed;inset:0;z-index:30;display:flex;align-items:center;justify-content:center;background:rgba(1,1,1,.72);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);opacity:0;pointer-events:none;transition:opacity .35s}
 #form.on{opacity:1;pointer-events:auto}
 #form form{width:min(480px,calc(100vw - 32px));transform:translateY(12px);transition:transform .35s}#form.on form{transform:none}
@@ -87,7 +97,7 @@ header nav{display:flex;gap:12px;align-items:flex-start}
 <div id="loader"><img src="assets/iskra.svg" alt=""><span class="t"><span id="loadPct">000</span>%</span></div>
 <canvas id="gl"></canvas>
 <header><a href="#" data-jump="top"><img src="assets/logo.svg" alt="Oxygen"></a><nav>
-  <div class="dd"><a href="#" class="pill" data-jump="cases">кейсы</a><div class="menu"><div class="in" id="caseMenu"></div></div></div>
+  <a href="#" class="pill" id="listBtn">кейсы</a>
   <a href="#" class="pill" id="contactsBtn">контакты</a>
 </nav></header>
 <div id="form" role="dialog" aria-modal="true" aria-labelledby="formH"><button type="button" class="x">закрыть</button>
@@ -102,6 +112,9 @@ header nav{display:flex;gap:12px;align-items:flex-start}
   </form>
 </div>
 <div id="fade"></div>
+<div id="list" role="dialog" aria-modal="true" aria-label="кейсы"><button type="button" class="pill x">закрыть</button><div class="in"></div></div><img id="peek" alt="">
+<div id="route"><span class="t">куда дальше?</span><div><button type="button" data-r="atl"><b>atl</b><span>креатив · продакшн · брендинг</span></button><button type="button" data-r="btl"><b>btl</b><span>event · спорт · бренд-зоны</span></button></div></div>
+<div id="nshade"></div><aside id="note"></aside>
 <div id="arrows"><button type="button" aria-label="предыдущий кейс">←</button><button type="button" aria-label="следующий кейс">→</button></div>
 
 <!-- текст живёт в HTML: его видят поисковики, 3D только иллюстрирует -->

@@ -363,7 +363,7 @@ const ZONES3 = {};   // 3D-зоны здесь не ставим: кейсы —
 // кадр зоны: «картинка» — фасад зоны (центр по фасаду, ширина ~ ширина зоны)
 const zoneShot = (k, kW, o = {}) => { const z = ZONES3[k], n = V(Math.sin(z.rotY), 0, Math.cos(z.rotY)), C = z.pos.clone().addScaledVector(n, z.size.d * z.S / 2); C.y = LOW + z.size.h * z.S * 0.42; return { C, n, _W: z.size.w * z.S * kW, z3: k, ...o }; };
 const ZS = (id, loc, zone, k, kW, o) => { const z = zoneShot(k, kW, o); return PJ(id, '', loc, zone, z, z._W, z); };
-const SHOTS = [
+const ALL = [
   PJ('baltikaPlant', 'cases/baltika-plant-1', 'ивенты', 'hyp', wallPt(-699.5, 115, -730, 1), 220),
   PJ('megafon', 'cases/megafon-1', 'ивенты', 'hyp', wallPt(-699.5, 115, -990, 1), 220),
   PJ('megafonTravel', 'cases/megafon-travel-1', 'ивенты', 'hyp', wallPt(-699.5, 115, -1250, 1), 220),
@@ -391,7 +391,10 @@ const SHOTS = [
   PJ('gdrive', 'cases/gdrive-silk-1', 'спорт', 'sport', wallPt(319.5, 110, -4965, -1), 120),
   PJ('baltika7', 'cases/baltika7-1', 'спорт', 'sport', wallPt(319.5, 110, -5085, -1), 120),
 ];
-SHOTS.forEach(c => { const z = ZP[c.zone]; c.P = c.C.clone().addScaledVector(c.n, c.pd || z.pd); c.P.y = c.py || z.py; });
+// маршрут: ALL — все стены с проекторами; SHOTS — кейсы выбранного маршрута (atl или btl), на остальных стенах камера не останавливается
+let SHOTS = ALL, ROUTE = null;
+ALL.forEach(c => { c.dir = (CASES[c.id] || {}).dir || 'btl'; });
+ALL.forEach(c => { const z = ZP[c.zone]; c.P = c.C.clone().addScaledVector(c.n, c.pd || z.pd); c.P.y = c.py || z.py; });
 // кадр кейса: камера смотрит на стену под углом 30° вперёд по ходу; картинка занимает половину экрана —
 // слева, если стена слева от хода, и справа, если справа; на другой половине — подпись и кнопка
 const SOLVE_A = THREE.MathUtils.degToRad(30);
@@ -414,7 +417,7 @@ function solveShot(sh, aspect) {
     lat += Math.max(-0.3, Math.min(0.3, (x0 + x1) / 2 - tx)) * D * 0.3; pitch = Math.max(-0.6, Math.min(0.6, pitch + ((y0 + y1) / 2 - ty) * 0.2));
   }
 }
-SHOTS.forEach(c => solveShot(c, innerWidth / innerHeight));
+ALL.forEach(c => solveShot(c, innerWidth / innerHeight));
 // проходы между локациями: камера идёт через проёмы по оси
 const DOORS = { 'hyp>shaft': [V(0, LOW + 42, -1440), V(0, LOW + 40, -1570)], 'shaft>asia': [V(0, LOW + 40, -1790), V(0, LOW + 42, -1890)], 'asia>ret': [V(0, LOW + 36, -2330), V(0, LOW + 36, -2460)],
   'ret>ai': [V(0, LOW + 56, -3290), V(0, LOW + 60, -3460)], 'ai>sport': [V(0, LOW + 64, -4400), V(0, LOW + 64, -4490)] };
@@ -430,12 +433,13 @@ const CAM0 = { pos: V(104, 34, -236), look: V(90, -120, -900) };   // кадр �
 function camKeys(endKeys) {
   const K = [{ pos: CAM0.pos.clone(), dir: CAM0.look.clone().sub(CAM0.pos).normalize() },   // с парапета — вниз над лестницей (между её бортами), из лестницы — в зал
     { pos: V(108, -40, -420), dir: V(-14, -70, -480).normalize() }, { pos: V(104, LOW + 48, -585), dir: V(-60, -8, -300).normalize(), stair: true }, { pos: V(80, LOW + 46, -690) }];   // взгляд — вперёд вниз по лестнице, не в её борт
-  SHOTS.forEach((c, i) => {
+  ALL.forEach((c, i) => {
     // проход мимо кадра: камера едет вдоль стены (по ходу), взгляд всё это время прикован к картинке
     const zr = ZR[c.zone], L = c.cam.D * 0.5, cz = z => Math.min(zr[0], Math.max(zr[1], z));
     const A = c.cam.pos.clone().addScaledVector(c.cam.f, -L / 2), B = c.cam.pos.clone().addScaledVector(c.cam.f, L / 2); A.z = cz(A.z); B.z = cz(B.z);
-    const pr = SHOTS[i - 1]; if (pr && pr.zone !== c.zone) DOORS[`${pr.zone}>${c.zone}`].forEach(p => { if (p.z > A.z + 5) K.push({ pos: p.clone() }); });
-    K.push({ pos: A, dir: lockDir(c, A), shot: c, hold: 'A' }, { pos: B, dir: lockDir(c, B), shot: c, hold: 'B' });
+    const pr = ALL[i - 1]; if (pr && pr.zone !== c.zone) DOORS[`${pr.zone}>${c.zone}`].forEach(p => { if (p.z > A.z + 5) K.push({ pos: p.clone() }); });
+    if (SHOTS.includes(c)) K.push({ pos: A, dir: lockDir(c, A), shot: c, hold: 'A' }, { pos: B, dir: lockDir(c, B), shot: c, hold: 'B' });
+    else K.push({ pos: c.cam.pos.clone().lerp(A, 0.5).setZ((A.z + B.z) / 2) });   // чужой маршрут: тот же проход (без колонн), но без остановки — взгляд за неоном
   });
   K.push({ pos: V(0, LOW + 60, -5080) }, { pos: V(0, LOW + 58, -5150) });   // к проёму в вентшахту — по оси
   return K.concat(endKeys);
@@ -461,7 +465,7 @@ const KEEP = [];
 function segD(px, py, pz, a, b) { const bx = b.x - a.x, by = b.y - a.y, bz = b.z - a.z; let t = ((px - a.x) * bx + (py - a.y) * by + (pz - a.z) * bz) / ((bx * bx + by * by + bz * bz) || 1); t = t < 0 ? 0 : t > 1 ? 1 : t;
   const dx = a.x + bx * t - px, dy = a.y + by * t - py, dz = a.z + bz * t - pz; return Math.sqrt(dx * dx + dy * dy + dz * dz); }
 // весь луч проектора (в плане) — тоже без колонн, иначе картинка ложится на колонну перед стеной
-const inBeam2 = (x, z, r) => SHOTS.some(c => { if (c.z3) return false; const T0 = c.n.clone().negate().cross(V(0, 1, 0)).normalize(), A = c.P, B = c.C.clone().addScaledVector(T0, -c.W / 2), C2 = c.C.clone().addScaledVector(T0, c.W / 2);
+const inBeam2 = (x, z, r) => ALL.some(c => { if (c.z3) return false; const T0 = c.n.clone().negate().cross(V(0, 1, 0)).normalize(), A = c.P, B = c.C.clone().addScaledVector(T0, -c.W / 2), C2 = c.C.clone().addScaledVector(T0, c.W / 2);
   const sd = (p, q) => (q.x - p.x) * (z - p.z) - (q.z - p.z) * (x - p.x), d1 = sd(A, B), d2 = sd(B, C2), d3 = sd(C2, A);
   return (!((d1 < 0 || d2 < 0 || d3 < 0) && (d1 > 0 || d2 > 0 || d3 > 0))) || segD(x, 0, z, A.clone().setY(0), B.clone().setY(0)) < r || segD(x, 0, z, A.clone().setY(0), C2.clone().setY(0)) < r; });
 const inZone2 = (x, z, r) => Object.values(ZONES3).some(Z => { const dx = x - Z.pos.x, dz = z - Z.pos.z, c = Math.cos(Z.rotY), s_ = Math.sin(Z.rotY), lx = dx * c - dz * s_, lz = dx * s_ + dz * c; return Math.abs(lx) < Z.size.w * Z.S / 2 + r + 20 && Math.abs(lz) < Z.size.d * Z.S / 2 + r + 20; });
@@ -679,7 +683,7 @@ function buildShelves(RX, RY) {
   [-170, 170, -310, 310].forEach(cx => segs.forEach(([za, zb]) => {
     box(cx - 0.5, cx + 0.5, LOW, LOW + 424, zb, za, 0.75);                                       // задняя стенка
     // там, куда бьёт проектор, стеллаж со стороны прохода разобран: на задней стенке чистый экран
-    const scr = SHOTS.find(s => s.zone === 'ret' && Math.abs(s.C.x - cx) < 2 && s.C.z < za && s.C.z > zb), fs = -Math.sign(cx);
+    const scr = ALL.find(s => s.zone === 'ret' && Math.abs(s.C.x - cx) < 2 && s.C.z < za && s.C.z > zb), fs = -Math.sign(cx);
     const inScr = (z0, z1, y) => scr && z1 > scr.C.z - scr.W / 2 - 6 && z0 < scr.C.z + scr.W / 2 + 6 && Math.abs(y - scr.C.y) < scr.H / 2 + 26;
     const half = (y0, y1, z0, z1, t) => { if (fs > 0) box(cx + 0.5, cx + 13, y0, y1, z0, z1, t); else box(cx - 13, cx - 0.5, y0, y1, z0, z1, t); };
     const back = (y0, y1, z0, z1, t) => { if (fs > 0) box(cx - 13, cx + 0.5, y0, y1, z0, z1, t); else box(cx - 0.5, cx + 13, y0, y1, z0, z1, t); };
@@ -739,7 +743,7 @@ function buildSphere(c, rad) {
 
 // типографская карточка кейса для проектора: только текст из документа (название, клиент, задача, цитата) — в айдентике 20_26
 function caseCard(c) {
-  const k = CASES[c.id] || {}, ps = k.pass || {}, num = String(SHOTS.indexOf(c) + 1).padStart(2, '0');
+  const k = CASES[c.id] || {}, ps = k.pass || {}, num = String(ALL.indexOf(c) + 1).padStart(2, '0');
   return canvasTex(1600, 900, (g, w, h) => {
     g.fillStyle = '#060505'; g.fillRect(0, 0, w, h);
     g.save(); g.globalAlpha = 0.07; g.fillStyle = '#E1D9CF'; g.font = '700 760px TT, sans-serif'; g.fillText(num, w - 980, h + 120); g.restore();   // огромный номер на фоне
@@ -785,7 +789,7 @@ function buildLight() {
   for (let zz = ZN.st1 - 64; zz > ZN.st1 - 520; zz -= 48) [-1, 1].forEach(sd => { const m = slab(3, 180, V(sd * (VENT.x - 0.6), LOW + 100, zz), 2.6); m.rotation.y = -sd * Math.PI / 2; });   // кадр 9: щели
   // проекторы: корпус на подвесе (или на галерее / на стеллаже), линза, луч в дымке; картинка — в шейдере бетона
   const bodies = [], rods = [], dark = new THREE.Color(0.045, 0.045, 0.05);
-  SHOTS.filter(c => !c.z3).forEach(c => {
+  ALL.filter(c => !c.z3).forEach(c => {
     const z = ZP[c.zone], P = c.P, dir = c.C.clone().sub(P).normalize(), q = new THREE.Quaternion().setFromUnitVectors(V(0, 0, 1), dir);
     bodies.push({ m: new THREE.Matrix4().compose(P.clone().addScaledVector(dir, -7), q, V(11, 7, 15)), c: dark });
     if (c.ceil || z.ceil) rods.push({ m: beam(P.clone().addScaledVector(dir, -7), V(P.x, c.ceil || z.ceil, P.z).addScaledVector(dir, -7), 0.8), c: dark });
@@ -1147,6 +1151,7 @@ function caption(p) {
 function frame() {
   const dt = Math.min(clock.getDelta(), 0.05), time = clock.elapsedTime;
   const max = document.documentElement.scrollHeight - innerHeight;
+  if (!ROUTE && max > 0) { const pr = toP(clamp01(scrollY / max)); if (pr > P_A + 1e-4 && pr < P_B) scrollTo(0, toRaw(P_A) * max); }   // без выбора маршрута — стоп на парапете
   // камера догоняет скролл по кривой торможения без пружины (из форка 2): скорость к цели сама гаснет, разгон с ограничением рывка, перелёта нет
   { const tgt = scrollY / innerHeight, err = tgt - FOL.s, dist = Math.abs(err), sg = Math.sign(err);
     FOL.boost += Math.max(-0.8 * dt, Math.min(0.8 * dt, Math.min(1.5, 1 + dist / 120) - FOL.boost));
@@ -1290,7 +1295,7 @@ const pageEl = document.getElementById('page');
 function openCase() {
   const id = (location.hash.match(/^#case\/(\w+)/) || [])[1], c = id && CASES[id];
   if (!c) { pageEl.classList.remove('on'); document.documentElement.classList.remove('lock'); return; }
-  const sh = SHOTS.find(t => t.id === id) || {}, ps = c.pass || {};
+  const sh = ALL.find(t => t.id === id) || {}, ps = c.pass || {};
   const steps = (c.steps || []).map((st, i) => st.length > 2 ? st : [String(i + 1).padStart(2, '0'), st[0], st[1]]);
   const gal = (c.how || []).filter(h => h[0]);
   pageEl.querySelector('.in').innerHTML = `<span class="t" style="color:var(--red)">${sh.loc || ''}</span><h1>${c.title || ''}</h1>
@@ -1305,13 +1310,50 @@ function openCase() {
 }
 // меню: не катим камеру через все локации, а перескакиваем — шторка, мгновенный переход, шторка
 const jumpTo = p => { const f = document.getElementById('fade'); f.classList.add('on'); setTimeout(() => { window.__mega.go(p); setTimeout(() => f.classList.remove('on'), 120); }, 360); };
-document.querySelectorAll('[data-jump]').forEach(el => el.addEventListener('click', e => {
-  e.preventDefault(); el.blur(); jumpTo(el.dataset.jump === 'top' ? 0 : SHOTS[0].pMid); }));
-// список кейсов по наведению на «кейсы»: по локациям, в порядке прохода; клик — сразу к кадру кейса
-{ const groups = []; SHOTS.forEach((t, k) => { const c = CASES[t.id] || {}; let g = groups.find(g => g.loc === t.loc); if (!g) groups.push(g = { loc: t.loc, items: [] }); g.items.push({ t, k, title: c.title || t.id }); });
-  const menu = document.getElementById('caseMenu');
-  menu.innerHTML = groups.map(g => `<div class="g"><span class="t">${g.loc}</span>${g.items.map(i => `<a href="#" data-k="${i.k}"><i>${String(i.k + 1).padStart(2, '0')}</i>${i.title}</a>`).join('')}</div>`).join('');
-  menu.addEventListener('click', e => { const a = e.target.closest('a[data-k]'); if (!a) return; e.preventDefault(); a.blur(); const dd = menu.closest('.dd'); dd.classList.add('shut'); dd.addEventListener('mouseleave', () => dd.classList.remove('shut'), { once: true }); jumpTo(SHOTS[+a.dataset.k].pMid); }); }
+document.querySelectorAll('[data-jump]').forEach(el => el.addEventListener('click', e => { e.preventDefault(); el.blur(); jumpTo(0); }));
+// маршрут atl / btl: те же стены и проекторы, горят только кейсы маршрута; путь камеры пересобирается под шторкой
+function setRoute(r) {
+  if (ROUTE === r) return; ROUTE = r; SHOTS = ALL.filter(c => c.dir === r);
+  ALL.forEach(c => { if (!SHOTS.includes(c)) { c.on = 0; if (c.beam) { c.beam.visible = false; c.dust.visible = false; } c.video?.pause(); } });
+  buildTimeline(); buildNotes(); capId = null; document.body.dataset.route = r;
+}
+const goRoute = (r, p) => { const f = document.getElementById('fade'); f.classList.add('on');
+  setTimeout(() => { setRoute(r); window.__mega.go(typeof p === 'function' ? p() : p); setTimeout(() => f.classList.remove('on'), 160); }, 360); };
+// выбор маршрута на парапете: дальше без выбора не пускаем
+{ const el = document.getElementById('route');
+  el.querySelectorAll('button').forEach(b => b.addEventListener('click', () => { const r = b.dataset.r; if (ROUTE === r) return navNext(); goRoute(r, P_A); setTimeout(() => navNext(), 900); }));
+  const upd = () => { el.classList.toggle('on', !ROUTE && pSm > P_A - 0.006 && pSm < P_A + 0.01); requestAnimationFrame(upd); }; upd(); }
+// «кейсы» — список во весь экран: atl и btl, у курсора — превью (некликабельное); клик — к кейсу (если он с другого маршрута — маршрут меняется)
+{ const L = document.getElementById('list'), peek = document.getElementById('peek'), html = document.documentElement, img = c => c.img ? `assets/${c.img}.jpg` : '';
+  const col = r => { const cs = ALL.filter(c => c.dir === r); return `<div><h3><span>${r}</span><i>${cs.length} кейсов</i></h3>${cs.map((c, k) => { const k_ = CASES[c.id] || {}, ps = k_.pass || {};
+    return `<a href="#" data-id="${c.id}" data-img="${img(c)}"><i>${String(k + 1).padStart(2, '0')}</i><b>${k_.title || c.id}</b><span>${[ps.клиент, ps.год].filter(x => x && x !== '—').join(' · ')}</span></a>`; }).join('')}</div>`; };
+  L.querySelector('.in').innerHTML = col('atl') + col('btl');
+  const open = () => { L.querySelectorAll('a').forEach(a => a.classList.toggle('cur', a.dataset.id === capId)); L.classList.add('on'); html.classList.add('lock'); };
+  const close = () => { L.classList.remove('on'); peek.classList.remove('on'); if (!pageEl.classList.contains('on')) html.classList.remove('lock'); };
+  document.getElementById('listBtn').addEventListener('click', e => { e.preventDefault(); e.currentTarget.blur(); open(); });
+  L.querySelector('.x').addEventListener('click', close);
+  addEventListener('keydown', e => { if (e.key === 'Escape' && L.classList.contains('on')) close(); });
+  L.addEventListener('mousemove', e => { const a = e.target.closest('a[data-img]'); if (a && a.dataset.img) { if (peek.getAttribute('src') !== a.dataset.img) peek.src = a.dataset.img; peek.style.left = e.clientX + 'px'; peek.style.top = e.clientY + 'px'; peek.classList.add('on'); } else peek.classList.remove('on'); });
+  L.addEventListener('mouseleave', () => peek.classList.remove('on'));
+  L.addEventListener('click', e => { const a = e.target.closest('a[data-id]'); if (!a) return; e.preventDefault(); close(); const c = ALL.find(t => t.id === a.dataset.id);
+    if (ROUTE === c.dir) jumpTo(c.pMid); else goRoute(c.dir, () => c.pMid); }); }
+// «о нас» — короткие заметки на длинных перегонах между кейсами (тексты — из портфолио 20_26, без изменений)
+const NOTE_TXT = {
+  who: `<span class="t">кто мы</span><h2>у каждого бренда есть огонь</h2><p>чаще всего он тлеет — в отчётах, согласованиях и «давайте аккуратнее». мы не приносим огонь со стороны: находим ваш и даём ему дышать</p>`,
+  num: `<span class="t">кто мы</span><div class="num"><b>2007</b><span>год основания агентства</span><b>52</b><span>специалиста в штате</span><b>10+</b><span>лет опыта у ключевых сотрудников</span><b>вся РФ</b><span>география проектов, дом — петербург</span></div>`,
+  awd: `<span class="t">награды и рейтинги</span><h2>нас считают. в хорошем смысле</h2><div class="num"><b>4</b><span>gold</span><b>6</b><span>silver</span><b>6</b><span>bronze</span><b>4</b><span>short-list</span></div><p>silver mercury, red apple, e+ awards, white square, perspectum awards, sreda, dprofile awards · 3 место — adindex, качество услуг · 4 место — АКАР, брендинг, 2022</p>`,
+  atl: `<span class="t">что делаем</span><h2>креатив, брендинг, дизайн, продакшн</h2><p>большие идеи и федеральные кампании: от инсайта до эфира. видео, 3d, cg, анимация, съёмка, ии-продакшн, звук</p>`,
+  btl: `<span class="t">что делаем</span><h2>btl, event, MICE, спорт</h2><p>бренд-зоны, фестивали, корпоративы, презентации. гонки, марафоны, клубы: от зоны до айдентики сезона</p>`,
+};
+let NOTES = [];
+function buildNotes() {
+  const gaps = [], hs = SHOTS.map(c => [c.p0, c.p1]).sort((a, b) => a[0] - b[0]); let prev = P_A + 0.02;
+  hs.forEach(([a, b]) => { if (a - prev > 0.012) gaps.push([prev, a]); prev = Math.max(prev, b); }); if (P_B - 0.01 - prev > 0.012) gaps.push([prev, P_B - 0.01]);
+  const pick = gaps.sort((x, y) => (y[1] - y[0]) - (x[1] - x[0])).slice(0, 4).sort((x, y) => x[0] - y[0]), keys = ['who', 'num', 'awd', ROUTE];
+  NOTES = pick.map(([a, b], i) => ({ a: a + (b - a) * 0.2, b: b - (b - a) * 0.2, k: keys[i] }));
+}
+{ const el = document.getElementById('note'), sh = document.getElementById('nshade'); let shown = null;
+  const upd = () => { const n = NOTES.find(n => pSm >= n.a && pSm <= n.b); if (n && n.k !== shown) { el.innerHTML = NOTE_TXT[n.k]; shown = n.k; } el.classList.toggle('on', !!n); sh.classList.toggle('on', !!n); requestAnimationFrame(upd); }; upd(); }
 // «контакты» — короткая форма; отправка пока через почтовую программу (сервера под заявки ещё нет)
 { const fm = document.getElementById('form'), form = fm.querySelector('form'), html = document.documentElement;
   const open = () => { fm.classList.remove('sent'); fm.classList.add('on'); html.classList.add('lock'); setTimeout(() => form.elements.name.focus(), 50); };
@@ -1324,14 +1366,16 @@ document.querySelectorAll('[data-jump]').forEach(el => el.addEventListener('clic
     let bad = false; [d.name, d.contact].forEach(i => { const v = !i.value.trim(); i.style.borderColor = v ? 'var(--red)' : ''; bad ||= v; }); if (bad) return;
     const body = `Имя: ${d.name.value.trim()}\nКонтакт: ${d.contact.value.trim()}\n\n${d.task.value.trim()}`;
     location.href = `mailto:ask@oxygen-agency.ru?subject=${encodeURIComponent('Задача с сайта')}&body=${encodeURIComponent(body)}`; fm.classList.add('sent'); }); }
+let navNext = () => {};
 // листание по кейсам (из форка 2): один жест колеса / свайп / клавиша = один кейс; стрелки ← → внизу посередине.
 // Работает на участке кейсов (от парапета до входа в вентшахту), до и после — обычный скролл.
 { const arrows = document.getElementById('arrows'), [bPrev, bNext] = arrows.querySelectorAll('button');
   const maxS = () => document.documentElement.scrollHeight - innerHeight, pNow = () => toP(clamp01(scrollY / Math.max(1, maxS()))), E = 1e-4;
   const targets = () => [P_A, ...SHOTS.map(c => c.pMid), P_B];
-  const zone = dir => { const p = pNow(); return p >= P_A - E && p <= P_B + E && !(dir > 0 && p >= P_B - E) && !(dir < 0 && p <= P_A + E); };
-  const busy = () => pageEl.classList.contains('on') || document.getElementById('form').classList.contains('on');
-  const navStep = dir => { const T = targets(), p = pNow(), cur = dir > 0 ? Math.max(p, pSm) : p;
+  const zone = dir => { const p = pNow(); if (!ROUTE && dir > 0 && p >= P_A - 0.004 && p < P_B) return true;   // без маршрута дальше парапета не идём — ждём выбора
+    return p >= P_A - E && p <= P_B + E && !(dir > 0 && p >= P_B - E) && !(dir < 0 && p <= P_A + E); };
+  const busy = () => pageEl.classList.contains('on') || document.getElementById('form').classList.contains('on') || document.getElementById('list').classList.contains('on');
+  const navStep = dir => { if (!ROUTE && dir > 0) { if (pNow() < P_A - E) scrollTo(0, toRaw(P_A) * maxS()); return; } const T = targets(), p = pNow(), cur = dir > 0 ? Math.max(p, pSm) : p;
     const t = dir > 0 ? T.find(x => x > cur + E) : [...T].reverse().find(x => x < cur - E); if (t == null) return; scrollTo(0, toRaw(t) * maxS()); };
   const N = { acc: 0, lock: 0, last: 0, tail: 1e9, armed: true };
   addEventListener('wheel', e => { if (busy() || e.ctrlKey) return; const dy = e.deltaMode === 1 ? e.deltaY * 16 : e.deltaY, dir = Math.sign(dy); if (!dir || !zone(dir)) return;
@@ -1346,8 +1390,8 @@ document.querySelectorAll('[data-jump]').forEach(el => el.addEventListener('clic
   addEventListener('touchend', e => { if (ty == null || busy()) return; const d = ty - e.changedTouches[0].clientY; ty = null; if (Math.abs(d) > 40 && zone(Math.sign(d))) navStep(Math.sign(d)); });
   addEventListener('keydown', e => { if (busy() || /input|textarea/i.test(e.target.tagName)) return; const dir = ['ArrowDown', 'PageDown', ' '].includes(e.key) ? 1 : ['ArrowUp', 'PageUp'].includes(e.key) ? -1 : 0;
     if (dir && zone(dir)) { e.preventDefault(); navStep(dir); } });
-  bPrev.addEventListener('click', () => navStep(-1)); bNext.addEventListener('click', () => navStep(1));
-  const upd = () => { const p = pSm, on = p >= P_A - 0.003 && p <= P_B + E && !busy(); arrows.classList.toggle('on', on); bPrev.disabled = pNow() <= P_A + E; bNext.disabled = pNow() >= P_B - E; requestAnimationFrame(upd); }; upd(); }
+  navNext = () => navStep(1); bPrev.addEventListener('click', () => navStep(-1)); bNext.addEventListener('click', () => navStep(1));
+  const upd = () => { const p = pSm, on = !!ROUTE && p >= P_A - 0.003 && p <= P_B + E && !busy(); arrows.classList.toggle('on', on); bPrev.disabled = pNow() <= P_A + E; bNext.disabled = pNow() >= P_B - E; requestAnimationFrame(upd); }; upd(); }
 addEventListener('hashchange', openCase);
 pageEl.querySelector('.x').addEventListener('click', () => { history.pushState('', '', location.pathname + location.search); openCase(); });
 addEventListener('keydown', e => { if (e.key === 'Escape' && pageEl.classList.contains('on')) pageEl.querySelector('.x').click(); });
@@ -1360,7 +1404,8 @@ buildWorld(slot); buildLight(); buildZones(); buildNeon(); buildReel(); buildWet
 // запечённый свет снят с геометрии до 3D-зон (колонны в гипостиле переставлены) — пока живой расчёт; ?baked включает старое запекание
 if (!new URLSearchParams(location.search).has('live')) await loadBaked();
 renderer.compile(scene, camera);
-window.__mega = { cam: camera, composer, bloom, fanMesh: FX.fan.bi, LAMPS, SHAFTS, glows: FX.glows, U, rigAt: q => { camTarget(q); return [camT.toArray(), look.toArray()]; }, go: p => { scrollTo(0, toRaw(p) * (document.documentElement.scrollHeight - innerHeight)); FOL.s = scrollY / innerHeight; FOL.v = 0; FOL.a = 0; pSm = p; snapCam = true; }, STOPS: () => SHOTS.map(c => [c.id, +c.pMid.toFixed(4)]), pScroll: () => toP(clamp01(scrollY / (document.documentElement.scrollHeight - innerHeight))), SHOTS, CP, renderer, scene };
+window.__mega = { cam: camera, composer, bloom, fanMesh: FX.fan.bi, LAMPS, SHAFTS, glows: FX.glows, U, rigAt: q => { camTarget(q); return [camT.toArray(), look.toArray()]; }, go: p => { if (!ROUTE && p > P_A + 1e-4 && p < P_B) setRoute(new URLSearchParams(location.search).get('route') || 'btl'); scrollTo(0, toRaw(p) * (document.documentElement.scrollHeight - innerHeight)); FOL.s = scrollY / innerHeight; FOL.v = 0; FOL.a = 0; pSm = p; snapCam = true; }, STOPS: () => SHOTS.map(c => [c.id, +c.pMid.toFixed(4)]), setRoute: r => setRoute(r), pScroll: () => toP(clamp01(scrollY / (document.documentElement.scrollHeight - innerHeight))), get SHOTS() { return SHOTS; }, ALL, get ROUTE() { return ROUTE; }, CP, renderer, scene };
+{ const r = new URLSearchParams(location.search).get('route'); if (r === 'atl' || r === 'btl') setRoute(r); }
 const AT = new URLSearchParams(location.search).get('p'); if (AT) window.__mega.go(+AT);
 frame();
 await new Promise(res => { const t0 = performance.now(); let calm = 0; const tick = () => { calm = LOAD.total === LOAD.loaded ? calm + 1 : 0; if (calm > 3 || performance.now() - t0 > 30000) return res(); setTimeout(tick, 150); }; tick(); });
