@@ -111,25 +111,48 @@ const U = {
   uHaze: { value: new THREE.Vector3(0, 0, 0) }, uHazeK: { value: 0 }, uT: { value: 0 }, uBake: { value: 1 },
   // три ближайших проектора: позиция и сила, центр картинки и ширина, нормаль стены и высота, масштаб «cover», сама картинка
   uJp: { value: [0, 1, 2].map(() => new THREE.Vector4(0, 0, 0, 0)) }, uJc: { value: [0, 1, 2].map(() => new THREE.Vector4(0, 0, -1, 1)) },
-  uJn: { value: [0, 1, 2].map(() => new THREE.Vector4(0, 0, 1, 1)) }, uJs: { value: [0, 1, 2].map(() => new THREE.Vector2(1, 1)) },
+  uJn: { value: [0, 1, 2].map(() => new THREE.Vector4(0, 0, 1, 1)) }, uJs: { value: [0, 1, 2].map(() => new THREE.Vector2(1, 1)) }, uJo: { value: [1, 1, 1] },
   tJ0: { value: null }, tJ1: { value: null }, tJ2: { value: null },
 };
 { const blk = new THREE.DataTexture(new Uint8Array([0, 0, 0, 255]), 1, 1); blk.needsUpdate = true; U.tJ0.value = U.tJ1.value = U.tJ2.value = blk; }
 // проекция: луч от проектора через точку поверхности попадает в плоскость картинки — так картинка ложится без трапеции
 // и на стену, и на изогнутый бетон, и на всё, что стоит в луче; за плоскостью стены и позади проектора света нет
-const PROJ = /* glsl */`uniform vec4 uJp[3]; uniform vec4 uJc[3]; uniform vec4 uJn[3]; uniform vec2 uJs[3]; uniform sampler2D tJ0, tJ1, tJ2;
-  vec3 projOne(sampler2D tI, vec4 P, vec4 C, vec4 Nn, vec2 sc, vec3 N, vec3 w) {
+const PROJ = /* glsl */`uniform vec4 uJp[3]; uniform vec4 uJc[3]; uniform vec4 uJn[3]; uniform vec2 uJs[3]; uniform float uJo[3]; uniform sampler2D tJ0, tJ1, tJ2;
+  vec3 projOne(sampler2D tI, vec4 P, vec4 C, vec4 Nn, vec2 sc, float on, vec3 N, vec3 w) {
     if (P.w <= 0.0) return vec3(0.0);
     vec3 n = Nn.xyz, d = w - P.xyz; float dn = dot(d, n); if (dn >= -1e-3) return vec3(0.0);
     float t = dot(C.xyz - P.xyz, n) / dn; if (t < 0.985) return vec3(0.0);
     vec3 h = P.xyz + d * t - C.xyz, T = normalize(cross(-n, vec3(0.0, 1.0, 0.0))), B = cross(T, -n);
     vec2 uv = vec2(dot(h, T) / C.w, dot(h, B) / Nn.w) + 0.5;
-    vec2 e = smoothstep(0.0, 0.004, uv) * smoothstep(0.0, 0.004, 1.0 - uv); float m = e.x * e.y; if (m <= 0.0) return vec3(0.0);
-    vec3 img = texture2D(tI, (uv - 0.5) * sc + 0.5).rgb + 0.035;   // у проектора нет чистого чёрного — рамка кадра видна и на тёмном ролике
-    float lam = max(dot(N, -normalize(d)), 0.0), vig = 1.0 - 0.45 * dot(uv - 0.5, uv - 0.5) * 2.0, scan = 0.94 + 0.06 * sin(uv.y * Nn.w * 1.3);
-    return img * m * P.w * (0.2 + 0.8 * lam) * vig * scan;
+    // ореол: свет чуть выходит за кадр и мягко гаснет на бетоне вокруг
+    vec2 o = max(max(-uv, uv - 1.0), 0.0) * vec2(C.w, Nn.w) / Nn.w; float halo = exp(-length(o) * 11.0) * 0.08;
+    vec2 e = smoothstep(0.0, 0.004, uv) * smoothstep(0.0, 0.004, 1.0 - uv); float m = e.x * e.y;
+    // включение: картинка проявляется строкой сверху вниз, по краю строки — яркая полоса
+    float wipe = 1.0 - on * 1.15, band = exp(-abs(uv.y - wipe) * 90.0) * step(0.02, on) * step(on, 0.98);
+    m *= smoothstep(wipe - 0.01, wipe + 0.01, uv.y);
+    vec3 avg = texture2D(tI, vec2(0.5), 9.0).rgb;
+    if (m <= 0.0 && halo < 0.002) return vec3(0.0);
+    // оптика: к краям кадра каналы чуть расходятся (хроматическая аберрация), как у настоящего объектива
+    vec2 tu = (uv - 0.5) * sc + 0.5, ca = (uv - 0.5) * 0.006;
+    vec3 img = m > 0.0 ? vec3(texture2D(tI, tu + ca).r, texture2D(tI, tu).g, texture2D(tI, tu - ca).b) : vec3(0.0);
+    img = pow(img, vec3(1.3)) * 1.18 + 0.004;   // контраст света: чёрное остаётся бетоном, светлое горит
+    img = img * m + (avg + 0.15) * halo * on + vec3(1.0, 0.95, 0.9) * band * 1.6 * m;
+    float lam = max(dot(N, -normalize(d)), 0.0), vig = 1.0 - 0.7 * dot(uv - 0.5, uv - 0.5) * 2.0;
+    img *= P.w * (0.35 + 0.65 * lam) * vig;
+    return img / (1.0 + img * 0.12);   // мягкое сжатие светов — без выгорания
   }
-  vec3 projAll(vec3 N, vec3 w) { return projOne(tJ0, uJp[0], uJc[0], uJn[0], uJs[0], N, w) + projOne(tJ1, uJp[1], uJc[1], uJn[1], uJs[1], N, w) + projOne(tJ2, uJp[2], uJc[2], uJn[2], uJs[2], N, w); }`;
+  // отражённый свет: проекция подсвечивает пол и всё вокруг средним цветом кадра
+  vec3 bounceOne(sampler2D tI, vec4 P, vec4 C, vec4 Nn, vec3 N, vec3 w) {
+    if (P.w <= 0.0) return vec3(0.0);
+    vec3 n = Nn.xyz, rel = w - C.xyz, T = normalize(cross(-n, vec3(0.0, 1.0, 0.0)));
+    float dw = dot(rel, n); if (dw < 1.5) return vec3(0.0);
+    float lat = abs(dot(rel, T)) / (C.w * 0.5), vert = rel.y / (Nn.w * 0.5);
+    float b = exp(-dw / (C.w * 0.32)) * (1.0 - smoothstep(0.7, 1.7, lat)) * (1.0 - smoothstep(0.6, 1.5, vert));
+    float recv = max(dot(N, -n), 0.0) * 0.6 + max(N.y, 0.0) * 0.55;
+    return texture2D(tI, vec2(0.5), 9.0).rgb * b * recv * P.w * 0.45;
+  }
+  vec3 projAll(vec3 N, vec3 w) { return projOne(tJ0, uJp[0], uJc[0], uJn[0], uJs[0], uJo[0], N, w) + projOne(tJ1, uJp[1], uJc[1], uJn[1], uJs[1], uJo[1], N, w) + projOne(tJ2, uJp[2], uJc[2], uJn[2], uJs[2], uJo[2], N, w)
+    + bounceOne(tJ0, uJp[0], uJc[0], uJn[0], N, w) + bounceOne(tJ1, uJp[1], uJc[1], uJn[1], N, w); }`;
 const HAZE = /* glsl */`uniform vec3 uHaze; uniform float uHazeK;
   vec3 haze(vec3 c, vec3 w) { float f = 1.0 - exp(-length(w - cameraPosition) * uHazeK); return mix(c, uHaze, f); }`;
 const LIGHT = /* glsl */`uniform vec4 uP[${NP}]; uniform vec3 uC[${NP}]; uniform vec4 uS[${NS}]; uniform vec2 uSY[${NS}]; uniform float uL; uniform vec3 uAmb;
@@ -235,8 +258,9 @@ function litMat({ flat = false, glow = 0, side = THREE.DoubleSide, baked = null,
         #ifdef GLOW
           L += vec3(GLOW);
         #endif
-        L += projAll(N, vW) * uL;
-        vec3 c = haze(alb * L, vW);
+        vec3 PJ = projAll(normalize(mix(n, N, 0.45)), vW) * uL;   // проекция: рельеф бетона читается, но не съедает картинку
+        L += PJ;
+        vec3 c = haze(alb * L + PJ * 0.1, vW);
         gl_FragColor = vec4(c, 1.0);
         #include <tonemapping_fragment>
         #include <colorspace_fragment>
@@ -324,12 +348,7 @@ const PJ = (id, img, loc, zone, w, W, o = {}) => Object.assign({ id, img, loc, z
 // раскладка: в каждом зале сначала подряд кейсы одной стены, потом — другой стены во второй половине зала (камера не возвращается к уже виденному)
 const AS = V(0, 0, ZN.asia), wallZ = (x, y, z) => ({ C: V(x, LOW + y, z), n: V(0, 0, 1) });
 // 3D-зоны кейсов (модуль zones/zones.js): локальные метры, фасад в +z — ставим в залы с масштабом S, у каждой свой свет
-const ZONES3 = {
-  robo: { build: buildRobozoneGen, gen: true, pos: V(300, LOW, -1240), rotY: 0, S: 6, size: { w: 15, d: 12, h: 6.5 } },
-  corp: { build: buildOzonCorpAlley, pos: V(-220, LOW, -1260), rotY: 0, S: 6, size: { w: 16, d: 26, h: 6 } },
-  sel: { build: buildSelectGen, gen: true, pos: V(-138, LOW, -2600), rotY: Math.PI / 2, S: 6, size: { w: 18, d: 4.6, h: 4.1 } },
-  dojo: { build: buildTdojoGen, gen: true, pos: V(130, LOW, -2150), rotY: 0, S: 4, size: { w: 32, d: 40, h: 14.2 } },
-};
+const ZONES3 = {};   // 3D-зоны здесь не ставим: кейсы — только проекции на стенах
 // кадр зоны: «картинка» — фасад зоны (центр по фасаду, ширина ~ ширина зоны)
 const zoneShot = (k, kW, o = {}) => { const z = ZONES3[k], n = V(Math.sin(z.rotY), 0, Math.cos(z.rotY)), C = z.pos.clone().addScaledVector(n, z.size.d * z.S / 2); C.y = LOW + z.size.h * z.S * 0.42; return { C, n, _W: z.size.w * z.S * kW, z3: k, ...o }; };
 const ZS = (id, loc, zone, k, kW, o) => { const z = zoneShot(k, kW, o); return PJ(id, '', loc, zone, z, z._W, z); };
@@ -337,17 +356,17 @@ const SHOTS = [
   PJ('baltikaPlant', 'cases/baltika-plant-1', 'ивенты', 'hyp', wallPt(-699.5, 115, -730, 1), 220),
   PJ('megafon', 'cases/megafon-1', 'ивенты', 'hyp', wallPt(-699.5, 115, -990, 1), 220),
   PJ('megafonTravel', 'cases/megafon-travel-1', 'ивенты', 'hyp', wallPt(-699.5, 115, -1250, 1), 220),
-  ZS('fandom', 'ozon corp · 3d-зона', 'hyp', 'corp', 0.95, { yc: 22, a: 8 }),
-  ZS('robozone', 'ozon tech · 3d-зона', 'hyp', 'robo', 1.0, { yc: 26 }),
-  PJ('mice', 'cases/mice-1', 'ивенты', 'hyp', wallPt(699.5, 115, -1420, -1), 140),
+  PJ('robozone', 'cases/robozone-1', 'ozon tech', 'hyp', wallPt(699.5, 115, -1275, -1), 160),
+  PJ('mice', 'cases/mice-1', 'ивенты', 'hyp', wallPt(699.5, 115, -1420, -1), 130),
   PJ('avangard', 'cases/avangard-1', 'спорт', 'hyp', wallZ(0, 250, -1499.4), 240, { pd: 420 }),
   PJ('derbent', 'cases/derbent-1', 'города', 'shaft', cylPt(SHC, 149.5, -65, -10), 130),
   PJ('tevredens', 'cases/tevredens-1', 'города', 'shaft', cylPt(SHC, 149.5, -125, -10), 130),
   PJ('ozonTravel', '', 'города', 'shaft', cylPt(SHC, 149.5, 125, -10), 130),
   PJ('izhora', 'cases/izhora-48-1', 'азия', 'asia', cylPt(AS, 259.5, -45, 80), 150),
-  PJ('treschnutye', 'cases/treschnutye-1', 'азия', 'asia', cylPt(AS, 259.5, -105, 80), 150),
-  ZS('tbank', 'т-банк · 3d-зона', 'asia', 'dojo', 0.55, { a: -20, yc: 30 }),
-  ZS('selekt', 'ozon селект · 3d-зона', 'ret', 'sel', 0.85, { yc: 24 }),
+  PJ('fandom', 'cases/ozon-fandom-kv-1', 'азия', 'asia', cylPt(AS, 259.5, -100, 80), 150),
+  PJ('tbank', 'cases/tbank-belt-1', 'азия', 'asia', cylPt(AS, 259.5, 115, 80), 150),
+  PJ('treschnutye', 'cases/treschnutye-1', 'азия', 'asia', cylPt(AS, 259.5, 155, 80), 150),
+  PJ('selekt', 'cases/ozon-select-1', 'ритейл', 'ret', wallPt(-169.4, 150, -2600, 1), 200),
   PJ('zaklinateli', 'cases/zaklinateli-kv-1', 'ритейл', 'ret', wallPt(-169.4, 150, -2870, 1), 200),
   PJ('dino', 'cases/dino-1', 'ритейл', 'ret', wallPt(-169.4, 150, -3140, 1), 200),
   PJ('gdriveMerch', 'cases/gdrive-capsule-1', 'мерч', 'ret', wallPt(169.4, 150, -3140, -1), 190),
@@ -493,7 +512,7 @@ function buildWorld(slot) {
     [V(xl, 0.25, 9), up], [V(90, 0.25, 9), up], [V(90, 0.25, STAIR.z0 - run), up]];
   const zBot = STAIR.z0 - run + 2 * LOW;
   P.push([V(90, LOW + 0.25, zBot), V(0, run, -rise).normalize()]);
-  [[90, -700], [-672, -700], [-672, -1360], [672, -1380], [672, -1440], [0, -1440], [0, -1860], [-112, -1905], [-211, -2023], [-211, -2177], [-112, -2295], [0, -2370], [0, -2470], [-140, -2470], [-140, -3205], [140, -3215], [140, -3285], [0, -3285], [0, -3460], [-672, -3460], [-672, -4225], [672, -4235], [672, -4420], [0, -4420], [0, -4470], [-292, -4470], [-292, -4920], [292, -4930], [292, -5100], [0, -5100], [0, ZN.fan + 40]]
+  [[90, -700], [-672, -700], [-672, -1185], [672, -1200], [672, -1440], [0, -1440], [0, -1860], [-112, -1905], [-211, -2023], [-211, -2177], [211, -2177], [112, -2295], [0, -2370], [0, -2470], [-140, -2470], [-140, -3205], [140, -3215], [140, -3285], [0, -3285], [0, -3460], [-672, -3460], [-672, -4225], [672, -4235], [672, -4420], [0, -4420], [0, -4470], [-292, -4470], [-292, -4920], [292, -4930], [292, -5100], [0, -5100], [0, ZN.fan + 40]]
     .forEach(([x, zz]) => P.push([V(x, LOW + 0.25, zz), up]));
   PATH = P;
   let s = 0; SEG = [];
@@ -710,18 +729,20 @@ function buildSphere(c, rad) {
 
 // типографская карточка кейса для проектора: только текст из документа (название, клиент, задача, цитата) — в айдентике 20_26
 function caseCard(c) {
-  const k = CASES[c.id] || {}, ps = k.pass || {};
+  const k = CASES[c.id] || {}, ps = k.pass || {}, num = String(SHOTS.indexOf(c) + 1).padStart(2, '0');
   return canvasTex(1600, 900, (g, w, h) => {
-    g.fillStyle = '#010101'; g.fillRect(0, 0, w, h);
-    g.fillStyle = '#F40709'; g.font = '30px AP, monospace'; g.fillText(`{${c.loc}}  ${[ps.клиент, ps.год].filter(Boolean).join(' · ')}`, 90, 120);
-    g.fillStyle = '#E1D9CF'; g.font = '520 116px TT, sans-serif';
-    const wrap = (t, x, y, mw, lh, max = 9) => { const ws = t.split(' '); let line = '', n = 0; for (const wd of ws) { const tt = line ? line + ' ' + wd : wd; if (g.measureText(tt).width > mw && line) { g.fillText(line, x, y); y += lh; line = wd; if (++n >= max) return y; } else line = tt; } g.fillText(line, x, y); return y + lh; };
-    let y = wrap(k.title || '', 90, 270, 1420, 112, 3);
+    g.fillStyle = '#060505'; g.fillRect(0, 0, w, h);
+    g.save(); g.globalAlpha = 0.07; g.fillStyle = '#E1D9CF'; g.font = '700 760px TT, sans-serif'; g.fillText(num, w - 980, h + 120); g.restore();   // огромный номер на фоне
+    g.fillStyle = '#F40709'; g.font = '34px AP, monospace'; g.fillText(`{${num}} ${c.loc}`, 96, 120);
+    g.fillStyle = '#8d867e'; g.fillText([ps.клиент, ps.год].filter(Boolean).join(' · '), 96, 170);
+    g.fillStyle = '#E1D9CF'; g.font = '560 150px TT, sans-serif';
+    const wrap = (t, x, y, mw, lh, max) => { const ws = t.split(' '); let line = '', n = 0; for (const wd of ws) { const tt = line ? line + ' ' + wd : wd; if (g.measureText(tt).width > mw && line) { g.fillText(line, x, y); y += lh; line = wd; if (++n >= max) return y; } else line = tt; } g.fillText(line, x, y); return y + lh; };
+    let y = wrap(k.title || '', 96, 360, 1400, 140, 3);
     const q = (k.quotes || [])[0];
-    g.font = '400 44px TT, sans-serif'; g.fillStyle = q ? '#E1D9CF' : '#8d867e';
-    if (q) { y = wrap(`«${q[0]}»`, 90, y + 40, 1300, 56, 4); g.fillStyle = '#8d867e'; g.font = '28px AP, monospace'; g.fillText(q[1], 90, y + 10); }
-    else wrap(k.task || '', 90, y + 40, 1300, 56, 4);
-    g.fillStyle = '#F40709'; g.fillRect(90, h - 110, 260, 6);
+    g.fillStyle = '#F40709'; g.fillRect(96, y - 40, 120, 8);
+    g.font = '400 46px TT, sans-serif'; g.fillStyle = '#E1D9CF';
+    y = wrap(q ? `«${q[0]}»` : (k.idea || k.task || ''), 96, y + 40, 1250, 58, 3);
+    if (q) { g.fillStyle = '#8d867e'; g.font = '28px AP, monospace'; g.fillText(q[1], 96, y + 6); }
   });
 }
 
@@ -787,6 +808,14 @@ function buildLight() {
           gl_FragColor = vec4((img + 0.06) * a, 1.0);
         }` }));
     bm.frustumCulled = false; scene.add(bm); c.beam = bm;
+    // пыль в луче: точки внутри пирамиды, медленно плывут; видна только в свете проектора
+    const NDU = 700, dp = new Float32Array(NDU * 3), rr = mulberry(c.C.x * 7 + c.C.z), cr0 = cr(-1, -1), cr1 = cr(1, -1), cr2 = cr(-1, 1);
+    for (let i = 0; i < NDU; i++) { const t = Math.pow(rr(), 0.7) * 0.92 + 0.04, a = rr(), b = rr(); const q = cr0.clone().lerp(cr1, a).add(cr2.clone().sub(cr0).multiplyScalar(b)); const p = P.clone().lerp(q, t); dp.set([p.x, p.y, p.z], i * 3); }
+    const dg = new THREE.BufferGeometry(); dg.setAttribute('position', new THREE.BufferAttribute(dp, 3));
+    c.dust = new THREE.Points(dg, new THREE.ShaderMaterial({ transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, uniforms: { uK: { value: 0 }, uT: U.uT, tI: { value: c.tex } },
+      vertexShader: 'uniform float uT; varying float vA; void main(){ vec3 p = position + vec3(sin(uT * 0.21 + position.z * 0.05), sin(uT * 0.17 + position.x * 0.05) * 0.6 - mod(uT * 0.6 + position.x, 6.0), cos(uT * 0.19 + position.y * 0.07)) * 3.0; vec4 mv = modelViewMatrix * vec4(p, 1.); vA = clamp(1.0 - (-mv.z) / 700.0, 0.0, 1.0); gl_PointSize = clamp(420.0 / -mv.z, 1.0, 3.5); gl_Position = projectionMatrix * mv; }',
+      fragmentShader: 'uniform float uK; varying float vA; void main(){ vec2 d = gl_PointCoord - 0.5; float r = dot(d, d); if (r > 0.25) discard; gl_FragColor = vec4(vec3(1.0, 0.96, 0.9) * uK * vA * (1.0 - r * 4.0), 1.0); }' }));
+    c.dust.frustumCulled = false; scene.add(c.dust);
   });
   inst(new THREE.BoxGeometry(1, 1, 1), flatMat, bodies);
   if (rods.length) inst(new THREE.CylinderGeometry(0.5, 0.5, 1, 6), flatMat, rods);
@@ -1054,7 +1083,7 @@ function updateRays() {
 }
 const zoneAt = z => { let i = 0; while (i < ZONES.length - 2 && z < ZONES[i + 1].z) i++; const a = ZONES[i], b = ZONES[i + 1], t = smooth(clamp01((a.z - z) / (a.z - b.z))); const mix = (u, v) => u.map((x, k) => x + (v[k] - x) * t); return { haze: mix(a.haze, b.haze), k: a.k + (b.k - a.k) * t, amb: mix(a.amb, b.amb) }; };
 const camT = V(0, 0, 0), rigPos = V(0, 0, 0), rigQ = new THREE.Quaternion(), _qT = new THREE.Quaternion(), _qS = new THREE.Quaternion(), _m4 = new THREE.Matrix4(), _up = V(0, 1, 0);
-let snapCam = true;
+let snapCam = true, snapPrev = true;
 // цель камеры: интро — по ключам; дальше — по таблице траектории (по длине ленты)
 function camTarget(q) {
   if (q > P_A && q < P_B && CP.p.length) {
@@ -1095,7 +1124,7 @@ function frame() {
   else { const d = camT.clone().sub(rigPos), stepV = d.multiplyScalar(1 - Math.exp(-dt * 3.0)), mx = 160 * dt; if (stepV.length() > mx) stepV.setLength(mx); rigPos.add(stepV); }
   _m4.lookAt(rigPos, look, _up); _qT.setFromRotationMatrix(_m4);
   if (snapCam) rigQ.copy(_qT); else { _qS.copy(rigQ).slerp(_qT, 1 - Math.exp(-dt * 2.4)); rigQ.rotateTowards(_qS, THREE.MathUtils.degToRad(40) * dt); }
-  snapCam = false;
+  snapPrev = snapCam; snapCam = false;
   mouseSm.lerp(mouse, Math.min(1, dt * 2)); camera.position.copy(rigPos).add(V(mouseSm.x * 2.5, -mouseSm.y * 1.5, 0)); camera.quaternion.copy(rigQ);
   // Искра
   let j = 0; while (j < ISK.length - 2 && pSm > ISK[j + 1].p) j++;
@@ -1125,9 +1154,11 @@ function frame() {
   FX.glows.forEach(g => { g.visible = Lh > 0.01; });
   // проекторы: в шейдер — три ближайших; лучи видны только у ближних
   const pj = SHOTS.filter(c => !c.z3).map(c => [c, cp.distanceTo(c.cam.pos)]).sort((a, b) => a[1] - b[1]), cur = SHOTS.find(c => pSm >= c.p0 - 0.004 && pSm <= c.p1 + 0.004);
-  for (let n = 0; n < 3; n++) { const c = pj[n][0], fl = 0.97 + 0.03 * Math.sin(time * 31 + n * 2) * Math.sin(time * 17.3);
-    U.uJp.value[n].set(c.P.x, c.P.y, c.P.z, 8.5 * fl * Lh * (cur ? (c === cur ? 1 : 0.12) : 0.3 + 0.7 * Math.exp(-pj[n][1] / 160)));   /* чужие кадры приглушены, свой — в полную силу */ U.uJc.value[n].set(c.C.x, c.C.y, c.C.z, c.W); U.uJn.value[n].set(c.n.x, c.n.y, c.n.z, c.H); U.uJs.value[n].copy(c.sc); U[`tJ${n}`].value = c.tex; }
-  pj.forEach(([c, d], n) => { if (c.video) { const on = n < 3 && Lh > 0.01; if (on && c.video.paused) c.video.play().catch(() => {}); else if (!on && !c.video.paused) c.video.pause(); } c.beam.visible = n < 4 && Lh > 0.01; c.beam.material.uniforms.uK.value = 0.03 * Lh; });
+  // включение проекторов: у своего кадра проектор плавно загорается (с миганием на старте), чужие гаснут
+  pj.forEach(([c]) => { const tgt = cur ? (c === cur ? 1 : 0) : 0.35; c.on = c.on ?? 0; c.on += (tgt - c.on) * (1 - Math.exp(-dt * (tgt > c.on ? 1.6 : 2.5))); if (snapPrev) c.on = tgt; });
+  for (let n = 0; n < 3; n++) { const c = pj[n][0], fl = (0.97 + 0.03 * Math.sin(time * 31 + n * 2) * Math.sin(time * 17.3)) * (c.on < 0.35 ? (Math.sin(time * 47 + n) > 0.2 ? 1 : 0.25) : 1);
+    U.uJp.value[n].set(c.P.x, c.P.y, c.P.z, 8.5 * fl * Lh * Math.min(1, c.on * 2.5));   /* чужие кадры приглушены, свой — в полную силу */ U.uJc.value[n].set(c.C.x, c.C.y, c.C.z, c.W); U.uJn.value[n].set(c.n.x, c.n.y, c.n.z, c.H); U.uJs.value[n].copy(c.sc); U.uJo.value[n] = Math.min(1, c.on); U[`tJ${n}`].value = c.tex; }
+  pj.forEach(([c, d], n) => { if (c.video) { const on = n < 3 && Lh > 0.01; if (on && c.video.paused) c.video.play().catch(() => {}); else if (!on && !c.video.paused) c.video.pause(); } c.beam.visible = n < 4 && Lh > 0.01; const kk = c.on ?? 0; c.beam.material.uniforms.uK.value = 0.034 * Lh * kk; c.dust.visible = c.beam.visible; c.dust.material.uniforms.uK.value = 0.55 * Lh * kk; });
   Object.values(ZONES3).forEach(Z => { if (!Z.obj) return; const on = Lh > 0.01 && cp.distanceTo(Z.pos) < 1400; Z.obj.group.visible = on; if (on) Z.obj.update(time, Lh, cp); });
   FX.petals.material.uniforms.uO.value = 0.85 * clamp01((-cp.z - 1700) / 150) * clamp01((2600 + cp.z) / 150);
   // вентилятор: на подходе к шахте раскручивается, гонит пыль на зрителя
