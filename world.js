@@ -243,7 +243,7 @@ const path = (q, r, ...pts) => pts.forEach(p => q.paths[r].push(V(...p)));
 
 // крыши: старт и нейтральная локация стоят на поверхности города, на высоте ROOF; в азии маршруты ныряют вниз
 const ROOF = 110;   // поверхность города: на ней старт и нейтральная, вровень с ней — крыши азии
-function lift(q, h) { q.g.position.y += h; for (const r of ['btl', 'atl']) q.paths[r].forEach(p => p.y += h); q.trunk?.forEach(p => p.y += h); q.cubes.forEach(c => c.p.y += h); q.anchors.forEach(a => a.p.y += h); }
+function lift(q, h) { q.g.position.y += h; for (const r of ['btl', 'atl']) q.paths[r].forEach(p => p.y += h); q.trunk?.forEach(p => p.y += h); q.cubes.forEach(c => { c.p.y += h; c.corners?.forEach(p => p.y += h); }); q.anchors.forEach(a => a.p.y += h); }
 
 // {00} старт — закрытый барабан из тонких бетонных рёбер на крыше. сквозь щели между рёбрами солнце кладёт на пол веер полос.
 // выходы не дыры: btl — щель в рёбрах с красными кромками и светящаяся дорожка, atl — световое кольцо в окулюсе, сквозь которое камера поднимается
@@ -286,6 +286,8 @@ function neutral(z0) {
   [-90, -30, 30, 90].forEach(x => k.box(ln, 0.45, 0.06, z1 - z0, x, 0, mid));             // продольные прорези
   for (let z = z0 + 40; z < z1; z += 80) { k.box(ln, 440, 0.06, 0.45, 0, 0, z); [-90, -30, 30, 90].forEach(x => k.box(ln, 2.6, 0.07, 2.6, x, 0, z)); }   // поперечные и колодцы на узлах
   const r = rng(91); [[-120, z0 + 90, 34], [150, z0 + 160, 46], [-170, z0 + 260, 40], [110, z0 + 330, 30], [-70, z0 + 380, 22], [190, z0 + 40, 26]].forEach(([x, z, a]) => k.box(blk, a, a, a, x, -a * (0.25 + r() * 0.3), z, r() * 0.6));   // кубы-гиганты, утопленные в плиты
+  // робозон — стенд ozon tech на поверхности города, первым кейсом btl (модель по визуализации проекта)
+  zoneAt(q, buildRobozoneGen(THREE, GLTF), -17, z0 + 42, 1.25, 'робозон', 60);
   // btl-кейсы нейтральной — баннеры на стальных мачтах у дороги, ниже баннеров atl
   [['золотые ворота', 110, 'megafon-1'], ['белград', 180, 'mice-1'], ['связь есть везде', 250, 'megafon-travel-1'], ['гусь на заводе', 320, 'baltika-plant-1']].forEach(([t, dz, img], i) => banner(q, i % 2 ? -14 : 14, 11, z0 + dz, t, { w: 17, leg: 'mast', img: `cases/${img}.jpg`, r: 'btl' }));
   [['дербент', 75, 'cases/derbent-1.jpg'], ['tevredens', 145, 'cases/tevredens-1.jpg', 'tevredens.mp4'], ['заклинатели', 215, 'cases/zaklinateli-1.jpg', 'zaklinateli.mp4'], ['дино', 285, 'cases/dino-1.jpg']].forEach(([t, dz, img, vid], i) => { const x = i % 2 ? 19 : -19, z = z0 + dz;
@@ -379,7 +381,7 @@ function asia(z0) {
   for (const sd of [-1, 1]) k.box(S, 180, 2, z1 - z0, sd * 130, ROOF - 2, (z0 + z1) / 2);   // поверхность города продолжается над кварталом
   const NICHE = [[-1, z0 + DS + 20], [1, z0 + DS + 130]];   // ниши в башнях под баннеры atl: башни здесь расступаются
   // дворы btl-кейсов: башни расступаются до самой земли, во дворе стоит 3D-зона кейса. [сторона, середина, полудлина]
-  const COURT = [[-1, z0 + DS + 120, 14, 'robo'], [1, z0 + DS + 192, 19, 'dojo']];
+  const COURT = [[1, z0 + DS + 192, 19, 'dojo']];
   for (const s of [-1, 1]) for (let z = z0; z < z1;) {
     const L = 9 + r() * 10, d = 30, x = s * (11 + d / 2), zc = z + L / 2, g0 = gy(z + L);
     if (NICHE.some(([ns, nz]) => ns === s && z < nz + 11 && z + L > nz - 11) || COURT.some(([ns, nz, h]) => ns === s && z < nz + h && z + L > nz - h)) { z += L + 1.4 + r() * 2; continue; }
@@ -421,8 +423,8 @@ function sport(z0) {
   [[1, 1], [1, -1], [-1, 1], [-1, -1]].forEach(([sx, sz]) => { const x = sx * A * 1.95, z = cz + sz * Bz * 1.05; k.box(steel, 2.4, 78, 2.4, x, 0, z); k.box(D, 16, 9, 2, x - sx * 1.5, 74, z - sz * 1.2, Math.atan2(-x, cz - z)); const p = new THREE.Mesh(new THREE.PlaneGeometry(14, 7), glow(0xffffff, 2.2)); p.position.set(x - sx * 3, 78.5, z - sz * 2.6); p.lookAt(0, 0, cz); q.g.add(p); });
   [[z0, z0 + 40], [z1 - 40, z1]].forEach(([a, b]) => { for (const s of [-1, 1]) k.box(C, 2, 12, b - a, s * 9, 0, (a + b) / 2); k.box(D, 20, 1.6, b - a, 0, 12, (a + b) / 2); q.anchors.push({ p: V(0, 9, (a + b) / 2), c: 0xe8eef4, i: 30 }); });
   // ironstar и шёлковый путь — баннеры у поля, перед ними машины: оранжевый mustang без брендинга и пресс-кар ралли
-  banner(q, -17, 9, cz - 70, 'ironstar', { w: 17, leg: 'mast', img: 'cases/gdrive-ironstar-1.jpg', r: 'btl' }); car(q, 'mustang', -9.5, cz - 76, 4.8, 0.55, 0xff5a0a);
-  banner(q, 17, 9, cz, 'шёлковый путь', { w: 17, leg: 'mast', img: 'cases/gdrive-silk-1.jpg', r: 'btl' }); car(q, 'tiggo8', 9.5, cz - 6, 4.7, -0.55);
+  banner(q, -17, 9, cz - 70, 'ironstar', { w: 17, leg: 'mast', img: 'cases/gdrive-ironstar-1.jpg', r: 'btl' }); car(q, 'mustang', -8.5, cz - 80, 9, 0.6, 0xff5a0a);
+  banner(q, 17, 9, cz, 'шёлковый путь', { w: 17, leg: 'mast', img: 'cases/gdrive-silk-1.jpg', r: 'btl' }); car(q, 'tiggo8', 8.5, cz - 10, 9, -0.6);
   // промозона «#футболеем всей страной» — модель по рендеру из портфолио: крупнее, развёрнута против часовой, без жёсткого свечения
   { const B7 = buildBaltika7Gen(THREE, GLTF); zoneAt(q, B7, -22, cz + 72, 1.6, 'балтика 7', 20, 0.55);
     B7.ready.then(() => B7.group.traverse(o => { if (o.isMesh && o.material?.emissive) { o.material.emissiveIntensity = Math.min(o.material.emissiveIntensity, 0.25); } })); }
@@ -463,10 +465,11 @@ function merch(z0) {
   }
   // мерч — витрины из моделей вещей: дождевик ГПН (отдельного кейса пока нет — экспонат без карточки), капсула G-Drive, бокс «Простора», капсула льва
   // зал 0: ozon селект вдоль стены во всю длину, от витрины на пол и стены ложится светлый холодный свет
-  { const zc = z0 + L / 2 + 7, Zs = buildSelectGen(THREE, GLTF); zoneAt(q, Zs, -10, zc, 1.15, 'ozon селект', 55); q.cubes.at(-1).half = 0.9;   // длинная витрина: можно занять почти весь кадр
-    const wash = new THREE.Mesh(new THREE.PlaneGeometry(16, 26), new THREE.MeshBasicMaterial({ map: (() => { const c = document.createElement('canvas'); c.width = c.height = 256; const g = c.getContext('2d'), gr = g.createRadialGradient(0, 128, 10, 0, 128, 250); gr.addColorStop(0, 'rgba(225,255,245,.55)'); gr.addColorStop(0.5, 'rgba(200,240,230,.18)'); gr.addColorStop(1, 'rgba(0,0,0,0)'); g.fillStyle = gr; g.fillRect(0, 0, 256, 256); return new THREE.CanvasTexture(c); })(), transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, toneMapped: false }));
-    wash.rotation.x = -Math.PI / 2; wash.position.set(-1, 0.06, zc); q.g.add(wash);   // световое пятно от витрины на полированном полу
-    q.anchors.push({ p: V(-9, 6, zc - 6), c: 0xe6fff6, i: 90, d: 30, pr: 6 }, { p: V(-9, 6, zc + 6), c: 0xe6fff6, i: 90, d: 30, pr: 6 }); }
+  { const zc = z0 + L / 2, Zs = buildSelectGen(THREE, GLTF); zoneAt(q, Zs, -12.2, zc, 2.4, 'ozon селект', 80); Object.assign(q.cubes.at(-1), { stopAt: z0 + 3 });
+    Zs.ready?.then(() => Zs.group.traverse(o => { if (o.isMesh && o.material?.emissive) o.material.emissiveIntensity = Math.min(o.material.emissiveIntensity, 0.35); }));   // витрина не должна выгорать в белое   // витрина во всю стену: 43 м в длину, ~10 м в высоту; смотрим на неё от входа в зал
+    const wash = new THREE.Mesh(new THREE.PlaneGeometry(18, 44), new THREE.MeshBasicMaterial({ map: (() => { const c = document.createElement('canvas'); c.width = c.height = 256; const g = c.getContext('2d'), gr = g.createRadialGradient(0, 128, 10, 0, 128, 250); gr.addColorStop(0, 'rgba(225,255,245,.22)'); gr.addColorStop(0.5, 'rgba(200,240,230,.07)'); gr.addColorStop(1, 'rgba(0,0,0,0)'); g.fillStyle = gr; g.fillRect(0, 0, 256, 256); return new THREE.CanvasTexture(c); })(), transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, toneMapped: false }));
+    wash.rotation.x = -Math.PI / 2; wash.position.set(-3, 0.06, zc); q.g.add(wash);   // световое пятно от витрины на полированном полу
+    q.anchors.push({ p: V(-4, 8, zc - 12), c: 0xe6fff6, i: 42, d: 30, pr: 6 }, { p: V(-4, 8, zc + 10), c: 0xe6fff6, i: 42, d: 34, pr: 6 }); }
   // зал «простора» целиком в фирменном градиенте: стены и перегородки — голубое небо
   { const zc = z0 + 3 * L + L / 2, grad = new THREE.MeshBasicMaterial({ toneMapped: false, map: (() => { const c = document.createElement('canvas'); c.width = 8; c.height = 512; const g = c.getContext('2d'), gr = g.createLinearGradient(0, 0, 0, 512); gr.addColorStop(0, '#1d7dff'); gr.addColorStop(0.62, '#9fd2ff'); gr.addColorStop(1, '#f2f8ff'); g.fillStyle = gr; g.fillRect(0, 0, 8, 512); const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; return t; })() });
     for (const sd of [-1, 1]) { const m = new THREE.Mesh(new THREE.PlaneGeometry(L - 1.3, 16), grad); m.position.set(sd * 17.94, 8, zc); m.rotation.y = -sd * Math.PI / 2; q.g.add(m);
@@ -673,29 +676,59 @@ function fits(pos, c) {
     if (p.x < Math.max(-0.88, xo - hx) || p.x > Math.min(0.88, xo + hx) || Math.abs(p.y - yo) > (mob ? 0.5 : 0.82)) return false; }
   return true;
 }
-const STOPS = {};
+const STOPS = {}, SEG = { m: 55, max: 6 };
 function buildStops() {
   for (const r of ['btl', 'atl']) { const o = R[r];
     const list = o.cubes.filter(c => c.r === r).map(c => { c.id = CASE_ID[c.title]; c.corners ||= caseCorners(c);
       let i = o.P.findIndex(p => p.z >= c.p.z - 6); while (i > o.iF + 2 && !fits(o.P[i], c)) i--;   // от кейса назад по рельсам, пока он не влезет в свою половину кадра
+      if (c.stopAt) i = Math.max(o.iF + 2, o.P.findIndex(p => p.z >= c.stopAt));
       return { a: o.C[i], c }; }).sort((x, y) => x.a - y.a);
     for (let k = 1; k < list.length; k++) list[k].a = Math.max(list[k].a, list[k - 1].a + 4);
-    KEYS[r] = [[0, 0], [TRUNK_W, o.trunkW], ...list.map((x, k) => [TRUNK_W + (k + 1) * STEP, x.a])];
-    STOPS[r] = list.map((x, k) => { x.c.stop = TRUNK_W + (k + 1) * STEP; return { s: x.c.stop, c: x.c }; });
+    // отрезок скролла до кейса: один шаг, а на длинных перегонах — до трёх, чтобы камера не неслась (скорость по миру не выше SEG.m метров на шаг)
+    let sAcc = TRUNK_W, aPrev = o.trunkW; KEYS[r] = [[0, 0], [TRUNK_W, o.trunkW]];
+    STOPS[r] = list.map(x => { sAcc += STEP * Math.min(SEG.max, Math.max(1, (x.a - aPrev) / SEG.m)); aPrev = x.a; KEYS[r].push([sAcc, x.a]); x.c.stop = sAcc; return { s: sAcc, c: x.c }; });
   }
   TOTAL = Math.max(...['btl', 'atl'].map(r => KEYS[r].at(-1)[0])) + 3 * STEP;   // хвост — финал с логотипом
   for (const r of ['btl', 'atl']) KEYS[r].push([TOTAL, R[r].C[N]]);
   document.getElementById('track').style.height = `${TOTAL * PX + innerHeight}px`;
 }
 buildStops();
-// магнит: если скролл замер у кейса, камера доезжает до точки обзора. тянет только туда, куда листали, — уйти от кейса ничто не мешает
-const MAG = { range: STEP * 0.8, back: STEP * 0.3, idle: 260, last: 0, done: true, dir: 1, y: scrollY };   // range — в метрах скролла вперёд по ходу; back — насколько можно вернуть назад, если чуть проскочили; idle — мс тишины
-addEventListener('scroll', () => { const d = scrollY - MAG.y; if (Math.abs(d) > 2) MAG.dir = Math.sign(d); MAG.y = scrollY; }, { passive: true });
-for (const ev of ['wheel', 'touchmove', 'keydown', 'pointerdown']) addEventListener(ev, () => { MAG.last = performance.now(); MAG.done = false; }, { passive: true });
+// листание по кейсам: один жест колеса / свайп / клавиша — ровно один кейс вперёд или назад. инерционный хвост трекпада гасится:
+// пока события идут подряд (паузы < 200 мс) и не набирают силу заново, это тот же жест. так не пролетаешь мимо следующего кейса и не застреваешь на текущем
+const NAV = { last: 0, armed: true, acc: 0, low: 1e9, t0: 0, ty: null };
+function navIdx() { const L = STOPS[route]; let k = -1; for (let i = 0; i < L.length; i++) if (L[i].s <= scrollY / PX + 1) k = i; return k; }   // последний кейс, до которого уже доехали
+function navStep(dir) {
+  const L = STOPS[route], k = navIdx(), cur = scrollY / PX, atStop = k >= 0 && Math.abs(L[k].s - cur) < 1.5;
+  let target;
+  if (dir > 0) target = k + 1 < L.length ? L[k + 1].s : TOTAL;
+  else if (!atStop && k >= 0) target = L[k].s;   // между кейсами — назад к тому, что позади
+  else if (k > 0) target = L[k - 1].s;
+  else { route = null; target = TRUNK_W - 4; }   // назад с первого кейса — к развилке
+  scrollTo(0, target * PX);
+}
+const modalOpen = () => document.getElementById('modal')?.classList.contains('on');
+addEventListener('wheel', e => {
+  if (!route || modalOpen() || e.ctrlKey) return;
+  e.preventDefault();
+  const d = e.deltaY * (e.deltaMode === 1 ? 16 : e.deltaMode === 2 ? innerHeight : 1), now = performance.now(), ad = Math.abs(d);
+  const locked = now - NAV.t0 < 450;   // после шага полсекунды ничего не слушаем: камера уже поехала
+  if (!locked && (now - NAV.last > 250 || Math.sign(d) !== Math.sign(NAV.acc))) { NAV.armed = true; NAV.acc = 0; NAV.low = 1e9; }   // затишье — новый жест
+  NAV.last = now; NAV.acc += d; NAV.low = Math.min(NAV.low, ad);
+  if (!NAV.armed && !locked && ad > 14 && ad > NAV.low * 2.2) { NAV.armed = true; NAV.acc = d; }   // хвост затух и пошёл новый толчок — это следующий жест
+  if (NAV.armed && !locked && Math.abs(NAV.acc) > 30) { NAV.armed = false; NAV.low = ad; NAV.t0 = now; navStep(Math.sign(NAV.acc)); }
+}, { passive: false });
+addEventListener('touchstart', e => { NAV.ty = e.touches[0].clientY; }, { passive: true });
+addEventListener('touchmove', e => { if (route && !modalOpen()) e.preventDefault(); }, { passive: false });
+addEventListener('touchend', e => { if (!route || NAV.ty === null || modalOpen()) return; const dy = NAV.ty - e.changedTouches[0].clientY; NAV.ty = null; if (Math.abs(dy) > 40) navStep(Math.sign(dy)); });
+addEventListener('keydown', e => { if (!route || modalOpen()) return; const f = { ArrowDown: 1, PageDown: 1, ' ': 1, ArrowUp: -1, PageUp: -1 }[e.key]; if (f) { e.preventDefault(); navStep(f); } });
+// магнит — только для полосы прокрутки: отпустили между кейсами — камера доезжает до ближайшего
+const MAG = { idle: 400, last: 0, done: true };
+addEventListener('pointerdown', () => { MAG.last = performance.now(); MAG.done = false; }, { passive: true });
+addEventListener('pointerup', () => { MAG.last = performance.now(); }, { passive: true });
 function magnet(s) {
   if (!route || MAG.done || performance.now() - MAG.last < MAG.idle || s <= TRUNK_W) return; MAG.done = true;
-  let best = null; for (const { s: st } of STOPS[route]) { const ds = (st - s) * MAG.dir; if (ds > -MAG.back && ds < MAG.range && (best === null || Math.abs(st - s) < Math.abs(best - s))) best = st; }
-  if (best !== null && Math.abs(best - s) > 0.5) scrollTo(0, best * PX);
+  let best = null; for (const { s: st } of STOPS[route]) if (best === null || Math.abs(st - s) < Math.abs(best - s)) best = st;
+  if (best !== null && Math.abs(best - s) > 0.5 && Math.abs(best - s) < STEP * 0.6) scrollTo(0, best * PX);
 }
 
 // ---------- зоны по положению камеры: небо, свет, отсечение ----------
@@ -742,7 +775,7 @@ function updateZones(dawn) {
 // ---------- HUD ----------
 const zoneN = document.getElementById('zoneN'), zoneT = document.getElementById('zoneT'), pct = document.getElementById('pct'), hint = document.getElementById('hint');
 const forkEl = document.getElementById('fork'), routeBtn = document.getElementById('routes'), flashEl = document.getElementById('flash');
-forkEl.addEventListener('click', e => { const b = e.target.closest('[data-r]'); if (!b) return; route = b.dataset.r; forkEl.classList.remove('on'); scrollTo({ top: (TRUNK_W + 30) * PX, behavior: 'smooth' }); });
+forkEl.addEventListener('click', e => { const b = e.target.closest('[data-r]'); if (!b) return; route = b.dataset.r; forkEl.classList.remove('on'); scrollTo(0, STOPS[route][0].s * PX); });   // сразу к первому кейсу маршрута
 // смена маршрута — телепорт: вспышка в чёрное, и камера уже стоит у соответствующего кейса другого маршрута (та же доля пути), без пролёта
 routeBtn.addEventListener('click', e => { const b = e.target.closest('[data-to]'); if (!b || !route || b.dataset.to === route) return; const to = b.dataset.to;
   const A = STOPS[route], B = STOPS[to]; let k = 0; A.forEach((x, i) => { if (Math.abs(x.s - sSm) < Math.abs(A[k].s - sSm)) k = i; });
@@ -803,7 +836,7 @@ addEventListener('pointermove', e => mouse.set(e.clientX / innerWidth - 0.5, e.c
 let lookInit = false, pitch = 0, yaw = 0, vS = 0, accS = 0, boostSm = 1, focW = 0, focC = null;
 // настройки камеры: vmax — предел скорости (м/с по пути), amax — предел разгона, dec — торможение, на которое рассчитана кривая подхода (меньше amax, с запасом — поэтому камера не проскакивает цель и не качается назад);
 // near — у самой цели скорость = near × расстояние (мягкий доезд без перелёта); jerk — как быстро нарастает разгон; prate — скорость доводки наклона (без пружины, без перелёта); wmax — предел угловой скорости
-const CAMK = { vmax: 60, amax: 75, dec: 45, near: 3, boostLag: 60, boostMax: 3, boostRate: 0.8, jerk: 160, prate: 2.2, wmax: 0.3, ymax: 0.3 };   // ymax — предел скорости поворота головы к кейсу
+const CAMK = { vmax: 48, amax: 60, dec: 40, near: 3, boostLag: 60, boostMax: 1.5, boostRate: 0.8, jerk: 160, prate: 2.2, wmax: 0.3, ymax: 0.3 };   // ymax — предел скорости поворота головы к кейсу
 const clock = new THREE.Clock(), look = V(0, 0, 0), tmp = V(0, 0, 0), tmp2 = V(0, 0, 0), ahead = V(0, 0, 0), DOCKQ = new THREE.Quaternion().setFromEuler(new THREE.Euler(0, Math.PI, 0)), endEl = document.getElementById('end');
 const REC = { on: /rec/.test(location.search), t: 0 };
 function frame() {
@@ -925,7 +958,7 @@ function bannerCheck(m = 0.4) {
   }
   console[out.length ? 'warn' : 'log'](`баннеры: ${out.length ? out.join(' | ') : 'чисто, ' + BANNERS.length + ' шт.'}`); return out;
 }
-window.__w = { scene, camera, renderer, composer, bloom, film, gtao, key, WETS, R, Z, go, goZone, check, bannerCheck, setQuality, QL, STOPS, TRUNK_W, TOTAL, tick: () => { REC.t += 1 / 24; } };
+window.__w = { scene, camera, renderer, composer, bloom, film, gtao, key, WETS, R, Z, go, goZone, check, bannerCheck, setQuality, QL, STOPS, TRUNK_W, TOTAL, sm: () => sSm, tick: () => { REC.t += 1 / 24; } };
 const AT = new URLSearchParams(location.search).get('at');
 if (AT) { const [k, f, r] = AT.split(':'); goZone(k, +f || 0.3, r || 'btl'); }
 if (location.search.includes('map')) drawMap();
