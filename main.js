@@ -13,8 +13,8 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { DRACOLoader } from 'three/addons/loaders/DRACOLoader.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 const gltfLoader = new GLTFLoader().setDRACOLoader(new DRACOLoader().setDecoderPath('https://cdn.jsdelivr.net/npm/three@0.169.0/examples/jsm/libs/draco/gltf/'));
-import { CASES, renderCase, MODALS } from './cases.js';
-import { buildRobozoneGen, buildTdojoGen, buildOzonCorpAlley, buildOzonCorpGen, buildSelectGen, buildBaltika7Gen, buildMerchGen } from './zones/zones.js';
+import { CASES, renderCase, MODALS } from './cases.js?v=1116b';
+import { buildRobozoneGen, buildTdojoGen, buildOzonCorpAlley, buildOzonCorpGen, buildSelectGen, buildBaltika7Gen, buildMerchGen } from './zones/zones.js?v=1116b';
 // учёт загрузки для прелоадера-искры: каждый файл через общий менеджер, картинки кейсов — вручную в caseTexture
 const LD = { done: 0, total: 0 }, LM = THREE.DefaultLoadingManager, lmStart = LM.itemStart, lmEnd = LM.itemEnd;
 LM.itemStart = u => { LD.total++; lmStart.call(LM, u); }; LM.itemEnd = u => { LD.done++; lmEnd.call(LM, u); };
@@ -97,7 +97,7 @@ const grain = new ShaderPass({ uniforms: { tDiffuse: { value: null }, t: { value
         float L = dot(c.rgb, vec3(0.299, 0.587, 0.114)); vec3 flat_ = c.rgb / max(L, 0.001) * (floor(L * 3.0 + 0.5) / 3.0);
         vec2 r45 = mat2(0.7071, -0.7071, 0.7071, 0.7071) * gl_FragCoord.xy / 5.0; float tone = step(length(fract(r45) - 0.5), 0.32);
         flat_ *= mix(1.0, mix(1.0, tone, 0.35), step(L, 0.22) * step(0.06, L)); flat_ = max(flat_ * 1.18, c.rgb * 0.9);   // светлая манга: тушь по граням, скринтон только в глубоких тенях
-        c.rgb = mix(c.rgb, flat_ * (1.0 - 0.55 * smoothstep(0.05, 0.14, ex)), wAnime * 0.7); }
+        c.rgb = mix(c.rgb, flat_ * (1.0 - 0.45 * smoothstep(0.05, 0.14, ex)), wAnime * 0.45); }
       if (wDuo > 0.01) {                                                                 // шёлковый путь: пустыня в два цвета — чёрный и оранжевый g-drive
         float L = smoothstep(0.03, 0.75, dot(c.rgb, vec3(0.299, 0.587, 0.114))); c.rgb = mix(c.rgb, mix(vec3(0.02), vec3(1.0, 0.42, 0.07), L), wDuo * 0.9); }
       if (wKeep > 0.01) {                                                                // bullet time: стоп-кадр — мир серый, цвет остаётся только у бренда
@@ -1747,7 +1747,7 @@ document.addEventListener('click', e => {
 // ---------- магнит и стрелки ----------
 // после того как колесо остановилось, скролл мягко доезжает до ближайшей остановки, если до неё рукой подать;
 // стрелки, PageUp/PageDown и пробел листают ровно по кейсам
-const stopsOf = () => [P0, 0.49, FORK, ...WORLD.filter(w => w.r === (route || 'btl')).map(w => w.p), 0.995].sort((a, b) => a - b);
+const stopsOf = () => [P0, 0.417, 0.452, 0.49, FORK, ...WORLD.filter(w => w.r === (route || 'btl')).map(w => w.p), 0.995].sort((a, b) => a - b);
 const pNow = () => P0 + clamp01(scrollY / Math.max(1, document.documentElement.scrollHeight - innerHeight)) * (1 - P0);
 let snapT = 0;
 addEventListener('scroll', () => {
@@ -1755,17 +1755,30 @@ addEventListener('scroll', () => {
   snapT = setTimeout(() => {
     const p = pNow(), st = stopsOf(); let i = 0; st.forEach((v, k) => { if (Math.abs(v - p) < Math.abs(st[i] - p)) i = k; });
     const gap = Math.min(...[st[i] - st[i - 1], st[i + 1] - st[i]].filter(x => x > 0)), d = Math.abs(st[i] - p);
-    if (d > 0.0004 && d < gap * 0.42 && (route || st[i] <= FORK)) scrollTo({ top: toScroll(st[i]), behavior: 'smooth' });
+    if (d > 0.0004 && d < gap * 0.5 && (route || st[i] <= FORK)) scrollTo({ top: toScroll(st[i]), behavior: 'smooth' });   // ползунок отпустили — доезжаем до ближайшей остановки
   }, 170);
 }, { passive: true });
-addEventListener('keydown', e => {
-  if (!INTRO.done || orbitOn || modal.classList.contains('on') || /INPUT|TEXTAREA|SELECT/.test(e.target.tagName)) return;
-  const next = ['ArrowDown', 'ArrowRight', 'PageDown', ' '].includes(e.key), prev = ['ArrowUp', 'ArrowLeft', 'PageUp'].includes(e.key);
-  if (!next && !prev) return; e.preventDefault();
-  const p = pNow(), st = stopsOf(), t = next ? st.find(v => v > p + 0.002) : [...st].reverse().find(v => v < p - 0.002);
+// один жест колеса, свайп или стрелка — ровно одна остановка: камера всегда приезжает в кейс, целиться не нужно
+let stepLock = 0, wheelAcc = 0, touchY = null;
+const free = () => INTRO.done && !orbitOn && !modal.classList.contains('on');
+function stepTo(dir) {
+  const p = pNow(), st = stopsOf(), t = dir > 0 ? st.find(v => v > p + 0.002) : [...st].reverse().find(v => v < p - 0.002);
   if (t === undefined) return;
   if (!route && t > FORK) { const f = document.getElementById('fork'); f.classList.add('pulse'); setTimeout(() => f.classList.remove('pulse'), 1100); return; }
   scrollTo({ top: toScroll(t), behavior: 'smooth' });
+}
+addEventListener('wheel', e => {
+  if (!free()) return; e.preventDefault();
+  const now = performance.now(); if (now < stepLock) { wheelAcc = 0; return; }
+  wheelAcc += e.deltaY; if (Math.abs(wheelAcc) > 30) { stepTo(Math.sign(wheelAcc)); wheelAcc = 0; stepLock = now + 700; }
+}, { passive: false });
+addEventListener('touchstart', e => { touchY = e.touches[0].clientY; }, { passive: true });
+addEventListener('touchend', e => { if (!free() || touchY === null) return; const dy = touchY - e.changedTouches[0].clientY; touchY = null; if (Math.abs(dy) > 40) stepTo(Math.sign(dy)); }, { passive: true });
+addEventListener('touchmove', e => { if (free()) e.preventDefault(); }, { passive: false });
+addEventListener('keydown', e => {
+  if (!free() || /INPUT|TEXTAREA|SELECT/.test(e.target.tagName)) return;
+  const next = ['ArrowDown', 'ArrowRight', 'PageDown', ' '].includes(e.key), prev = ['ArrowUp', 'ArrowLeft', 'PageUp'].includes(e.key);
+  if (!next && !prev) return; e.preventDefault(); stepTo(next ? 1 : -1);
 });
 
 // клик по экрану в 3D открывает кейс
@@ -1884,10 +1897,8 @@ function frame() {
     iskra.scale.setScalar(a.scale + (b.scale - a.scale) * t);
     iskra.rotation.set(0, 0, a.spin + (b.spin - a.spin) * t);
   });
-  const landed = clamp01((pSm - 0.345) / 0.03);
-  if (pSm < 0.05) iskra.rotation.y = Math.sin(time * 0.8) * 0.5;
-  else iskra.rotation.y = (1 - landed) * Math.sin(time * 2) * 0.6;
-  iskra.position.y += (1 - landed) * Math.sin(time * 1.4) * 1.2;
+  const landed = clamp01((pSm - 0.347) / 0.004);   // посадка — щелчок: искра встала в «О», логотип загорелся, искра исчезла
+  iskra.rotation.y = 0;   // без покачиваний
   iskra.userData.key.position.copy(iskra.position).add(new THREE.Vector3(-30, 40, 60));
   iskra.userData.key.intensity = 260 * (1 - landed);
 
@@ -1897,7 +1908,7 @@ function frame() {
   logo.mat.emissiveIntensity = landed * 1.1;
   logo.mat.color.copy(LOGO_DARK).lerp(ISK_RED, landed);
   iskra.material.color.copy(ISK_RED).lerp(ISK_BLACK, landed);
-  iskra.visible = landed < 0.98;   // встала в «О» — и исчезла: дальше живёт только логотип
+  iskra.visible = landed < 0.5;   // исчезает в тот же кадр, когда загорается логотип
   logo.glow.intensity = 0;   // без пятна света на подложке: логотип светится сам
   fans.air.pts.visible = false;   // поток воздуха нужен только у башни
 
