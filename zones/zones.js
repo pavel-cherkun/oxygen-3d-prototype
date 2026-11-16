@@ -380,7 +380,7 @@ export function buildOzonCorpAlley(THREE, opts = {}) {
   });
   asph.wrapS = asph.wrapT = THREE.RepeatWrapping; asph.repeat.set(1, L / Wd);
   const ground = new THREE.Mesh(new THREE.PlaneGeometry(Wd, L), new THREE.MeshStandardMaterial({ map: asph, roughness: 0.35, metalness: 0.3 }));
-  ground.rotation.x = -Math.PI / 2; ground.position.y = 0.01; ground.receiveShadow = true; g.add(ground);
+  ground.rotation.x = -Math.PI / 2; ground.position.y = 0.01; ground.receiveShadow = true; if (opts.ground !== false) g.add(ground);   // ground: false — без своего асфальта, если зона стоит на готовой улице
   // две граффити-стены с ключевым визуалом кейса
   const kv = new THREE.TextureLoader().load(kvUrl); kv.colorSpace = THREE.SRGBColorSpace; kv.wrapS = THREE.RepeatWrapping; kv.repeat.set(L / 14, 1);
   const kvMat = new THREE.MeshStandardMaterial({ map: kv, emissive: 0xffffff, emissiveMap: kv, emissiveIntensity: 0.35, roughness: 0.8 });

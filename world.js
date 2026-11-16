@@ -229,7 +229,7 @@ function banner(q, x, y, z, title, o = {}) {
   if (o.img) TXL.load('assets/' + o.img, tx => { tx.colorSpace = THREE.SRGBColorSpace; tx.anisotropy = 8; coverFit(tx, tx.image.width, tx.image.height); scr.material.map = tx; scr.material.color.setScalar(lum); scr.material.needsUpdate = true; });
   else scr.material.color.setScalar(lum);
   if (o.vid) VIDS.push({ g, mat: scr.material, src: 'assets/' + o.vid, lum });
-  if (o.img) { const cap = add(new THREE.Mesh(new THREE.PlaneGeometry(W, W * 300 / 1600), new THREE.MeshBasicMaterial({ map: captionTex(title, sub), transparent: true, depthWrite: false, toneMapped: false })), 0, -H / 2 + W * 300 / 1600 / 2, 0.29); cap.castShadow = cap.receiveShadow = false; cap.material.color.setScalar(0.92); }
+  if (o.img && o.caption) { const cap = add(new THREE.Mesh(new THREE.PlaneGeometry(W, W * 300 / 1600), new THREE.MeshBasicMaterial({ map: captionTex(title, sub), transparent: true, depthWrite: false, toneMapped: false })), 0, -H / 2 + W * 300 / 1600 / 2, 0.29); cap.castShadow = cap.receiveShadow = false; cap.material.color.setScalar(0.92); }
   add(new THREE.Mesh(new THREE.BoxGeometry(W + 0.8, 0.14, 0.14), glow(CREAM, 1.4)), 0, H / 2 + 0.47, 0.2);
   const yb = -(H / 2 + 0.4), ground = o.ground ?? 0, h = y + yb - ground;
   if (o.leg && h > 0.5) for (const lx of [-W * 0.32, W * 0.32]) {
@@ -331,7 +331,7 @@ function caseZone(q, s, zc, half, kind) {
 // ozon corp — прямо на улице азии: переулок, через который пролетает камера. слева модель зоны (по 3D-макету кейса) фасадом к проходу,
 // справа — стена ретро-телевизоров. камера опускается ниже фонарей переулка
 function corpStreet(q, zc) {
-  const k = q.kit, Zn = buildOzonCorpAlley(THREE, { kv: 'assets/cases/ozon-fandom-kv-1.jpg', length: 44, width: 21 }), g = Zn.group;
+  const k = q.kit, Zn = buildOzonCorpAlley(THREE, { kv: 'assets/cases/ozon-fandom-kv-1.jpg', length: 44, width: 21, ground: false }), g = Zn.group;
   g.traverse(o => { if (o.isLight) o.visible = false; }); g.position.set(0, 0.02, zc); q.g.add(g);
   const M = buildOzonCorpGen(THREE, GLTF); M.group.traverse(o => { if (o.isLight) o.visible = false; });
   // модель вдвое крупнее и чуть повёрнута против часовой: фасад смотрит на подлетающую камеру. стоит во дворе между башнями, передом выходит на улицу
@@ -450,23 +450,16 @@ function merch(z0) {
   const q = zone('merch', { grade: { sat: 0.92, con: 0.1, grain: 0.022, vig: 0.25, ca: 0.3, tint: [1.02, 1.0, 0.97], rays: 0.12, streak: 0.08 },  n: '04', t: 'мерч', line: 'концепт-стор: белые залы, светящиеся потолки, рейлы, чёрные постаменты', exp: 0.9, sky: ['#d0c8be', '#e6e0d7', '#f6f2ec'], hemi: [0xffffff, 0xc8c0b4, 1.15], key: [0xfff6ea, 1.4, V(0.4, 1, 0.25)], bloom: 0.45, spark: 3 });
   // залы: 0 — ozon селект (длинный: витрина во всю высоту стены выходит почти на 66 м), 1 — g-drive, 2 — «простор» в градиенте, 3 — лев
   const LS = [74, 46, 46, 46], ZS = LS.reduce((o, l) => (o.push(o.at(-1) + l), o), [z0]), rooms = LS.length, z1 = ZS.at(-1), k = q.kit, mid = (z0 + z1) / 2, zcOf = i => (ZS[i] + ZS[i + 1]) / 2;
-  q.wet.push({ w: 36, d: z1 - z0, x: 0, y: 0.03, z: mid, k: 0.3, pol: 1, below: 16 }, { w: 36, d: z1 - z0, x: 0, y: 18.15, z: mid, k: 0.3, pol: 1, above: 16 });   // полированные полы обоих этажей
+  q.wet.push({ w: 36, d: z1 - z0, x: 0, y: 0.03, z: mid, k: 0.3, pol: 1 }); q.yr = [-1e9, 19];   // полированный пол; дом мерча одноэтажный — над ним мир ai (atl)
   const Wl = matte(0xe2dbd0, 0.92), FL = matte(0xd4cec4, 0.3, 0.05), blk = matte(0x0d0d0d, 0.22, 0.3), steel = matte(0xc8c8c8, 0.25, 0.9), lightP = glow(0xfff6ec, 0.95), red = glow(RED, 1.5);
   q.rects.push([-30, 30, z0 - 60, z1 + 10]);
-  k.box(FL, 38, 0.3, z1 - z0, 0, -0.3, mid); k.box(Wl, 38, 2, z1 - z0, 0, 16, mid); k.box(FL, 36, 0.12, z1 - z0, 0, 18, mid); k.box(Wl, 38, 1, z1 - z0, 0, 34.5, mid);
-  for (const s of [-1, 1]) k.box(Wl, 1.2, 35, z1 - z0, s * 18.6, 0, mid);
-  for (let i = 0; i <= rooms; i++) { const z = ZS[i]; for (const y0 of [0, 18]) { for (const s of [-1, 1]) k.box(Wl, 13.4, 16, 1.2, s * 11.7, y0, z); k.box(Wl, 10, 4, 1.2, 0, y0 + 12, z); } k.box(Wl, 36, 2, 1.2, 0, 16, z); }
+  k.box(FL, 38, 0.3, z1 - z0, 0, -0.3, mid); k.box(Wl, 38, 2, z1 - z0, 0, 16, mid);
+  for (const s of [-1, 1]) k.box(Wl, 1.2, 18, z1 - z0, s * 18.6, 0, mid);
+  for (let i = 0; i <= rooms; i++) { const z = ZS[i]; for (const s of [-1, 1]) k.box(Wl, 13.4, 16, 1.2, s * 11.7, 0, z); k.box(Wl, 10, 4, 1.2, 0, 12, z); k.box(Wl, 36, 2, 1.2, 0, 16, z); }
   const clothes = [matte(0x111111, 0.8), matte(CREAM, 0.85), matte(0x2a2a2a, 0.8), matte(RED, 0.7)];
-  for (let i = 0; i < rooms; i++) for (const y0 of [0, 18]) {
-    const zc = zcOf(i), L = LS[i];
-    k.box(lightP, 26, 0.1, L - 10, 0, y0 + (y0 ? 16.3 : 15.8), zc);   // светящийся потолок
-    q.anchors.push({ p: V(0, y0 + 12, zc), c: 0xfff4e6, i: 40 });
-    if (!y0) continue;   // на первом этаже рейлов нет: там витрины и подвесы; рейлы с одеждой — на втором, мимо них летит atl
-    for (const s of [-1, 1]) {
-      k.box(steel, 0.12, 0.12, 16, s * 16.6, y0 + 9, zc); [-8, 8].forEach(o => k.box(steel, 2, 0.1, 0.1, s * 17.6, y0 + 9, zc + o));   // рейл на кронштейнах
-      for (let j = 0; j < 9; j++) k.box(clothes[(j + i + (s > 0 ? 1 : 0)) % 3 === 0 && j === 4 ? 3 : (j + i) % 3], 0.35, 4.4, 1.3, s * 16.6, y0 + 4.5, zc - 7 + j * 1.75);
-    }
-  }
+  for (let i = 0; i < rooms; i++) { const zc = zcOf(i), L = LS[i];
+    k.box(lightP, 26, 0.1, L - 10, 0, 15.8, zc);   // светящийся потолок
+    q.anchors.push({ p: V(0, 12, zc), c: 0xfff4e6, i: 40 }); }
   // подвес: вещи висят на тросах с потолка по всей ширине зала справа и слева от камеры и медленно вращаются. skip — полоса z, где стоит витрина (с её стороны там не вешаем)
   const spinners = [];
   function hangCloud(i, files, n, size, side = 0, seed = 7, zx = zcOf(i)) { const zc = zcOf(i), L = LS[i], rr = rng(seed), wire = matte(0x9a9a9a, 0.5, 0.6);
@@ -499,15 +492,14 @@ function merch(z0) {
   // g-drive и лев: витрины втрое крупнее прежних, вещи висят по залу
   [['gdrive', 1, 'мерч g-drive', ['merch-tee']], ['lion', 3, 'мерч льва', ['merch-lion-hoodie', 'merch-lion-bomber', 'merch-lion-panama']]].forEach(([kind, i, t, hang]) => { const x = 10, z = ZS[i] + 29;   // витрина в глубине зала, точка обзора — у входа в зал: из соседнего её закрыли бы перегородки
     k.box(red, 0.12, 0.05, 20, x - 6.5, 0, z); zoneAt(q, buildMerchGen(THREE, GLTF, kind), x, z, 2.8, t, 45); q.cubes.at(-1).stopAt = ZS[i] + 2; hangCloud(i, hang, 16, kind === 'lion' ? 2.2 : 2.6, 1, 20 + i, z); });
-  path(q, 'btl', [0, 5, z0 - 14], [0, 5, z0 + 6], [0, 5, z0 + 90], [0, 5, z1]);
-  path(q, 'atl', [0, 36, z0 - 22], [0, 23.5, z0 - 6], [0, 23.5, z0 + 90], [0, 23.5, z1]);
+  path(q, 'btl', [0, 5, z0 - 14], [0, 5, z0 + 6], [0, 5, z0 + 90], [0, 5, z1]);   // atl сюда не заходит: он летит через мир ai над крышей
   return z1;
 }
 
 // {05} ai — чёрная пустота: кремовая сетка гаснет к краям, монолиты проступают только в свете искры; atl парит среди монолитов
 function ai(z0) {
   const q = zone('ai', { grade: { sat: 0, con: 0.36, grain: 0.07, vig: 0.65, ca: 0, red: 1, streak: 0.35 },  n: '05', t: 'ai-продакшн', line: 'пустота, кремовая сетка, монолиты в свете искры', sky: ['#000000', '#030303', '#0c0c0c'], hemi: [0x6a6a6a, 0x050505, 0.08], key: [0xe1d9cf, 0.35, V(0, 1, -0.4)], bloom: 1.3, spark: 55 });
-  const z1 = z0 + 300, k = q.kit, r = rng(53), mono = matte(0x0a0a0a, 0.35, 0.2);
+  const z1 = z0 + 260, k = q.kit, r = rng(53), mono = matte(0x0a0a0a, 0.35, 0.2), AY = 20; q.yr = [19, 1e9];   // мир ai стоит над крышей дома мерча: atl летит здесь, btl — по мерчу под ним
   q.rects.push([-120, 120, z0, z1]);
   k.box(matte(0x050505, 0.6), 240, 0.3, z1 - z0, 0, -0.3, (z0 + z1) / 2);
   const pts = [], col = [], c = new THREE.Color(CREAM);
@@ -519,16 +511,16 @@ function ai(z0) {
   const edges = [];
   for (let i = 0; i < 40; i++) {
     const s = i % 2 ? 1 : -1, x = s * (14 + r() * 90), z = z0 + 10 + r() * (z1 - z0 - 20), w = 1.2 + r() * 1.6, h = 24 + r() * 80, d = 5 + r() * 10, ry = (r() - 0.5) * 0.6;
-    if (Math.abs(x) < 40 && [60, 120, 180, 240].some(dz => z > z0 + dz - 45 && z < z0 + dz + 8)) continue;   // перед баннерами atl — чистый коридор обзора
+    if (Math.abs(x) < 40 && [50, 105, 160, 215].some(dz => z > z0 + dz - 45 && z < z0 + dz + 8)) continue;   // перед баннерами atl — чистый коридор обзора
     k.box(mono, w, h, d, x, 0, z, ry);
     const e = new THREE.EdgesGeometry(new THREE.BoxGeometry(w, h, d)); e.applyMatrix4(new THREE.Matrix4().compose(V(x, h / 2, z), new THREE.Quaternion().setFromEuler(new THREE.Euler(0, ry, 0)), V(1, 1, 1))); edges.push(e);
   }
   q.g.add(new THREE.LineSegments(mergeGeometries(edges), new THREE.LineBasicMaterial({ color: new THREE.Color(CREAM).multiplyScalar(0.28), toneMapped: false })));
   for (let i = 0; i < 8; i++) { const s = i % 2 ? 1 : -1; k.geo(glow(CREAM, 0.6), new THREE.CylinderGeometry(0.12, 0.12, 260, 6), s * (60 + r() * 50), 130, z0 + r() * (z1 - z0)); }
   const blk = matte(0x111111, 0.3, 0.3);
-  [['ai · fonbet', 60, 'fonbet'], ['ai · mango', 120, 'mango'], ['ai · лавка', 180, 'lavka'], ['ai · альфа', 240, 'alfa']].forEach(([t, dz, f], i) => banner(q, i % 2 ? 15 : -15, 29, z0 + dz, t, { w: 20, img: `cases/ai-${f}.jpg`, vid: `ai-${f}.mp4` }));
-  path(q, 'btl', [0, 4.5, z0 + 4], [0, 5, z0 + 150], [0, 4.5, z1]);
-  path(q, 'atl', [0, 26, z0 + 4], [1, 30, z0 + 150], [0, 32, z1 - 20], [0, 32, z1]);
+  [['ai · fonbet', 50, 'fonbet'], ['ai · mango', 105, 'mango'], ['ai · лавка', 160, 'lavka'], ['ai · альфа', 215, 'alfa']].forEach(([t, dz, f], i) => banner(q, i % 2 ? 15 : -15, 29, z0 + dz, t, { w: 20, img: `cases/ai-${f}.jpg`, vid: `ai-${f}.mp4` }));
+  path(q, 'atl', [0, 26, z0 + 4], [1, 30, z0 + 130], [0, 32, z1 - 20], [0, 32, z1]);
+  lift(q, AY);
   return z1;
 }
 
@@ -543,7 +535,7 @@ function ending(z0) {
 }
 
 // ---------- сборка мира: развилка → нейтральная → азия → спорт → мерч → ai → финал, оба маршрута через все локации ----------
-const zR = rotunda(), zN = neutral(zR + 8), zA = asia(zN), zS = sport(zA), zM = merch(zS + 70), zI = ai(zM), FIN = ending(zI);
+const zR = rotunda(), zN = neutral(zR + 8), zA = asia(zN), zS = sport(zA), zM = merch(zS + 70), zI = ai(zS + 70), FIN = ending(Math.max(zM, zI));
 FIN.gone = 0; const BLK = { k: 0, dir: V(0, 0.3, 1) };   // BLK — чёрное солнце у tevredens: вес и направление
 ZL.forEach(q => q.kit.flush(q.g));
 const ground = new THREE.Mesh(new THREE.PlaneGeometry(4000, 4000), matte(0x050505, 1)); ground.rotation.x = -Math.PI / 2; ground.position.y = -0.4; scene.add(ground);
@@ -735,7 +727,7 @@ function navStep(dir) {
   else { route = null; target = TRUNK_W - 4; }   // назад с первого кейса — к развилке
   scrollTo(0, target * PX);
 }
-const modalOpen = () => document.getElementById('modal')?.classList.contains('on');
+const modalOpen = () => document.getElementById('modal')?.classList.contains('on') || document.getElementById('cpop')?.classList.contains('on');
 addEventListener('wheel', e => {
   if (!route || modalOpen() || e.ctrlKey) return;
   e.preventDefault();
@@ -766,7 +758,7 @@ const M = { top: new THREE.Color(), mid: new THREE.Color(), bot: new THREE.Color
 let curZone = null;
 function updateZones(dawn) {
   const x = camera.position.x, z = camera.position.z;
-  const ws = ZL.map(q => { const d = rectD(q, x, z); q.g.visible = d < 260; q.d = d; return Math.exp(-((d / 16) ** 2)) + 1e-6; }), sum = ws.reduce((a, b) => a + b, 0);
+  const y = camera.position.y, ws = ZL.map(q => { const dv = q.yr ? Math.max(0, q.yr[0] - y, y - q.yr[1]) : 0, d = rectD(q, x, z) + dv * 4; q.g.visible = d < 260 && dv < 12; q.d = d; return Math.exp(-((d / 16) ** 2)) + 1e-6; }), sum = ws.reduce((a, b) => a + b, 0);   // мерч и ai — один участок пути друг над другом: зона выбирается и по высоте
   for (const k of ['top', 'mid', 'bot', 'key', 'hs', 'hg', 'sunC']) M[k].setRGB(0, 0, 0); M.dir.set(0, 0, 0); M.sun.set(0, 0, 0);
   let keyI = 0, hemiI = 0, bl = 0, sunK = 0, sp = 0, ex = 0, hd = 0, fg = 0, best = 0; const gr = { sat: 0, con: 0, grain: 0, vig: 0, ca: 0, red: 0, rays: 0, streak: 0, rain: 0, t0: 0, t1: 0, t2: 0 };
   ZL.forEach((q, i) => { const w = ws[i] / sum; if (ws[i] > ws[best]) best = i;
@@ -828,15 +820,25 @@ function govern() {
 }
 { const qp = new URLSearchParams(location.search).get('q'); if (qp !== null) { QL.fixed = true; setQuality(+qp); } else setQuality(1); }   // по умолчанию без затенения углов: оно самое дорогое, а на глаз почти незаметно; ?q=0 — включить
 // ---------- карточка кейса у остановки, наведение на превью, страница кейса ----------
-const cardEl = document.getElementById('card'), modalEl = document.getElementById('modal'), modalBody = document.getElementById('modalBody');
+const shadeEl = document.getElementById('shade'), cardEl = document.getElementById('card'), modalEl = document.getElementById('modal'), modalBody = document.getElementById('modalBody');
 let cardC = null;
 function updateCard() {
   const on = !!focC && focW > 0.8 && !!focC.id && !modalEl.classList.contains('on');
   if (on && focC !== cardC) { cardC = focC; const c = CASES[focC.id], yr = c.pass.год && c.pass.год !== '—' ? ' · ' + c.pass.год : '';
     cardEl.innerHTML = `<span class="t">${c.pass.клиент}${yr}</span><h3>${c.title}</h3><p>${c.idea}</p><button class="t" data-case="${focC.id}">читать кейс →</button>`;
-    cardEl.classList.toggle('left', focusSide(focC)[0] > 0); }
-  cardEl.classList.toggle('on', on);
+    cardEl.classList.toggle('left', focusSide(focC)[0] > 0); shadeEl.classList.toggle('left', focusSide(focC)[0] > 0); }
+  cardEl.classList.toggle('on', on); shadeEl.classList.toggle('on', on);   // под текстом — градиент на полэкрана, а не пятно
 }
+// связаться: кнопка внизу слева и «есть задача» в финале открывают попап с контактами
+const cpop = document.getElementById('cpop');
+document.addEventListener('click', e => { if (e.target.closest('[data-contact]')) cpop.classList.add('on'); else if (e.target === cpop || e.target.closest('#cpop .x')) cpop.classList.remove('on'); });
+addEventListener('keydown', e => { if (e.key === 'Escape') cpop.classList.remove('on'); });
+// стрелки внизу посередине: мышкой от кейса к кейсу, тем же шагом, что колесо и клавиши
+const arrowsEl = document.getElementById('arrows');
+arrowsEl.addEventListener('click', e => { const b = e.target.closest('[data-d]'); if (b && route) navStep(+b.dataset.d); });
+// финал: стрелка на другой маршрут — телепорт к его первому кейсу
+const endSw = document.getElementById('endSw');
+endSw.addEventListener('click', () => { if (!route) return; const to = route === 'btl' ? 'atl' : 'btl'; flashEl.classList.add('on'); setTimeout(() => { go(to, STOPS[to][0].s); lastZone = ''; requestAnimationFrame(() => flashEl.classList.remove('on')); }, 280); });
 const openCase = id => { modalBody.innerHTML = renderCase(id); modalEl.classList.add('on'); modalEl.scrollTop = 0; };
 const closeCase = () => modalEl.classList.remove('on');
 addEventListener('click', e => {
@@ -932,6 +934,7 @@ function frame() {
   pct.textContent = String(Math.round(sSm / TOTAL * 100)).padStart(3, '0') + '%';
   hint.style.opacity = sSm < 10 ? 0.6 : 0;
   routeBtn.style.display = route ? 'flex' : 'none'; routeBtn.dataset.r = route || '';
+  arrowsEl.classList.toggle('on', !!route && !modalOpen()); if (route) { const L = STOPS[route]; arrowsEl.children[1].disabled = scrollY / PX >= TOTAL - 1; } endSw.textContent = route === 'atl' ? 'смотреть btl →' : 'смотреть atl →';
   updateCard(); if (!REC_) updateHover(dt);
   for (const z of ZONES) if (z.q.g.visible && z.at.distanceTo(camera.position) < 260) { z.Zn.update(time, 1, camera.position); z.Zn.extra?.update(time, 1); z.Zn.tvs?.forEach((t, i) => { if (i !== 4) t.material.color.setScalar(0.55 + 0.3 * Math.sin(time * 9 + i * 3) ** 8); }); }
   film.uniforms.uT.value = (time * 60) % 1000; composer.render(); if (!REC_) govern(); requestAnimationFrame(frame);

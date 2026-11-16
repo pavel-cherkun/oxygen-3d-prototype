@@ -19,7 +19,24 @@ html.lock,html.lock body{overflow:hidden}
 .t{font:400 12px/1.4 "AP",monospace;letter-spacing:.04em;text-transform:lowercase}
 .hud{position:fixed;z-index:3;pointer-events:none}
 #logo{left:28px;top:24px;width:118px}
-#zone{left:28px;bottom:26px}
+#zone{display:none}
+#contact{all:unset;position:fixed;left:28px;bottom:26px;z-index:4;cursor:pointer;font:520 clamp(18px,1.6vw,24px)/1 "TT",sans-serif;padding:12px 24px;border:1px solid var(--red);border-radius:40px;color:var(--cream);background:rgba(10,10,10,.35);backdrop-filter:blur(6px);transition:background .25s}
+#contact:hover{background:var(--red)}
+#cpop{position:fixed;inset:0;z-index:30;display:none;place-items:center;background:rgba(0,0,0,.6);backdrop-filter:blur(8px)}
+#cpop.on{display:grid}
+#cpop .box{position:relative;background:#0d0d0d;border:1px solid rgba(225,217,207,.16);border-radius:24px;padding:44px 48px;width:min(460px,86vw)}
+#cpop h2{font:520 clamp(32px,3.6vw,52px)/1 "TT",sans-serif;margin:8px 0 26px;text-transform:lowercase}
+#cpop a{display:block;color:var(--cream);text-decoration:none;font:520 clamp(20px,1.8vw,26px)/1.25 "TT",sans-serif;margin-bottom:10px}
+#cpop a:hover{color:var(--red)}
+#cpop p{opacity:.6;margin-top:18px;line-height:1.35}
+#cpop .x{all:unset;cursor:pointer;position:absolute;right:22px;top:20px;color:var(--cream);opacity:.6}
+#cpop .x:hover{opacity:1}
+#arrows{position:fixed;left:50%;bottom:24px;translate:-50% 0;z-index:4;display:none;gap:6px;padding:4px;border:1px solid rgba(225,217,207,.22);border-radius:60px;background:rgba(10,10,10,.35);backdrop-filter:blur(6px)}
+#arrows.on{display:flex}
+#arrows button{all:unset;cursor:pointer;width:52px;height:44px;display:grid;place-items:center;border-radius:40px;color:var(--cream);font:520 22px/1 "TT",sans-serif;opacity:.7;transition:background .25s,opacity .25s}
+#arrows button:hover{opacity:1;background:var(--red)}
+#arrows button:disabled{opacity:.2;pointer-events:none}
+#end .sw{margin-left:8px;border-color:rgba(225,217,207,.4)}
 #zone b{display:block;font:520 clamp(34px,4.4vw,64px)/.95 "TT",sans-serif;letter-spacing:-.01em;margin-top:6px;text-transform:lowercase}
 #zone .t{color:var(--red)}
 #pct{right:28px;bottom:26px;color:var(--red)}
@@ -60,7 +77,9 @@ html.lock,html.lock body{overflow:hidden}
 /* карточка кейса у остановки: в половине кадра напротив превью */
 #card{position:fixed;z-index:3;right:6vw;top:50%;translate:0 -50%;width:min(420px,38vw);opacity:0;pointer-events:none;transition:opacity .45s,transform .45s;transform:translateY(12px)}
 #card.left{right:auto;left:6vw}
-#card::before{content:"";position:absolute;inset:-60px -70px;z-index:-1;background:radial-gradient(closest-side,rgba(0,0,0,.62),rgba(0,0,0,.35) 60%,transparent);pointer-events:none}
+#shade{position:fixed;top:0;bottom:0;right:0;width:55vw;z-index:2;pointer-events:none;opacity:0;transition:opacity .45s;background:linear-gradient(to left,rgba(0,0,0,.72),rgba(0,0,0,.5) 50%,transparent)}
+#shade.left{right:auto;left:0;background:linear-gradient(to right,rgba(0,0,0,.72),rgba(0,0,0,.5) 50%,transparent)}
+#shade.on{opacity:1}
 #card.on{opacity:1;pointer-events:auto;transform:none}
 #card .t{color:var(--red)}
 #card h3{font:520 clamp(32px,3.4vw,54px)/.95 "TT",sans-serif;margin:10px 0 14px;text-transform:lowercase;text-wrap:balance}
@@ -119,7 +138,11 @@ html.lock,html.lock body{overflow:hidden}
 <div class="hud t" id="hint">скролл — идти за искрой</div>
 <div class="hud" id="routes"><button data-to="start" class="st">начало</button><button data-to="btl">btl</button><button data-to="atl">atl</button></div>
 <div id="flash"></div>
-<div id="end"><span class="t">{06} финал</span><h2>добавьте кислорода</h2><button class="t">есть задача →</button></div>
+<div id="end"><span class="t">{06} финал</span><h2>добавьте кислорода</h2><button class="t" data-contact>есть задача →</button><button class="t sw" id="endSw"></button></div>
+<div id="shade"></div>
+<button id="contact" data-contact>связаться</button>
+<div id="arrows"><button data-d="-1" aria-label="предыдущий кейс">←</button><button data-d="1" aria-label="следующий кейс">→</button></div>
+<div id="cpop"><div class="box"><button class="x t">закрыть ✕</button><span class="t">oxygen</span><h2>есть задача?</h2><a href="mailto:ask@oxygen-agency.ru">ask@oxygen-agency.ru</a><a href="tel:+78126790559">+7 (812) 679 05 59</a><p>санкт-петербург, набережная мойки 37</p></div></div>
 <div id="card"></div>
 <div id="modal"><button class="close t">закрыть ✕</button><div class="wrap" id="modalBody"></div></div>
 <div id="fork">
