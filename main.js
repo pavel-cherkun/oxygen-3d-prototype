@@ -378,8 +378,8 @@ const ALL = [
   PJ('tevredens', 'cases/tevredens-1', 'города', 'shaft', cylPt(SHC, 149.5, 100, -5), 185),
   PJ('izhora', 'cases/izhora-48-1', 'азия', 'asia', cylPt(AS, 259.5, -45, 80), 150),
   PJ('fandom', 'cases/ozon-fandom-kv-1', 'азия', 'asia', cylPt(AS, 259.5, -100, 80), 150),
+  PJ('treschnutye', 'cases/treschnutye-1', 'азия', 'asia', cylPt(AS, 259.5, 155, 80), 150),   // по кольцу в одну сторону: левая половина вниз, правая вверх
   PJ('tbank', 'cases/tbank-zone-1', 'азия', 'asia', cylPt(AS, 259.5, 115, 80), 150),
-  PJ('treschnutye', 'cases/treschnutye-1', 'азия', 'asia', cylPt(AS, 259.5, 155, 80), 150),
   PJ('selekt', 'cases/ozon-select-1', 'ритейл', 'ret', wallPt(-169.4, 150, -2600, 1), 200),
   PJ('zaklinateli', 'cases/zaklinateli-kv-1', 'ритейл', 'ret', wallPt(-169.4, 150, -2870, 1), 200),
   PJ('dino', 'cases/dino-1', 'ритейл', 'ret', wallPt(-169.4, 150, -3140, 1), 200),
@@ -471,9 +471,14 @@ const ZORD = ['hyp', 'shaft', 'asia', 'ret', 'ai', 'sport'], RR = 238;
 function neonRoute(shots) {
   const Y = LOW + 0.25, P = [], add = (x, z) => { const q = V(x, Y, z); if (!P.length || P[P.length - 1].distanceTo(q) > 1) P.push(q); };
   const ang = (x, z) => Math.atan2(x, z - ZN.asia), last = () => P[P.length - 1];
-  const ringTo = a1 => { const L = last(), a0 = ang(L.x, L.z); let d = a1 - a0; d = Math.atan2(Math.sin(d), Math.cos(d)); const n = Math.max(1, Math.ceil(Math.abs(d) / 0.1)); for (let i = 1; i <= n; i++) { const a = a0 + d * i / n; add(RR * Math.sin(a), ZN.asia + RR * Math.cos(a)); } };
+  const ringTo = a1 => { const L = last(), a0 = ang(L.x, L.z); let d = a1 - a0; while (d > 0.02) d -= 2 * Math.PI; while (d <= -2 * Math.PI) d += 2 * Math.PI; /* по кольцу всегда в одну сторону: левая половина вниз, правая вверх */ const n = Math.max(1, Math.ceil(Math.abs(d) / 0.1)); for (let i = 1; i <= n; i++) { const a = a0 + d * i / n; add(RR * Math.sin(a), ZN.asia + RR * Math.cos(a)); } };
   let zone = 'hyp';
-  const goZone = to => { for (let i = ZORD.indexOf(zone); i < ZORD.indexOf(to); i++) { if (ZORD[i] === 'asia') ringTo(Math.PI); DOORS[`${ZORD[i]}>${ZORD[i + 1]}`].forEach(d => add(0, d.z)); zone = ZORD[i + 1]; } };
+  const goZone = to => { for (let i = ZORD.indexOf(zone); i < ZORD.indexOf(to); i++) { const D_ = DOORS[`${ZORD[i]}>${ZORD[i + 1]}`];
+      if (ZORD[i] === 'asia') { const L = last(), a0 = ang(L.x, L.z);   // из круглого зала: если последний кейс на правой половине — плавная шпилька внутрь
+        // и по внутреннему кругу (между кольцом и стволом) вниз к выходу; иначе по кольцу до выхода
+        if (a0 > 0.2 && a0 < Math.PI - 0.2) { const r2 = 165; for (let a = a0; a <= Math.PI + 1e-6; a += 0.1) add(r2 * Math.sin(a), ZN.asia + r2 * Math.cos(a)); add(0, ZN.asia - r2); }
+        else ringTo(Math.PI); }
+      (ZORD[i + 1] === 'asia' ? D_.slice(0, 1) : D_).forEach(d => { if (d.z < last().z - 2) add(0, d.z); }); zone = ZORD[i + 1]; } };   // проёмы позади — пропускаем (без хвостов); в круглый зал — сразу на кольцо
   // внутренний прямоугольник зала (28 от стен): участки вдоль стен не вылезают за угол
   const BOX = { hyp: [671, -330, -1471], ret: [141, -2485, -3291], ai: [671, -3460, -4412], sport: [291, -4500, -5132] };
   const clampB = (z_, p) => { const b = BOX[z_]; if (!b) return p; p.x = Math.max(-b[0], Math.min(b[0], p.x)); p.z = Math.min(b[1], Math.max(b[2], p.z)); return p; };
@@ -490,20 +495,19 @@ function neonRoute(shots) {
     goZone(it.zone);
     if (it.pt) { add(it.pt.x, it.pt.z); return; }
     const L = last(), N = exitPt(k);
-    if (it.ring) { const a0 = ang(L.x, L.z), d0 = x => Math.abs(Math.atan2(Math.sin(x - a0), Math.cos(x - a0))); const [p, q] = d0(it.ring[0]) < d0(it.ring[1]) ? it.ring : [it.ring[1], it.ring[0]]; ringTo(p); ringTo(q); return; }
+    if (it.ring) { ringTo(it.ring[1]); ringTo(it.ring[0]); return; }
     let [p, q] = it.run; if (L.distanceTo(q) + p.distanceTo(N) < L.distanceTo(p) + q.distanceTo(N)) [p, q] = [q, p];
     const t = clamp01(N.clone().sub(p).dot(q.clone().sub(p)) / (q.distanceToSquared(p) || 1)); if (t > 0.05 && t < 0.95) q = p.clone().lerp(q, t);   // выход посреди участка — не доходим до конца и не возвращаемся
     add(p.x, p.z); add(q.x, q.z);
   });
   goZone('sport'); add(0, -5100); add(0, ZN.fan + 40);
-  // скругление углов: дуга радиусом до 34 (не больше 40% соседних отрезков)
-  const out = [P[0]];
-  for (let i = 1; i < P.length - 1; i++) { const a = P[i - 1], b = P[i], c = P[i + 1], u = a.clone().sub(b), w = c.clone().sub(b), lu = u.length(), lw = w.length(), th = u.angleTo(w);
-    if (th > Math.PI - 0.05 || th < 0.08 || lu < 1 || lw < 1) { out.push(b); continue; }
-    const r = Math.min(34, 0.4 * Math.min(lu, lw) * Math.tan(th / 2)), t = r / Math.tan(th / 2);
-    const p0 = b.clone().addScaledVector(u.normalize(), t), p1 = b.clone().addScaledVector(w.normalize(), t), n = Math.max(2, Math.ceil((Math.PI - th) / 0.14));
-    for (let k = 0; k <= n; k++) { const s_ = k / n, q = p0.clone().multiplyScalar((1 - s_) * (1 - s_)).addScaledVector(b, 2 * s_ * (1 - s_)).addScaledVector(p1, s_ * s_); out.push(q); } }
-  out.push(P[P.length - 1]); return out;
+  // сглаживание: срезание углов (Чайкин) с ограниченным срезом — острые места становятся плавными дугами, длинные прямые остаются прямыми
+  let Q = P;
+  for (let it = 0; it < 4; it++) { const R_ = [Q[0]];
+    for (let i = 0; i < Q.length - 1; i++) { const a = Q[i], b = Q[i + 1], L = a.distanceTo(b), c = Math.min(0.25, 26 / (L || 1));
+      if (i > 0) R_.push(a.clone().lerp(b, c)); if (i < Q.length - 2) R_.push(a.clone().lerp(b, 1 - c)); }
+    R_.push(Q[Q.length - 1]); Q = R_; }
+  return Q.filter((q, i) => i === 0 || q.distanceTo(Q[i - 1]) > 0.5);
 }
 // маршруты: кейсы и неон для каждого; зона без колонн и балок — объединение всех трёх (камера, взгляд на кадры, лучи проекторов, неон)
 const ROUTES = { all: ALL, atl: ALL.filter(c => c.dir === 'atl'), btl: ALL.filter(c => c.dir === 'btl') };
@@ -1188,9 +1192,9 @@ function updateRays() {
 }
 const zoneAt = z => { let i = 0; while (i < ZONES.length - 2 && z < ZONES[i + 1].z) i++; const a = ZONES[i], b = ZONES[i + 1], t = smooth(clamp01((a.z - z) / (a.z - b.z))); const mix = (u, v) => u.map((x, k) => x + (v[k] - x) * t); return { haze: mix(a.haze, b.haze), k: a.k + (b.k - a.k) * t, amb: mix(a.amb, b.amb) }; };
 const camT = V(0, 0, 0), rigPos = V(0, 0, 0), rigQ = new THREE.Quaternion(), _qT = new THREE.Quaternion(), _qS = new THREE.Quaternion(), _m4 = new THREE.Matrix4(), _up = V(0, 1, 0);
-let snapCam = true, snapPrev = true;
+let snapCam = true, snapPrev = true, NEON_S = 0;
 const RM = matchMedia('(prefers-reduced-motion: reduce)').matches;   // спокойный режим: без пролётов — переходы шторкой, камера сразу на месте
-const FOL = { s: 0, v: 0, a: 0, boost: 1, vmax: 60, amax: 90, dec: 55 };   // догонка скролла в единицах vh
+const FOL = { s: 0, v: 0, a: 0, boost: 1, vmax: 75, amax: 95, dec: 60, near: 3.6 };   // догонка скролла в единицах vh
 // цель камеры: интро — по ключам; дальше — по таблице траектории (по длине ленты)
 function camTarget(q) {
   if (q > P_A && q < P_B && CP.p.length) {
@@ -1230,18 +1234,18 @@ function frame() {
   if (RM) { FOL.s = scrollY / innerHeight; FOL.v = 0; }
   { const tgt = scrollY / innerHeight, err = tgt - FOL.s, dist = Math.abs(err), sg = Math.sign(err);
     FOL.boost += Math.max(-0.8 * dt, Math.min(0.8 * dt, Math.min(1.5, 1 + dist / 120) - FOL.boost));
-    const vT = sg * Math.min(FOL.vmax * FOL.boost, Math.sqrt(2 * FOL.dec * FOL.boost * dist), 3 * dist);
+    const vT = sg * Math.min(FOL.vmax * FOL.boost, Math.sqrt(2 * FOL.dec * FOL.boost * dist), FOL.near * dist);
     if (Math.sign(vT) === Math.sign(FOL.v || vT) && Math.abs(vT) > Math.abs(FOL.v)) { FOL.a = Math.min(FOL.a + 160 * dt, FOL.amax * FOL.boost); FOL.v += Math.sign(vT - FOL.v) * Math.min(Math.abs(vT - FOL.v), FOL.a * dt); }
     else { FOL.a = 0; FOL.v += Math.sign(vT - FOL.v) * Math.min(Math.abs(vT - FOL.v), 1.5 * FOL.amax * dt); }
     const st = FOL.v * dt; if (dist < 0.02 && Math.abs(FOL.v) < 0.1 || (sg !== 0 && (err - st) * sg < 0)) { FOL.s = tgt; if (dist < 0.02 || (err - st) * sg < 0) FOL.v = 0; } else FOL.s += st; }
   pSm = toP(max > 0 ? clamp01(FOL.s * innerHeight / max) : 0);
   U.uT.value = time;
   camTarget(pSm);
-  // риг: пружина с пределом скорости 160 м/с и пределом поворота 40°/с — без рывков даже при резком скролле
+  // риг: догонка скролла уже плавная (FOL), здесь только гасим дрожь — камера не отстаёт от пути
   if (snapCam) { rigPos.copy(camT); }
-  else { const d = camT.clone().sub(rigPos), stepV = d.multiplyScalar(1 - Math.exp(-dt * 3.0)), mx = 160 * dt; if (stepV.length() > mx) stepV.setLength(mx); rigPos.add(stepV); }
+  else { const d = camT.clone().sub(rigPos), stepV = d.multiplyScalar(1 - Math.exp(-dt * 4.5)), mx = 320 * dt; if (stepV.length() > mx) stepV.setLength(mx); rigPos.add(stepV); }
   _m4.lookAt(rigPos, look, _up); _qT.setFromRotationMatrix(_m4);
-  if (snapCam) rigQ.copy(_qT); else { _qS.copy(rigQ).slerp(_qT, 1 - Math.exp(-dt * 2.4)); rigQ.rotateTowards(_qS, THREE.MathUtils.degToRad(40) * dt); }
+  if (snapCam) rigQ.copy(_qT); else { _qS.copy(rigQ).slerp(_qT, 1 - Math.exp(-dt * 3.4)); rigQ.rotateTowards(_qS, THREE.MathUtils.degToRad(62) * dt); }
   snapPrev = snapCam; snapCam = false;
   mouseSm.lerp(mouse, Math.min(1, dt * 2)); camera.position.copy(rigPos).add(V(mouseSm.x * 2.5, -mouseSm.y * 1.5, 0)); camera.quaternion.copy(rigQ);
   // Искра
@@ -1256,7 +1260,8 @@ function frame() {
   iskra.material.emissiveIntensity = 1.0 * (1 - landed);   // логотип загорается — искра в нём становится чёрной, как в знаке
   iskra.material.color.set(RED).lerp(_black, landed); iskra.material.emissive.set(RED).multiplyScalar(1 - landed);
   // лента
-  const s = sOfP(pSm); neon.material.uniforms.uDraw.value = pSm < P_LINE ? -1 : s; neon.material.uniforms.uT.value = time;
+  const sT = sOfP(pSm); if (snapPrev || Math.abs(sT - NEON_S) > 2500) NEON_S = sT; else { const ds = (sT - NEON_S) * (1 - Math.exp(-dt * 2.8)); NEON_S += Math.sign(ds) * Math.min(Math.abs(ds), 620 * dt); }   // голова ленты — плавно, без рывков
+  const s = NEON_S; neon.material.uniforms.uDraw.value = pSm < P_LINE ? -1 : s; neon.material.uniforms.uT.value = time;
   headAt(s, head);
   // свет для бетона: Искра, лого, голова ленты и хвост, 8 ближайших ламп локаций
   const P = U.uP.value, C = U.uC.value, Lh = clamp01((pSm - 0.17) / 0.06); U.uL.value = Lh;
