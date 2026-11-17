@@ -951,7 +951,7 @@ function frame() {
   if (focC?.zone) { const k = focW * 0.75; scene.fog.density *= 1 - k; const f = film.uniforms; f.uTint.value.lerp(V(1, 1, 1), k); f.uSat.value += (0.95 - f.uSat.value) * k; f.uVig.value *= 1 - 0.4 * k; }   // у 3D-зоны квартал расступается: туман и красный фильтр слабеют, зона читается в своих цветах
   if (curZone && curZone.k !== lastZone) { lastZone = curZone.k; zoneN.textContent = `{${curZone.n}} ${route ? (route === 'btl' ? 'btl · на земле' : 'atl · над городом') : 'вход'}`; zoneT.textContent = curZone.t; }
   pct.textContent = String(Math.round(sSm / TOTAL * 100)).padStart(3, '0') + '%';
-  hint.style.opacity = sSm < 10 ? 0.6 : 0; heroEl.style.opacity = !route && sSm < 12 ? 1 : 0;   // виден сразу, ещё поверх прелоадера   // первый экран: H1 и H2 Никиты, пока не тронулись
+  hint.style.opacity = sSm < 10 ? 0.6 : 0; heroEl.style.opacity = !route && sSm < 12 ? 1 : 0;   // первый экран: H1 и H2 Никиты, пока не тронулись
   routeBtn.style.display = route ? 'flex' : 'none'; routeBtn.dataset.r = route || '';
   arrowsEl.classList.toggle('on', !!route && !modalOpen()); if (route) { const L = STOPS[route]; arrowsEl.children[1].disabled = scrollY / PX >= TOTAL - 1; } endSw.textContent = route === 'atl' ? 'смотреть btl →' : 'смотреть atl →';
   updateCard(); if (!REC_) updateHover(dt);

@@ -92,6 +92,7 @@ html.lock,html.lock body{overflow:hidden}
 #loader .pl span{display:block;opacity:0;transform:translateY(8px);transition:opacity .8s,transform .8s}
 #loader .pl span.on{opacity:1;transform:none}
 #loader.ready .pl{opacity:0;transition:opacity .6s .5s}
+html.lock #hero{opacity:0!important}   /* H1 появляется, когда прелоадер ушёл: строки прелоадера не налезают на него; в HTML текст есть сразу */
 #hero{position:fixed;left:28px;bottom:96px;z-index:11;pointer-events:none;opacity:1;max-width:min(720px,80vw);transition:opacity .8s}
 #hero b{display:block;font:520 clamp(48px,7vw,112px)/.9 "TT",sans-serif;letter-spacing:-.02em;text-transform:lowercase;margin-bottom:16px}
 #hero p{font-size:clamp(16px,1.4vw,20px);line-height:1.35;max-width:52ch;opacity:.88;text-wrap:pretty}
