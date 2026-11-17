@@ -92,7 +92,7 @@ html.lock,html.lock body{overflow:hidden}
 #loader .pl span{display:block;opacity:0;transform:translateY(8px);transition:opacity .8s,transform .8s}
 #loader .pl span.on{opacity:1;transform:none}
 #loader.ready .pl{opacity:0;transition:opacity .6s .5s}
-#hero{position:fixed;left:28px;bottom:96px;z-index:3;pointer-events:none;opacity:0;max-width:min(720px,80vw);transition:opacity .8s}
+#hero{position:fixed;left:28px;bottom:96px;z-index:11;pointer-events:none;opacity:1;max-width:min(720px,80vw);transition:opacity .8s}
 #hero b{display:block;font:520 clamp(48px,7vw,112px)/.9 "TT",sans-serif;letter-spacing:-.02em;text-transform:lowercase;margin-bottom:16px}
 #hero p{font-size:clamp(16px,1.4vw,20px);line-height:1.35;max-width:52ch;opacity:.88;text-wrap:pretty}
 #about{all:unset;position:fixed;left:170px;bottom:26px;z-index:4;cursor:pointer;font:520 clamp(18px,1.6vw,24px)/1 "TT",sans-serif;padding:12px 20px;border-radius:40px;color:var(--cream);opacity:.75}
@@ -128,7 +128,7 @@ html.lock,html.lock body{overflow:hidden}
 #cpop .jobs{margin-top:22px;padding-top:16px;border-top:1px solid #262626;font-size:15px;opacity:.75}
 button:focus-visible,a:focus-visible,input:focus-visible,textarea:focus-visible{outline:2px solid var(--red);outline-offset:3px}
 @media(prefers-reduced-motion:reduce){#loader .spark,#loader .spark img,#loader .spark::before{animation:none}*{transition-duration:.01s!important}}
-@media(max-width:760px){#pct{display:none}#hint{bottom:84px;width:86vw;text-align:center}#hero{left:16px;right:16px;bottom:150px;max-width:none}#about{left:auto;right:16px}#contact{left:16px}#cpop .row{grid-template-columns:1fr}#apop .box{margin:0;border-radius:0;padding:64px 20px 32px;min-height:100%}#arrows{bottom:84px}}
+@media(max-width:760px){#loader .pl{top:26%}#pct{display:none}#hint{bottom:84px;width:86vw;text-align:center}#hero{left:16px;right:16px;bottom:150px;max-width:none}#about{left:auto;right:16px}#contact{left:16px}#cpop .row{grid-template-columns:1fr}#apop .box{margin:0;border-radius:0;padding:64px 20px 32px;min-height:100%}#arrows{bottom:84px}}
 #shade{position:fixed;top:0;bottom:0;right:0;width:55vw;z-index:2;pointer-events:none;opacity:0;transition:opacity .45s;background:linear-gradient(to left,rgba(0,0,0,.72),rgba(0,0,0,.5) 50%,transparent)}
 #shade.left{right:auto;left:0;background:linear-gradient(to right,rgba(0,0,0,.72),rgba(0,0,0,.5) 50%,transparent)}
 #shade.on{opacity:1}
@@ -138,46 +138,11 @@ button:focus-visible,a:focus-visible,input:focus-visible,textarea:focus-visible{
 #card p{font-size:18px;line-height:1.35;opacity:.86;max-width:36ch;text-wrap:pretty}
 #card button,#card a.btn{all:unset;cursor:pointer;margin-top:20px;display:inline-block;border:1px solid var(--red);border-radius:40px;padding:12px 22px;color:var(--cream)}
 #card button:hover,#card a.btn:hover{background:var(--red)}
-/* страница кейса поверх мира */
-#modal{position:fixed;inset:0;z-index:20;background:#0d0d0d;overflow:auto;overscroll-behavior:contain;display:none}
-#modal.on{display:block}
-#modal .wrap{max-width:1180px;margin:0 auto;padding:96px 40px 96px}
-#modal .t{color:var(--red)}
-#modal .ch{padding-bottom:28px;border-bottom:1px solid #262626}
-#modal h1{font-weight:520;font-size:clamp(52px,8vw,128px);line-height:.9;margin:14px 0 18px;text-transform:lowercase;letter-spacing:-.02em;text-wrap:balance;max-width:14ch}
-#modal .tags{display:flex;flex-wrap:wrap;gap:8px}
-#modal .tags span{font:400 13px/1 "AP",monospace;border:1px solid #3a3a3a;border-radius:30px;padding:7px 12px;color:var(--cream)}
-#modal .pass{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:20px 32px;margin:0;padding:26px 0;border-bottom:1px solid #262626}
-#modal .pass dd{margin:6px 0 0;font-size:18px;line-height:1.3}
-#modal .ti{display:grid;grid-template-columns:1fr 1fr;gap:48px;margin:44px 0 52px}
-#modal .ti p{font-size:clamp(22px,2.2vw,30px);line-height:1.2;margin-top:12px;text-wrap:pretty}
-#modal section{margin:0 0 56px}
-#modal .gal{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:12px;margin:0 0 56px}
-#modal .gal figure img{width:100%;display:block;aspect-ratio:16/10;object-fit:cover;background:#1a1a1a}
-#modal figcaption{margin-top:8px;font-size:15px}
-#modal .steps{list-style:none;margin:16px 0 0;padding:0;border-top:1px solid #262626}
-#modal .steps li{display:grid;grid-template-columns:110px minmax(180px,1fr) 2fr;gap:24px;align-items:baseline;padding:20px 0;border-bottom:1px solid #262626}
-#modal .steps .n{font-size:13px}
-#modal .steps b{font-weight:520;font-size:22px;line-height:1.15;text-transform:lowercase}
-#modal .steps p{font-size:18px;line-height:1.4;opacity:.82;text-wrap:pretty}
-#modal .res{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:32px 28px;margin-top:20px}
-#modal .res b{display:block;font-weight:520;font-size:clamp(56px,6.4vw,96px);line-height:.9;letter-spacing:-.02em;color:var(--red);margin-bottom:12px;white-space:nowrap}
-#modal .res span{display:block;font-size:17px;line-height:1.35;max-width:26ch;opacity:.86}
-#modal .q{margin:0 0 56px;padding:36px 0 0;border-top:1px solid var(--red);max-width:900px}
-#modal .q p{font-size:clamp(24px,2.6vw,36px);line-height:1.2;text-wrap:pretty}
-#modal .q cite{display:block;margin-top:18px;font-style:normal}
-#modal .note{margin:-24px 0 48px;opacity:.7}
-#modal .cta{padding-top:36px;border-top:1px solid #262626}
-#modal .cta p{font-size:26px;margin-bottom:4px}
-#modal .btn{display:inline-flex;align-items:center;gap:10px;margin:16px 8px 0 0;background:var(--red);color:#111;border:0;font:520 16px "TT",sans-serif;padding:12px 18px;border-radius:40px;cursor:pointer}
-#modal .btn.ghost{background:transparent;color:var(--cream);border:1px solid #444}
-#modal .close{all:unset;position:fixed;top:22px;right:28px;z-index:21;cursor:pointer;color:var(--cream);border:1px solid #444;border-radius:40px;padding:8px 16px;background:#0d0d0d}
-@media(max-width:760px){#modal .steps li{grid-template-columns:1fr;gap:6px}#modal .ti{grid-template-columns:1fr;gap:28px}#modal .wrap{padding:80px 16px}}
-@media(max-width:760px){#card{left:16px;right:16px;top:auto;bottom:18vh;translate:none;width:auto}#card.left{left:16px}#modal .ti{grid-template-columns:1fr}#modal .wrap{padding:80px 16px}}
+@media(max-width:760px){#card{left:16px;right:16px;top:auto;bottom:18vh;translate:none;width:auto}#card.left{left:16px}}
 @media(max-width:760px){#logo,#zone{left:16px}#pct,#routes{right:16px}#fork{grid-template-columns:1fr;grid-template-rows:1fr 1fr}#fork button+button{border-left:0;border-top:1px solid rgba(225,217,207,.16)}}
 </style>
 <script type="importmap">
-{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.169.0/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.169.0/examples/jsm/"}}
+{"imports":{"three":"./vendor/three/build/three.module.min.js","three/addons/":"./vendor/three/examples/jsm/"}}
 </script>
 </head>
 <body>
@@ -221,7 +186,6 @@ button:focus-visible,a:focus-visible,input:focus-visible,textarea:focus-visible{
 <h2>оценили не только клиенты</h2><ul id="awardsList"></ul>
 <p style="margin-top:24px"><a href="cases/" style="color:var(--red)">все кейсы списком →</a></p></div></div>
 <div id="card"></div>
-<div id="modal"><button class="close t">закрыть ✕</button><div class="wrap" id="modalBody"></div></div>
 <div id="fork">
   <button data-r="btl"><span class="t">btl · на земле · в арку</span><b>btl</b><p>Гости приходят зрителями — и становятся участниками</p><p class="t">Фестивали, гонки, марафоны, промо, выездные программы. Продумываем до последней вывески и строим сами.</p></button>
   <button data-r="atl"><span class="t">atl + ai · над городом · вверх, за светом</span><b>atl + ai</b><p>Кампании, которые продолжаются без нас</p><p class="t">Вселенные, бренд-платформы, сезонные рамки и точечные механики. Всё внутри агентства, включая AI-продакшн — режиссуру без площадок, смен и пересъёмок.</p></button>

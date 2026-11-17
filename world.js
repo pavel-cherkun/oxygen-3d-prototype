@@ -12,7 +12,7 @@ import { GTAOPass } from 'three/addons/postprocessing/GTAOPass.js';
 import { RGBELoader } from 'three/addons/loaders/RGBELoader.js';
 import { Reflector } from 'three/addons/objects/Reflector.js';
 import { Pass, FullScreenQuad } from 'three/addons/postprocessing/Pass.js';
-import { CASES, renderCase } from './cases.js';
+import { CASES } from './cases.js';
 import { buildRobozoneGen, buildTdojoGen, buildOzonCorpAlley, buildOzonCorpGen, buildSelectGen, buildMerchGen, buildBaltika7Gen } from './zones/zones.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { DRACOLoader } from 'three/addons/loaders/DRACOLoader.js';
@@ -34,9 +34,11 @@ const canvas = document.getElementById('gl');
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance' });
 // два уровня качества: десктоп — отражения, мягкие тени в углах, сглаживание; телефоны — облегчённо
 const HQ = !/Mobi|Android|iPhone|iPad/i.test(navigator.userAgent) && innerWidth >= 900;
+// облегчённый режим для телефонов и планшетов: без теней, отражений луж, bloom и бликов, сниженное разрешение, 3D-модели зон грузятся по пути. ?lite — включить на десктопе
+const LITE = /Mobi|Android|iPhone|iPad/i.test(navigator.userAgent) || matchMedia('(pointer: coarse)').matches || /lite/.test(location.search);
 renderer.setPixelRatio(Math.min(devicePixelRatio, HQ ? 1.5 : 1.25)); renderer.setSize(innerWidth, innerHeight);
 renderer.toneMapping = THREE.ACESFilmicToneMapping; renderer.toneMappingExposure = 1.0;
-renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.shadowMap.enabled = !LITE; renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 const scene = new THREE.Scene(); scene.background = new THREE.Color(0x000000); scene.fog = new THREE.FogExp2(0x000000, 0);   // дымка — только в пилотных локациях
 const camera = new THREE.PerspectiveCamera(52, innerWidth / innerHeight, 0.3, 700);   // дальняя плоскость 700 м: дальше мир не рисуется вовсе
 const composer = new EffectComposer(renderer, new THREE.WebGLRenderTarget(innerWidth, innerHeight, { type: THREE.HalfFloatType, samples: HQ ? 4 : 0 })); composer.addPass(new RenderPass(scene, camera));
@@ -89,12 +91,12 @@ class GlarePass extends Pass {
   setSize(w, h) { this.rt.setSize(Math.max(1, Math.round(w / 4)), Math.max(1, Math.round(h / 4))); }
   render(renderer, writeBuffer, readBuffer) { this.mat.uniforms.tDiffuse.value = readBuffer.texture; renderer.setRenderTarget(this.rt); this.fs.render(renderer); }
 }
-const glare = new GlarePass(); glare.setSize(innerWidth * renderer.getPixelRatio(), innerHeight * renderer.getPixelRatio()); composer.addPass(glare);
+const glare = new GlarePass(); glare.setSize(innerWidth * renderer.getPixelRatio(), innerHeight * renderer.getPixelRatio()); composer.addPass(glare); if (LITE) { glare.enabled = false; bloom.enabled = false; }
 composer.addPass(film);
 
 // свет: небо-полусфера, ключевой с тенью (ездит за камерой), искра и три «лампы зоны» — их число постоянно, шейдеры не пересобираются
 const hemi = new THREE.HemisphereLight(0xffffff, 0x222222, 0); scene.add(hemi);
-const key = new THREE.DirectionalLight(0xffffff, 0); key.castShadow = true; scene.add(key, key.target);
+const key = new THREE.DirectionalLight(0xffffff, 0); key.castShadow = !LITE; scene.add(key, key.target);
 Object.assign(key.shadow.camera, { left: -110, right: 110, top: 110, bottom: -110, near: 1, far: 600 }); key.shadow.mapSize.set(2048, 2048); key.shadow.bias = -0.0004; key.shadow.normalBias = 0.5;
 const lamps = [0, 1, 2].map(() => { const l = new THREE.PointLight(0xffffff, 0, 40, 1.6); scene.add(l); return l; });
 
@@ -178,7 +180,7 @@ await Promise.all([document.fonts.load('520 100px TT'), document.fonts.load('20p
 // k, n — ключ и номер; sky — [зенит, середина, горизонт]; hemi — [небо, земля, сила]; key — [цвет, сила, направление на свет];
 // sun — [направление, цвет, сила] для диска в небе; rects — прямоугольники зоны в плане [x0, x1, z0, z1]
 const ZL = [], Z = {};
-function zone(k, o) { const z = Object.assign({ k, exp: 1, hdr: 0, fog: 0, wet: [], grade: {}, g: new THREE.Group(), kit: new Kit(), paths: { btl: [], atl: [] }, cubes: [], anchors: [], rects: [], bloom: 1, sun: [V(0, 0.2, 1), 0x000000, 0] }, o); scene.add(z.g); ZL.push(z); Z[k] = z; return z; }
+function zone(k, o) { const z = LOADQ = Object.assign({ k, exp: 1, hdr: 0, fog: 0, wet: [], grade: {}, g: new THREE.Group(), kit: new Kit(), paths: { btl: [], atl: [] }, cubes: [], anchors: [], rects: [], bloom: 1, sun: [V(0, 0.2, 1), 0x000000, 0] }, o); scene.add(z.g); ZL.push(z); Z[k] = z; return z; }
 const PLINTH = conc(0x3a3836, true);
 const LABELS = [];   // подписи кубов: вплотную гаснут, чтобы не лезть в кадр
 // куб-плейсхолдер кейса. r — маршрут (btl на земле, atl над городом); у atl куб стоит на консоли или парит
@@ -307,7 +309,10 @@ function neutral(z0) {
 
 // 3D-зоны btl-кейсов во дворах азии: модуль zones/zones.js (по визуализациям проектов). свои лампы зон выключены —
 // каждый лишний источник света дорожает для всего мира; зону освещает квартал и её собственные светящиеся материалы
-const ZONES = [], GLTF = new GLTFLoader().setDRACOLoader(new DRACOLoader().setDecoderPath('https://cdn.jsdelivr.net/npm/three@0.169.0/examples/jsm/libs/draco/gltf/'));
+const ZONES = [], GLTF = new GLTFLoader().setDRACOLoader(new DRACOLoader().setDecoderPath('vendor/three/examples/jsm/libs/draco/gltf/'));
+// LITE: загрузка моделей откладывается, пока камера не подлетит к зоне ближе 220 м (зона запоминается в момент постройки)
+const LAZY = []; let LOADQ = null;
+if (LITE) { const la = GLTF.load.bind(GLTF); GLTF.load = (url, ok, pr, err) => { const q = LOADQ; if (!q) return la(url, ok, pr, err); LAZY.push({ q, run: () => la(url, ok, pr, err) }); }; }
 function caseZone(q, s, zc, half, kind) {
   const k = q.kit, back = 41, floor = pbr('floor', 0x231e1e, 0.9, THREE.FrontSide, 0.1);
   k.box(floor, back - 11, 0.3, half * 2, s * (11 + (back - 11) / 2), -0.3, zc);   // пол двора
@@ -537,6 +542,7 @@ function ending(z0) {
 
 // ---------- сборка мира: развилка → нейтральная → азия → спорт → мерч → ai → финал, оба маршрута через все локации ----------
 const zR = rotunda(), zN = neutral(zR + 8), zA = asia(zN), zS = sport(zA), zM = merch(zS + 70), zI = ai(zS + 70), FIN = ending(Math.max(zM, zI));
+LOADQ = null;   // дальше модели грузятся сразу
 FIN.gone = 0; const BLK = { k: 0, dir: V(0, 0.3, 1) };   // BLK — чёрное солнце у tevredens: вес и направление
 ZL.forEach(q => q.kit.flush(q.g));
 const ground = new THREE.Mesh(new THREE.PlaneGeometry(4000, 4000), matte(0x050505, 1)); ground.rotation.x = -Math.PI / 2; ground.position.y = -0.4; scene.add(ground);
@@ -729,7 +735,7 @@ function navStep(dir) {
   else { route = null; target = TRUNK_W - 4; }   // назад с первого кейса — к развилке
   if (RM) { const fl = document.getElementById('flash'); fl.classList.add('on'); setTimeout(() => { scrollTo(0, target * PX); requestAnimationFrame(() => fl.classList.remove('on')); }, 200); } else scrollTo(0, target * PX);
 }
-const modalOpen = () => ['modal', 'cpop', 'apop'].some(k => document.getElementById(k)?.classList.contains('on'));
+const modalOpen = () => ['cpop', 'apop'].some(k => document.getElementById(k)?.classList.contains('on'));
 addEventListener('wheel', e => {
   if (!route || modalOpen() || e.ctrlKey) return;
   e.preventDefault();
@@ -777,7 +783,7 @@ function updateZones(dawn) {
   const fwd = new THREE.Vector3(); camera.getWorldDirection(fwd); key.target.position.copy(camera.position).addScaledVector(fwd, 50); key.target.position.y = Math.max(0, camera.position.y - (camera.position.y > ROOF ? 6 : 8)); if (camera.position.y > ROOF + 20) key.target.position.y = ROOF;
   key.position.copy(key.target.position).addScaledVector(M.dir.normalize(), 300);
   u.uHdr.value = hd * D; scene.fog.color.copy(M.bot).multiplyScalar(0.55 * D); scene.fog.density = fg * D;
-  WETS.forEach(o => { const U = o.m.material.uniforms; U.uT.value = performance.now() / 1000; U.uDrops.value = o.drops * RAIN.k; }); WETS.forEach(o => { const cy = camera.position.y; o.m.visible = (o.q.g.visible || !!o.also?.g.visible) && !(o.below && cy > o.below) && !(o.above && cy < o.above); });   // в мерче — только пол своего этажа
+  WETS.forEach(o => { const U = o.m.material.uniforms; U.uT.value = performance.now() / 1000; U.uDrops.value = o.drops * RAIN.k; }); WETS.forEach(o => { const cy = camera.position.y; o.m.visible = !LITE && (o.q.g.visible || !!o.also?.g.visible) && !(o.below && cy > o.below) && !(o.above && cy < o.above); });   // в мерче — только пол своего этажа
   if (SKYLINE.mesh) { SKYLINE.mesh.position.set(camera.position.x, ROOF - 30, camera.position.z); SKYLINE.mesh.material.opacity = clamp01(hd * 1.4) * D; SKYLINE.mesh.visible = hd > 0.02; }
   // ролики превью: включаются в 160 м от баннера, выключаются дальше 200 м; кадр подменяется видео, когда оно реально пошло
   let vNear = null, vD = 130; VIDS.forEach(v => { v.g.getWorldPosition(tmpL); v.d = tmpL.distanceTo(camera.position); if (v.d < vD) { vD = v.d; vNear = v; } });   // играет только ближайший ролик
@@ -820,12 +826,12 @@ function govern() {
   if (!QL.t0) QL.t0 = now; QL.n++;
   if (now - QL.t0 > 1500) { const fps = QL.n * 1000 / (now - QL.t0); QL.t0 = now; QL.n = 0; if (fps < 50) setQuality(QL.lvl + 1); }
 }
-{ const qp = new URLSearchParams(location.search).get('q'); if (qp !== null) { QL.fixed = true; setQuality(+qp); } else setQuality(1); }   // по умолчанию без затенения углов: оно самое дорогое, а на глаз почти незаметно; ?q=0 — включить
+{ const qp = new URLSearchParams(location.search).get('q'); if (qp !== null) { QL.fixed = true; setQuality(+qp); } else setQuality(LITE ? 3 : 1); }   // по умолчанию без затенения углов: оно самое дорогое, а на глаз почти незаметно; ?q=0 — включить
 // ---------- карточка кейса у остановки, наведение на превью, страница кейса ----------
-const shadeEl = document.getElementById('shade'), cardEl = document.getElementById('card'), modalEl = document.getElementById('modal'), modalBody = document.getElementById('modalBody');
+const shadeEl = document.getElementById('shade'), cardEl = document.getElementById('card');
 let cardC = null;
 function updateCard() {
-  const on = !!focC && focW > 0.8 && !!focC.id && !modalEl.classList.contains('on');
+  const on = !!focC && focW > 0.8 && !!focC.id && !modalOpen();
   if (on && focC !== cardC) { cardC = focC; const c = CASES[focC.id], yr = c.pass.год && c.pass.год !== '—' ? ' · ' + c.pass.год : '';
     cardEl.innerHTML = `<span class="t">${c.pass.клиент}${yr}</span><h3>${c.title}</h3><p>${c.idea}</p><a class="t btn" href="cases/${focC.id}.html">читать кейс →</a>`;
     cardEl.classList.toggle('left', focusSide(focC)[0] > 0); shadeEl.classList.toggle('left', focusSide(focC)[0] > 0); }
@@ -853,19 +859,17 @@ arrowsEl.addEventListener('click', e => { const b = e.target.closest('[data-d]')
 const endSw = document.getElementById('endSw');
 endSw.addEventListener('click', () => { if (!route) return; const to = route === 'btl' ? 'atl' : 'btl'; flashEl.classList.add('on'); setTimeout(() => { go(to, STOPS[to][0].s); lastZone = ''; requestAnimationFrame(() => flashEl.classList.remove('on')); }, 280); });
 const openCase = id => { location.href = `cases/${id}.html`; };   // кейс — отдельная страница со своим адресом (её видят поисковики)
-const closeCase = () => modalEl.classList.remove('on');
 addEventListener('click', e => {
-  const el = e.target.closest?.('[data-case],[data-go],[data-brief],.close');
-  if (el) { if (el.tagName === 'A') return; if (el.dataset.case) openCase(el.dataset.case); else closeCase(); return; }
+  const el = e.target.closest?.('[data-case]');
+  if (el) { if (el.tagName !== 'A') openCase(el.dataset.case); return; }
   if (HOV.b && e.target === renderer.domElement) openCase(HOV.b.id);
 });
-addEventListener('keydown', e => { if (e.key === 'Escape') closeCase(); });
 // превью под курсором проступает в цвете (в ai-зоне кадр чёрно-белый): плёнка получает четырёхугольник экрана и снимает с него обесцвечивание
 const HOV = { b: null, k: 0, ndc: new THREE.Vector2(9, 9), rc: new THREE.Raycaster() };
 addEventListener('pointermove', e => HOV.ndc.set(e.clientX / innerWidth * 2 - 1, -(e.clientY / innerHeight) * 2 + 1));
 function updateHover(dt) {
   let hit = null;
-  if (!modalEl.classList.contains('on')) { HOV.rc.setFromCamera(HOV.ndc, camera); let best = 1e9;
+  if (!modalOpen()) { HOV.rc.setFromCamera(HOV.ndc, camera); let best = 1e9;
     for (const b of BANNERS) { if (!b.q.g.visible || b.g.position.distanceTo(camera.position) > 260) continue; const h = HOV.rc.intersectObject(b.scr, false)[0]; if (h && h.distance < best) { best = h.distance; hit = b; } } }
   if (hit) { if (!hit.id) hit.id = CASE_ID[hit.title]; HOV.b = hit; }
   HOV.k += ((hit ? 1 : 0) - HOV.k) * (1 - Math.exp(-dt * 6)); if (!hit && HOV.k < 0.01) HOV.b = null;
@@ -943,10 +947,11 @@ function frame() {
   { const on = focC?.id === 'tevredens' ? focW : 0; BLK.k += (on - BLK.k) * Math.min(1, dt * 2.5);   // у tevredens солнце становится чёрным и встаёт над баннером
     if (BLK.k > 0.001) { const c = STOPS.atl.find(o => o.c.id === 'tevredens').c; BLK.dir.copy(c.p).sub(camera.position).setY(0).normalize().multiplyScalar(0.9).add(V(Math.sign(c.p.x) * 0.12, 0.2, 0)).normalize(); } }
   updateZones(dawn);
+  if (LAZY.length) for (let i = LAZY.length - 1; i >= 0; i--) if (LAZY[i].q.d < 220) LAZY.splice(i, 1)[0].run();
   if (focC?.zone) { const k = focW * 0.75; scene.fog.density *= 1 - k; const f = film.uniforms; f.uTint.value.lerp(V(1, 1, 1), k); f.uSat.value += (0.95 - f.uSat.value) * k; f.uVig.value *= 1 - 0.4 * k; }   // у 3D-зоны квартал расступается: туман и красный фильтр слабеют, зона читается в своих цветах
   if (curZone && curZone.k !== lastZone) { lastZone = curZone.k; zoneN.textContent = `{${curZone.n}} ${route ? (route === 'btl' ? 'btl · на земле' : 'atl · над городом') : 'вход'}`; zoneT.textContent = curZone.t; }
   pct.textContent = String(Math.round(sSm / TOTAL * 100)).padStart(3, '0') + '%';
-  hint.style.opacity = sSm < 10 ? 0.6 : 0; heroEl.style.opacity = !route && sSm < 12 && loaderEl.classList.contains('done') ? 1 : 0;   // первый экран: H1 и H2 Никиты, пока не тронулись
+  hint.style.opacity = sSm < 10 ? 0.6 : 0; heroEl.style.opacity = !route && sSm < 12 ? 1 : 0;   // виден сразу, ещё поверх прелоадера   // первый экран: H1 и H2 Никиты, пока не тронулись
   routeBtn.style.display = route ? 'flex' : 'none'; routeBtn.dataset.r = route || '';
   arrowsEl.classList.toggle('on', !!route && !modalOpen()); if (route) { const L = STOPS[route]; arrowsEl.children[1].disabled = scrollY / PX >= TOTAL - 1; } endSw.textContent = route === 'atl' ? 'смотреть btl →' : 'смотреть atl →';
   updateCard(); if (!REC_) updateHover(dt);
@@ -1008,7 +1013,7 @@ function bannerCheck(m = 0.4) {
   }
   console[out.length ? 'warn' : 'log'](`баннеры: ${out.length ? out.join(' | ') : 'чисто, ' + BANNERS.length + ' шт.'}`); return out;
 }
-window.__w = { scene, camera, renderer, composer, bloom, film, gtao, key, WETS, R, Z, go, goZone, check, bannerCheck, setQuality, QL, STOPS, TRUNK_W, TOTAL, sm: () => sSm, tick: () => { REC.t += 1 / 24; } };
+window.__w = { scene, camera, renderer, composer, bloom, film, gtao, key, WETS, R, Z, go, goZone, check, bannerCheck, setQuality, QL, STOPS, TRUNK_W, TOTAL, sm: () => sSm, lazy: () => LAZY.length, tick: () => { REC.t += 1 / 24; } };
 const AT = new URLSearchParams(location.search).get('at');
 if (AT) { const [k, f, r] = AT.split(':'); goZone(k, +f || 0.3, r || 'btl'); }
 if (location.search.includes('map')) drawMap();

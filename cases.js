@@ -35,32 +35,3 @@ export const CASES = {
   robozon: {"dir":"btl","title":"робозон","awards":[],"pass":{"клиент":"Ozon Tech","год":"2026","отрасль":"IT","направления":"btl, atl"},"task":"с нуля оформить инженерный хакатон «Робозон» — от разработки айдентики до бренд-зоны на офлайн-событии","idea":"сменить суровый кодинг на азарт соревнования и показать вживую, как написанный код управляет настоящим складом Ozon","how":[[C + "robozone-1.jpg","робозон",""],[C + "robozone-2.jpg","робозон",""],[C + "robozone-3.jpg","робозон",""],[C + "robozone-4.jpg","робозон",""],[C + "robozone-5.jpg","робозон",""],[C + "robozone-6.jpg","робозон",""]],"steps":[["дизайн-система","создали key visual, адаптировали его под разные форматы, а также придумали дизайн наград для победителей"],["креатив для соцсетей","разработали идею и написали тексты для плакатов, которые команда Ozon использовала для постов в Telegram-каналах"],["бренд-зона на ИТ-Пикнике от Т-Банка","полностью продумали дизайн, планировку и интерактивы для гостей зоны"]],"result":[["177К","просмотров публикаций в соцсетях"],["3 667","заявок на участие в хакатоне"],["1 361","гостей бренд-зоны"]]},
 };
 export const ORDER = {"btl":["fandom","robozon","tbank","selekt","lion","ironstar","gdrive","baltika7","baltikaPlant","megafon","mice","megafonTravel","gdriveMerch","oxygenSet","lionMerch"],"atl":["treschnutye","zaklinateli","dino","izhora","avangard","derbent","tevredens","ozonTravel","aiFonbet","aiDracondaz","aiBeep","aiMango","aiLavka","aiAlfa","ai"]};
-
-const num = i => String(i + 1).padStart(2, '0');
-export function renderCase(id) {
-  const c = CASES[id], list = ORDER[c.dir] || [], next = list[(list.indexOf(id) + 1) % list.length];
-  const steps = c.steps || [], res = (c.result || []).filter(([n]) => n && n !== '—'), q = c.quotes || [];
-  return `<header class="ch"><span class="t">{кейс} · ${c.pass.клиент}${c.pass.год && c.pass.год !== '—' ? ' · ' + c.pass.год : ''}</span>
-  <h1>${c.title}</h1>
-  ${c.awards.length ? `<div class="tags">${c.awards.map(a => `<span>${a}</span>`).join('')}</div>` : ''}</header>
-  <dl class="pass">${Object.entries(c.pass).filter(([, v]) => v && v !== '—').map(([k, v]) => `<div><dt class="t">${k}</dt><dd>${v}</dd></div>`).join('')}</dl>
-  <div class="ti"><div><span class="t">{задача}</span><p>${c.task}</p></div><div><span class="t">{идея}</span><p>${c.idea}</p></div></div>
-  ${c.how.length ? `<div class="gal">${c.how.map(([src, h, d]) => `<figure><img src="${src}" alt="${c.title}${h ? ': ' + h : ''}" loading="lazy">${h && d ? `<figcaption><b>${h}</b> <span class="t">${d}</span></figcaption>` : ''}</figure>`).join('')}</div>` : ''}
-  ${steps.length ? `<section><span class="t">{как сделали}</span><ol class="steps">${steps.map(([h, d], i) => `<li><span class="n t">${num(i)}/{${num(i)}}</span><b>${h}</b><p>${d}</p></li>`).join('')}</ol></section>` : ''}
-  ${res.length ? `<section><span class="t">{результат}</span><div class="res">${res.map(([n, d]) => `<div><b>${n}</b><span>${d}</span></div>`).join('')}</div></section>` : ''}
-  ${q.map(([t, a]) => `<blockquote class="q"><p>«${t}»</p><cite class="t">— ${a}</cite></blockquote>`).join('')}
-  ${c.note ? `<p class="note t">${c.note}</p>` : ''}
-  <div class="cta"><p>нужен похожий результат?</p>
-  <button class="btn" data-brief="${c.dir}" data-brief-case="${c.title}">хочу так же</button>
-  ${c.model ? '<button class="btn ghost" id="caseOrbit">покрутить зону в 3D ↻</button>' : ''}
-  ${next && next !== id ? `<button class="btn ghost" data-case="${next}">следующий кейс: ${CASES[next].title} →</button>` : ''}</div>`;
-}
-
-export const MODALS = {
-  reel: `<span class="t">{02} шоурил 2026</span><h1>шоурил</h1>
-    <video src="assets/oxygen_promo_v2.mp4" controls autoplay playsinline poster="assets/showreel-poster.webp" style="width:100%;display:block"></video>
-    <p class="t" style="margin-top:10px">фильм бренда из гайдлайна 20_26 · 40 секунд · 2560×1440. шоурила 2026 пока нет — когда будет, встанет сюда и на башню</p>`,
-  jobs: `<span class="t">{вакансии}</span><h1>ищем тех, кто превращает чужие искры в пламя</h1>
-    <p class="lead" style="font-size:26px;max-width:700px">структура страницы — по прототипу Антона: 4 факта о работе, позиции с фильтром по отделам (позиция · отдел · город · вилка), «нет своей — пришлите портфолио», как нанимаем: отклик → звонок → тестовое → решение</p>
-    <p class="t" style="margin-top:16px">прототип: список вакансий и условия даёт hr, в макете Антона стоят заглушки</p>`,
-};
