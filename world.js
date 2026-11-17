@@ -25,7 +25,8 @@ const rng = a => () => { a |= 0; a = a + 0x6d2b79f5 | 0; let t = Math.imul(a ^ a
 
 // ---------- загрузка: прелоадер считает модели и текстуры ----------
 const LOAD = { a: 0, b: 0, last: performance.now(), t0: performance.now() };
-THREE.DefaultLoadingManager.onProgress = (u, a, b) => { Object.assign(LOAD, { a, b, last: performance.now() }); document.getElementById('loadPct').textContent = String(Math.min(99, Math.round(a / b * 100))).padStart(2, '0') + '%'; };
+document.getElementById('pl1')?.classList.add('on');   // прелоадер: первая строка Никиты на старте загрузки, вторая — к концу
+THREE.DefaultLoadingManager.onProgress = (u, a, b) => { Object.assign(LOAD, { a, b, last: performance.now() }); document.getElementById('loadPct').textContent = String(Math.min(99, Math.round(a / b * 100))).padStart(2, '0') + '%'; if (a / b > 0.7) document.getElementById('pl2')?.classList.add('on'); };
 const settled = () => new Promise(res => { const tick = () => { const now = performance.now(); if ((LOAD.a >= LOAD.b && now - LOAD.last > 400 && now - LOAD.t0 > 2200) || now - LOAD.t0 > 20000) res(); else setTimeout(tick, 150); }; tick(); });
 
 // ---------- рендер ----------
@@ -718,6 +719,7 @@ buildStops();
 // пока события идут подряд (паузы < 200 мс) и не набирают силу заново, это тот же жест. так не пролетаешь мимо следующего кейса и не застреваешь на текущем
 const NAV = { last: 0, armed: true, acc: 0, low: 1e9, t0: 0, ty: null };
 function navIdx() { const L = STOPS[route]; let k = -1; for (let i = 0; i < L.length; i++) if (L[i].s <= scrollY / PX + 1) k = i; return k; }   // последний кейс, до которого уже доехали
+const RM = matchMedia('(prefers-reduced-motion: reduce)').matches;   // спокойный режим: без бега камеры (переход через затемнение), без дождя, зерна и качания от мыши
 function navStep(dir) {
   const L = STOPS[route], k = navIdx(), cur = scrollY / PX, atStop = k >= 0 && Math.abs(L[k].s - cur) < 1.5;
   let target;
@@ -725,9 +727,9 @@ function navStep(dir) {
   else if (!atStop && k >= 0) target = L[k].s;   // между кейсами — назад к тому, что позади
   else if (k > 0) target = L[k - 1].s;
   else { route = null; target = TRUNK_W - 4; }   // назад с первого кейса — к развилке
-  scrollTo(0, target * PX);
+  if (RM) { const fl = document.getElementById('flash'); fl.classList.add('on'); setTimeout(() => { scrollTo(0, target * PX); requestAnimationFrame(() => fl.classList.remove('on')); }, 200); } else scrollTo(0, target * PX);
 }
-const modalOpen = () => document.getElementById('modal')?.classList.contains('on') || document.getElementById('cpop')?.classList.contains('on');
+const modalOpen = () => ['modal', 'cpop', 'apop'].some(k => document.getElementById(k)?.classList.contains('on'));
 addEventListener('wheel', e => {
   if (!route || modalOpen() || e.ctrlKey) return;
   e.preventDefault();
@@ -783,7 +785,7 @@ function updateZones(dawn) {
     if (d < 160 && !v.el) { const el = v.el = document.createElement('video'); Object.assign(el, { src: v.src, muted: true, loop: true, playsInline: true, preload: 'auto', crossOrigin: 'anonymous' }); el.addEventListener('playing', () => { if (!v.tex) { v.tex = new THREE.VideoTexture(el); v.tex.colorSpace = THREE.SRGBColorSpace; coverFit(v.tex, el.videoWidth, el.videoHeight); } v.mat.map = v.tex; v.mat.color.setScalar(v.lum); v.mat.needsUpdate = true; }); }
     if (v.el) { if (d < 160 && v.el.paused) v.el.play().catch(() => {}); else if (d > 200 && !v.el.paused) v.el.pause(); } });
   LABELS.forEach(l => { l.getWorldPosition(tmpL); l.material.opacity = smooth(clamp01((tmpL.distanceTo(camera.position) - 15) / 12)); });
-  { const f = film.uniforms; f.uSat.value = gr.sat; f.uCon.value = gr.con; f.uGrain.value = gr.grain; f.uVig.value = gr.vig; f.uCA.value = gr.ca; f.uRed.value = gr.red; f.uTint.value.set(gr.t0, gr.t1, gr.t2); f.uStreak.value = gr.streak * D; f.uRain.value = gr.rain * D;
+  { const f = film.uniforms; f.uSat.value = gr.sat; f.uCon.value = gr.con; f.uGrain.value = RM ? 0 : gr.grain; f.uVig.value = gr.vig; f.uCA.value = gr.ca; f.uRed.value = gr.red; f.uTint.value.set(gr.t0, gr.t1, gr.t2); f.uStreak.value = gr.streak * D; f.uRain.value = RM ? 0 : gr.rain * D;
     // солнце на экране: лучи тянутся к нему, только если оно впереди
     const sp = camera.position.clone().addScaledVector(M.sun.clone().normalize(), 400), front = sp.clone().sub(camera.position).dot(camera.getWorldDirection(new THREE.Vector3())) > 0; sp.project(camera);
     f.uSunUV.value.set(sp.x * 0.5 + 0.5, sp.y * 0.5 + 0.5); f.uRays.value = (front ? gr.rays * D * (1 - smooth(clamp01(Math.hypot(sp.x, sp.y) / 2.2))) : 0) * (1 - BLK.k); sky.material.uniforms.uBlk.value = BLK.k * D; sky.material.uniforms.uBlkD.value.copy(BLK.dir); RAIN.k = gr.rain; }
@@ -795,7 +797,7 @@ function updateZones(dawn) {
 
 // ---------- HUD ----------
 const zoneN = document.getElementById('zoneN'), zoneT = document.getElementById('zoneT'), pct = document.getElementById('pct'), hint = document.getElementById('hint');
-const forkEl = document.getElementById('fork'), routeBtn = document.getElementById('routes'), flashEl = document.getElementById('flash');
+const heroEl = document.getElementById('hero'), loaderEl = document.getElementById('loader'), forkEl = document.getElementById('fork'), routeBtn = document.getElementById('routes'), flashEl = document.getElementById('flash');
 forkEl.addEventListener('click', e => { const b = e.target.closest('[data-r]'); if (!b) return; route = b.dataset.r; forkEl.classList.remove('on'); scrollTo(0, STOPS[route][0].s * PX); });   // сразу к первому кейсу маршрута
 // смена маршрута — телепорт: вспышка в чёрное, и камера уже стоит у соответствующего кейса другого маршрута (та же доля пути), без пролёта
 routeBtn.addEventListener('click', e => { const b = e.target.closest('[data-to]'); if (!b || !route || b.dataset.to === route) return; const to = b.dataset.to;
@@ -825,25 +827,36 @@ let cardC = null;
 function updateCard() {
   const on = !!focC && focW > 0.8 && !!focC.id && !modalEl.classList.contains('on');
   if (on && focC !== cardC) { cardC = focC; const c = CASES[focC.id], yr = c.pass.год && c.pass.год !== '—' ? ' · ' + c.pass.год : '';
-    cardEl.innerHTML = `<span class="t">${c.pass.клиент}${yr}</span><h3>${c.title}</h3><p>${c.idea}</p><button class="t" data-case="${focC.id}">читать кейс →</button>`;
+    cardEl.innerHTML = `<span class="t">${c.pass.клиент}${yr}</span><h3>${c.title}</h3><p>${c.idea}</p><a class="t btn" href="cases/${focC.id}.html">читать кейс →</a>`;
     cardEl.classList.toggle('left', focusSide(focC)[0] > 0); shadeEl.classList.toggle('left', focusSide(focC)[0] > 0); }
   cardEl.classList.toggle('on', on); shadeEl.classList.toggle('on', on);   // под текстом — градиент на полэкрана, а не пятно
 }
 // связаться: кнопка внизу слева и «есть задача» в финале открывают попап с контактами
 const cpop = document.getElementById('cpop');
 document.addEventListener('click', e => { if (e.target.closest('[data-contact]')) cpop.classList.add('on'); else if (e.target === cpop || e.target.closest('#cpop .x')) cpop.classList.remove('on'); });
-addEventListener('keydown', e => { if (e.key === 'Escape') cpop.classList.remove('on'); });
+addEventListener('keydown', e => { if (e.key === 'Escape') { cpop.classList.remove('on'); apop.classList.remove('on'); } });
+// о нас: три блока Никиты + награды из кейсов
+const apop = document.getElementById('apop');
+document.getElementById('about').addEventListener('click', () => apop.classList.add('on'));
+apop.addEventListener('click', e => { if (e.target === apop || e.target.closest('.x')) apop.classList.remove('on'); });
+document.getElementById('awardsList').innerHTML = Object.entries(CASES).filter(([, c]) => c.awards?.length).map(([id, c]) => `<li><a href="cases/${id}.html">${c.awards.join(' · ')} — ${c.title} (${c.pass.клиент})</a></li>`).join('');
+// форма «есть задача»: приёмника заявок пока нет — честно говорим и даём письмо с заполненным текстом
+document.getElementById('brief').addEventListener('submit', e => { e.preventDefault(); const f = e.target, m = document.getElementById('briefMsg'), d = new FormData(f);
+  if (!f.pd.checked) { m.textContent = 'отметьте согласие на обработку персональных данных'; m.classList.add('on'); return; }
+  const body = [`С чем приходим: ${d.getAll('come').join(', ') || '—'}`, `Имя: ${d.get('name') || '—'}`, `Компания: ${d.get('company') || '—'}`, `Контакт: ${d.get('contact') || '—'}`, `Задача: ${d.get('task') || '—'}`].join('\n');
+  const href = `mailto:ask@oxygen-agency.ru?subject=${encodeURIComponent('есть задача' + (d.get('company') ? ' — ' + d.get('company') : ''))}&body=${encodeURIComponent(body)}`;
+  m.innerHTML = `отправка заявок с сайта ещё не подключена — ничего не ушло. <a href="${href}">откройте письмо с вашим текстом</a> или позвоните: <a href="tel:+78126790559">+7 (812) 679 05 59</a>`; m.classList.add('on'); });
 // стрелки внизу посередине: мышкой от кейса к кейсу, тем же шагом, что колесо и клавиши
 const arrowsEl = document.getElementById('arrows');
 arrowsEl.addEventListener('click', e => { const b = e.target.closest('[data-d]'); if (b && route) navStep(+b.dataset.d); });
 // финал: стрелка на другой маршрут — телепорт к его первому кейсу
 const endSw = document.getElementById('endSw');
 endSw.addEventListener('click', () => { if (!route) return; const to = route === 'btl' ? 'atl' : 'btl'; flashEl.classList.add('on'); setTimeout(() => { go(to, STOPS[to][0].s); lastZone = ''; requestAnimationFrame(() => flashEl.classList.remove('on')); }, 280); });
-const openCase = id => { modalBody.innerHTML = renderCase(id); modalEl.classList.add('on'); modalEl.scrollTop = 0; };
+const openCase = id => { location.href = `cases/${id}.html`; };   // кейс — отдельная страница со своим адресом (её видят поисковики)
 const closeCase = () => modalEl.classList.remove('on');
 addEventListener('click', e => {
   const el = e.target.closest?.('[data-case],[data-go],[data-brief],.close');
-  if (el) { if (el.tagName === 'A') e.preventDefault(); if (el.dataset.case) openCase(el.dataset.case); else closeCase(); return; }
+  if (el) { if (el.tagName === 'A') return; if (el.dataset.case) openCase(el.dataset.case); else closeCase(); return; }
   if (HOV.b && e.target === renderer.domElement) openCase(HOV.b.id);
 });
 addEventListener('keydown', e => { if (e.key === 'Escape') closeCase(); });
@@ -864,7 +877,7 @@ function updateHover(dt) {
 }
 // ---------- цикл ----------
 let sSm = 0, mouse = new THREE.Vector2(), mSm = new THREE.Vector2(), lastZone = '';
-addEventListener('pointermove', e => mouse.set(e.clientX / innerWidth - 0.5, e.clientY / innerHeight - 0.5));
+addEventListener('pointermove', e => { if (!RM) mouse.set(e.clientX / innerWidth - 0.5, e.clientY / innerHeight - 0.5); });
 let lookInit = false, pitch = 0, yaw = 0, vS = 0, accS = 0, boostSm = 1, focW = 0, focC = null;
 // настройки камеры: vmax — предел скорости (м/с по пути), amax — предел разгона, dec — торможение, на которое рассчитана кривая подхода (меньше amax, с запасом — поэтому камера не проскакивает цель и не качается назад);
 // near — у самой цели скорость = near × расстояние (мягкий доезд без перелёта); jerk — как быстро нарастает разгон; prate — скорость доводки наклона (без пружины, без перелёта); wmax — предел угловой скорости
@@ -878,7 +891,8 @@ function frame() {
   forkEl.classList.toggle('on', !route && s > TRUNK_W - 14);
   if (!REC_) magnet(s);
   // движение: скролл задаёт только цель, камера догоняет её пружиной с пределом скорости и ускорения — без рывков
-  if (!REC_) {
+  if (RM && !REC_) { sSm = s; vS = 0; }   // спокойный режим: камера встаёт сразу
+  else if (!REC_) {
     // без пружины: целевая скорость сама гаснет к цели (кривая торможения), поэтому перелёта и качелей нет.
     // чем сильнее отстаём, тем выше предел скорости, но множитель растёт медленно; разгон нарастает не резче jerk, тормозить можно сразу
     const err = s - sSm, dist = Math.abs(err), dir = Math.sign(err);
@@ -932,7 +946,7 @@ function frame() {
   if (focC?.zone) { const k = focW * 0.75; scene.fog.density *= 1 - k; const f = film.uniforms; f.uTint.value.lerp(V(1, 1, 1), k); f.uSat.value += (0.95 - f.uSat.value) * k; f.uVig.value *= 1 - 0.4 * k; }   // у 3D-зоны квартал расступается: туман и красный фильтр слабеют, зона читается в своих цветах
   if (curZone && curZone.k !== lastZone) { lastZone = curZone.k; zoneN.textContent = `{${curZone.n}} ${route ? (route === 'btl' ? 'btl · на земле' : 'atl · над городом') : 'вход'}`; zoneT.textContent = curZone.t; }
   pct.textContent = String(Math.round(sSm / TOTAL * 100)).padStart(3, '0') + '%';
-  hint.style.opacity = sSm < 10 ? 0.6 : 0;
+  hint.style.opacity = sSm < 10 ? 0.6 : 0; heroEl.style.opacity = !route && sSm < 12 && loaderEl.classList.contains('done') ? 1 : 0;   // первый экран: H1 и H2 Никиты, пока не тронулись
   routeBtn.style.display = route ? 'flex' : 'none'; routeBtn.dataset.r = route || '';
   arrowsEl.classList.toggle('on', !!route && !modalOpen()); if (route) { const L = STOPS[route]; arrowsEl.children[1].disabled = scrollY / PX >= TOTAL - 1; } endSw.textContent = route === 'atl' ? 'смотреть btl →' : 'смотреть atl →';
   updateCard(); if (!REC_) updateHover(dt);
@@ -1001,9 +1015,10 @@ if (location.search.includes('map')) drawMap();
 frame();
 // прелоадер: искра встаёт туда, где в кадре 3D-искра, и передаёт ей кадр; только потом открывается скролл
 {
-  const L = document.getElementById('loader'), open = () => { L.classList.add('done'); document.documentElement.classList.remove('lock'); };
+  const L = document.getElementById('loader'), open = () => { L.classList.add('done'); document.documentElement.classList.remove('lock');
+    const qc = new URLSearchParams(location.search).get('case'); if (qc) for (const r of ['btl', 'atl']) { const x = STOPS[r].find(o => o.c.id === qc); if (x) { go(r, x.s); break; } } };   // ?case=<id> — со страницы кейса «смотреть на месте»
   if (AT || /map|rec/.test(location.search)) open();
-  else { await settled(); document.getElementById('loadPct').textContent = '100%';
+  else { await settled(); document.getElementById('loadPct').textContent = '100%'; document.getElementById('pl2')?.classList.add('on'); await new Promise(r => setTimeout(r, 900));
     const c = spark.position.clone().project(camera), d = spark.position.distanceTo(camera.position), px = 0.8 / (2 * d * Math.tan(camera.fov * Math.PI / 360)) * innerHeight;
     L.style.setProperty('--tx', `${(c.x + 1) / 2 * innerWidth}px`); L.style.setProperty('--ty', `${(1 - c.y) / 2 * innerHeight}px`); L.style.setProperty('--tw', `${Math.max(16, px)}px`);
     L.classList.add('ready'); setTimeout(open, 1250); }

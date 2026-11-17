@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Страница не найдена — Oxygen</title>
+<meta name="robots" content="noindex">
+<meta name="theme-color" content="#111111">
+<link rel="icon" href="/assets/iskra.svg">
+<style>
+@font-face{font-family:"TT";src:url("/assets/fonts/tiktok-sans.woff2") format("woff2");font-weight:300 900;font-display:swap}
+@font-face{font-family:"AP";src:url("/assets/fonts/anonymous-pro.woff2") format("woff2");font-display:swap}
+:root{--cream:#E1D9CF;--red:#F40709}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%;background:#000;color:var(--cream)}
+body{font:400 17px/1.45 "TT",system-ui,sans-serif;display:grid;place-items:center;text-align:center;padding:28px}
+img.s{width:64px;filter:drop-shadow(0 0 8px #f40709) drop-shadow(0 0 30px rgba(244,7,9,.6));animation:spin 6s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+@media(prefers-reduced-motion:reduce){img.s{animation:none}}
+.t{font:400 12px/1.4 "AP",monospace;letter-spacing:.04em;color:var(--red);display:block;margin:28px 0 10px}
+h1{font:520 clamp(44px,7vw,104px)/.92 "TT",sans-serif;letter-spacing:-.02em;text-transform:lowercase;margin-bottom:18px}
+p{opacity:.8;max-width:40ch;margin:0 auto 26px}
+a{display:inline-block;color:var(--cream);text-decoration:none;border:1px solid var(--red);border-radius:40px;padding:12px 24px;margin:4px}
+a:hover,a:focus-visible{background:var(--red);outline:none}
+</style>
+</head>
+<body>
+<main><img class="s" src="/assets/iskra.svg" alt=""><span class="t">{404}</span><h1>здесь искра не горит</h1><p>такой страницы нет. вернитесь к началу или посмотрите кейсы списком</p><a href="/">на главную</a><a href="/cases/">все кейсы</a></main>
+</body>
+</html>

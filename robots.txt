@@ -1,0 +1,6 @@
+# ⚠ черновик: пока сайт не на боевом домене, страницы закрыты meta robots noindex.
+# Поисковые и ИИ-поисковые боты открыты. Обучающих ботов (GPTBot, ClaudeBot, Google-Extended) открыть или закрыть — решение руководства.
+User-agent: *
+Allow: /
+
+Sitemap: https://oxygen-agency.ru/sitemap.xml
