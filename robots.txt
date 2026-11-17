@@ -1,0 +1,17 @@
+# Черновая версия: пока сайт на черновом адресе, страницы закрыты meta robots noindex.
+# На боевом домене: снять noindex (DRAFT=false в tools/build-pages.mjs и meta в index.html), правила ниже оставить.
+User-agent: *
+Allow: /
+
+# поисковые и ИИ-поисковые боты — открыты
+User-agent: YandexBot
+User-agent: Googlebot
+User-agent: OAI-SearchBot
+User-agent: ChatGPT-User
+User-agent: PerplexityBot
+User-agent: Claude-SearchBot
+Allow: /
+
+# обучающие боты (GPTBot, ClaudeBot, Google-Extended) — открыть или закрыть решает руководство; пока по умолчанию открыты
+
+Sitemap: https://oxygen-agency.ru/sitemap.xml

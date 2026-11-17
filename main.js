@@ -13,8 +13,8 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { DRACOLoader } from 'three/addons/loaders/DRACOLoader.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 const gltfLoader = new GLTFLoader().setDRACOLoader(new DRACOLoader().setDecoderPath('https://cdn.jsdelivr.net/npm/three@0.169.0/examples/jsm/libs/draco/gltf/'));
-import { CASES, renderCase, MODALS } from './cases.js?v=1116l';
-import { buildRobozoneGen, buildTdojoGen, buildOzonCorpAlley, buildOzonCorpGen, buildSelectGen, buildBaltika7Gen, buildMerchGen } from './zones/zones.js?v=1116l';
+import { CASES, renderCase, MODALS } from './cases.js?v=1117b';
+import { buildRobozoneGen, buildTdojoGen, buildOzonCorpAlley, buildOzonCorpGen, buildSelectGen, buildBaltika7Gen, buildMerchGen } from './zones/zones.js?v=1117b';
 // учёт загрузки для прелоадера-искры: каждый файл через общий менеджер, картинки кейсов — вручную в caseTexture
 const LD = { done: 0, total: 0 }, LM = THREE.DefaultLoadingManager, lmStart = LM.itemStart, lmEnd = LM.itemEnd;
 LM.itemStart = u => { LD.total++; lmStart.call(LM, u); }; LM.itemEnd = u => { LD.done++; lmEnd.call(LM, u); };
@@ -1679,7 +1679,7 @@ STORIES.forEach(([id, a, b, r, side, more, orbitBtn]) => {
     const res = c.result.filter(x => x[0] !== '—')[0];
     el.className = 'ov left flex'; el.dataset.a = w.p - Math.max(w.span * 0.3, 0.008); el.dataset.b = b; el.dataset.f = 0.004; el.dataset.route = r;   // титр набирает полную непрозрачность раньше, чем камера встаёт на остановку
     el.innerHTML = `<span class="t">${c.pass.клиент}</span><h2>${c.title}</h2><p class="idea">${c.idea}</p>
-      ${res ? `<div class="hit"><b>${res[0]}</b><span class="t">${res[1]}</span></div>` : ''}<button class="btn" data-case="${id}">кейс целиком</button>`;
+      ${res ? `<div class="hit"><b>${res[0]}</b><span class="t">${res[1]}</span></div>` : ''}<button class="btn" data-case="${id}">кейс целиком</button> <a class="btn ghost" href="cases/${id}.html">читать кейс →</a>`;
     return document.body.insertBefore(el, document.getElementById('orbitUi'));
   }
   el.className = `ov ${side} panel`; el.dataset.a = a; el.dataset.b = b; el.dataset.f = 0.005; el.dataset.route = r; el.style.maxWidth = '460px';
@@ -1716,6 +1716,7 @@ const modal = document.getElementById('modal'), modalBody = document.getElementB
 const openModal = html => { modalBody.innerHTML = html; modal.classList.add('on'); modal.scrollTop = 0; };
 const closeModal = () => modal.classList.remove('on');
 document.getElementById('modalClose').addEventListener('click', closeModal);
+addEventListener('keydown', e => { if (e.key === 'Escape') closeModal(); });
 const routeBtn = document.getElementById('routeBtn'), arrowsEl = document.getElementById('arrows');
 arrowsEl.addEventListener('click', e => { const b = e.target.closest('[data-d]'); if (b) stepTo(+b.dataset.d); });
 const WORD = { reel: 'фильм', cross: 'развилка', btl: 'btl', alley: 'азиатский квартал', sport: 'спорт', event: 'ивент', shops: 'мерч', dixy: 'дикси', ai: 'ai-продакшн', atl: 'atl', awards: 'награды', about: 'о нас', brief: 'бриф' };
@@ -1740,7 +1741,8 @@ document.addEventListener('click', e => {
   if (el.id === 'caseOrbit') { closeModal(); route = 'btl'; scrollTo(0, toScroll(GO.alley)); CS.snap = true; openOrbit(); return; }
   if (el.dataset.case) return openModal(renderCase(el.dataset.case));
   if (el.dataset.modal) return openModal(MODALS[el.dataset.modal]);
-  if (el.dataset.brief) {   // бриф открывается с подставленным направлением или кейсом
+  if (el.dataset.brief) {   // «хочу так же»: в форму подставляется кейс
+    const ta = document.querySelector('#briefForm [name="task"]'); if (ta && el.dataset.briefCase) ta.value = `хотим похоже на кейс «${el.dataset.briefCase}»: `;
     return goTo('brief');
   }
   goTo(el.dataset.go);
@@ -1772,6 +1774,7 @@ function stepTo(dir) {
   if (t === undefined || (dir > 0 && t <= pSm)) return;   // шаг вперёд никогда не ведёт назад
   if (!route && t > FORK) { const f = document.getElementById('fork'); f.classList.add('pulse'); setTimeout(() => f.classList.remove('pulse'), 1100); return; }
   STEPS.target = t; STEPS.until = performance.now() + 1600;
+  if (CALM) { curtain.className = 'in'; setTimeout(() => { scrollTo(0, toScroll(t)); CS.snap = true; curtain.className = 'out'; }, 300); return; }
   scrollTo(0, toScroll(t));   // скролл сразу встаёт на цель, плавность даёт кривая торможения камеры
 }
 // один жест = один кейс (механика форка 2): инерционный хвост трекпада гасится — пока события идут подряд и не набирают силу заново, это тот же жест
@@ -1878,7 +1881,8 @@ function adaptRes(dt) {
 }
 const WHITE = { k: 0 };
 let unlocked = false, pSm = 0, mouse = new THREE.Vector2(), mouseSm = new THREE.Vector2();
-addEventListener('pointermove', e => mouse.set(e.clientX / innerWidth - .5, e.clientY / innerHeight - .5));
+const CALM = matchMedia('(prefers-reduced-motion: reduce)').matches;   // спокойный режим: без покачивания от мыши, переходы между кейсами — под шторкой, без пролёта
+addEventListener('pointermove', e => { if (!CALM) mouse.set(e.clientX / innerWidth - .5, e.clientY / innerHeight - .5); });
 const clock = new THREE.Clock(), look = new THREE.Vector3();
 function frame() {
   const dt = Math.min(clock.getDelta(), 0.05), time = clock.elapsedTime;
@@ -1968,6 +1972,7 @@ addEventListener('resize', () => {
 // пока грузится город, на чёрном горит Искра (прелоадер в index.html) и скролл заперт; город собирается и
 // уже рисуется под шторкой, чтобы шейдеры скомпилировались; когда все файлы на месте — шторка уходит, скролл открывается
 history.scrollRestoration = 'manual'; scrollTo(0, 0);
+document.getElementById('say1').classList.add('on');   // первая строка прелоадера — на старте
 const ldPct = document.getElementById('ldPct'); let ldShown = 0, built = false;
 const ldTick = setInterval(() => { const real = LD.total ? LD.done / LD.total : 0, goal = Math.min(built ? 1 : 0.9, real * (built ? 1 : 0.9)); ldShown += (goal - ldShown) * 0.25; ldPct.textContent = String(Math.round(ldShown * 100)).padStart(3, '0'); }, 60);
 await Promise.all([document.fonts.load('520 100px TT'), document.fonts.load('20px AP')]);
@@ -1987,7 +1992,8 @@ await Promise.all(ZLIVE.map(z => z.Z.ready).filter(Boolean)).catch(() => {});
   for (const [r, pp] of pts) { const k = CAM[r]; camAt(k, sOfP(k, pp), pos, lk); camera.position.copy(pos); camera.lookAt(lk); camera.updateMatrixWorld(); updateSun(lk); updateReach();
     renderer.shadowMap.needsUpdate = true; try { composer.render(); } catch (e) {} await new Promise(res => setTimeout(res, 0)); }
   camera.position.copy(p0); camera.quaternion.copy(q); }
-clearInterval(ldTick); ldPct.textContent = '100';
+clearInterval(ldTick); ldPct.textContent = '100'; document.getElementById('say2').classList.add('on');   // вторая строка прелоадера — в конце загрузки
+await new Promise(r => setTimeout(r, 900));
 window.__cam = () => ({ p: +pSm.toFixed(4), s: +CS.s.toFixed(1), v: +CS.v.toFixed(1), pos: camera.position.toArray().map(v => +v.toFixed(1)) });
 window.__three = { renderer, scene, CAM, THREE, WORLD, BR, checkPath, go: (p, r) => { INTRO.done = true; document.documentElement.classList.remove('lock'); route = r; scrollTo(0, toScroll(p)); CS.snap = true; } };   // для отладки
 scrollTo(0, 0); unlocked = true;   // скролл откроется после вступления (frame)
@@ -1996,3 +2002,12 @@ if (location.search.includes('dev')) checkPath();   // для отладки п�
 // ?at=lion:-0.3 — сразу встать на остановку кейса (для скриншотов)
 const AT = new URLSearchParams(location.search).get('at');
 if (AT) { const [id, t] = AT.split(':'), w = WORLD.find(w => w.id === id); window.__three.go(w.p + w.span * (+t || 0), w.r); }
+// возврат со страницы кейса: #case-<id> — сразу к кейсу в 3D, #brief — к форме, #btl / #atl — к маршруту
+{ const h = location.hash.slice(1), w = h.startsWith('case-') && WORLD.find(w => w.id === h.slice(5));
+  if (w) window.__three.go(w.p, w.r); else if (h === 'brief') window.__three.go(1, route || 'btl'); else if (h === 'btl' || h === 'atl') window.__three.go(GO[h], h); }
+// форма: приёмника заявок пока нет — честно говорим об этом и даём письмо с уже заполненным текстом
+document.getElementById('briefForm').addEventListener('submit', e => {
+  e.preventDefault(); const f = e.target, v = n => f.querySelector(`[name="${n}"]`)?.value || '', dir = document.getElementById('briefDir').value;
+  const body = encodeURIComponent(`${dir}\n\n${v('task')}\n\n${v('name')}, ${v('contact')}`), href = `mailto:ask@oxygen-agency.ru?subject=${encodeURIComponent('Задача: ' + dir)}&body=${body}`;
+  f.outerHTML = `<p class="sent">Форма пока не отправляет заявки на сервер — это черновая версия сайта. <a href="${href}">Отправьте письмом</a>, текст уже заполнен, или позвоните: <a href="tel:+78126790559">+7 (812) 679 05 59</a>.</p>`;
+});

@@ -399,7 +399,7 @@ export function renderCase(id) {
   return `<div class="cv">
   <span class="t">{кейс} · ${c.dir}</span>
   <h1>${c.title}</h1>
-  ${c.awards.length ? `<div class="tags">${c.awards.map(a => `<a href="#" data-go="awards">${a}</a>`).join('')}</div>` : ''}
+  ${c.awards.length ? `<div class="tags">${c.awards.map(a => `<span>${a}</span>`).join('')}</div>` : ''}
   <div class="pass">${Object.entries(c.pass).map(([k, v]) => `<div><span class="t">${k}</span><br>${v}</div>`).join('')}</div>
   ${c.task ? `<div class="ti"><div><span class="t">{задача}</span><p>${c.task}</p></div><div><span class="t">{идея}</span><p>${c.idea}</p></div></div>` : ''}
   ${c.steps ? `<span class="t">{как сделали}</span><ol class="steps">${c.steps.map(([h, d], i) => `<li><span class="n">${nn(i)}</span><span class="t">{${nn(i)}}</span><b>${h}</b><p>${d}</p></li>`).join('')}</ol>` : ''}
@@ -408,15 +408,14 @@ export function renderCase(id) {
   ${c.quotes ? c.quotes.map(([q, a]) => `<blockquote class="q"><p>«${q.replace(/^«|»$/g, '')}»</p><cite class="t">— ${a}</cite></blockquote>`).join('') : ''}
   <div class="cta"><p class="lead">нужен похожий результат?</p>
   <button class="btn" data-brief="${c.dir}" data-brief-case="${c.title}">хочу так же</button>
+  <a class="btn ghost" href="cases/${id}.html">отдельная страница кейса →</a>
   ${next !== id ? `<button class="btn ghost" data-case="${next}">следующий: ${CASES[next].title} →</button>` : ''}</div>
   </div>`;
 }
 
 export const MODALS = {
-  reel: `<span class="t">{02} шоурил 2026</span><h1>шоурил</h1>
-    <video src="assets/oxygen_promo_v2.mp4" controls autoplay playsinline poster="assets/showreel-poster.webp" style="width:100%;display:block"></video>
-    <p class="t" style="margin-top:10px">фильм бренда из гайдлайна 20_26 · 40 секунд · 2560×1440. шоурила 2026 пока нет — когда будет, встанет сюда и на башню</p>`,
-  jobs: `<span class="t">{вакансии}</span><h1>ищем тех, кто превращает чужие искры в пламя</h1>
-    <p class="lead" style="font-size:26px;max-width:700px">структура страницы — по прототипу Антона: 4 факта о работе, позиции с фильтром по отделам (позиция · отдел · город · вилка), «нет своей — пришлите портфолио», как нанимаем: отклик → звонок → тестовое → решение</p>
-    <p class="t" style="margin-top:16px">прототип: список вакансий и условия даёт hr, в макете Антона стоят заглушки</p>`,
+  reel: `<span class="t">фильм бренда</span><h1>фильм бренда</h1>
+    <video src="assets/oxygen_promo_v2.mp4" controls autoplay playsinline poster="assets/showreel-poster.webp" style="width:100%;display:block"></video>`,
+  jobs: `<span class="t">вакансии</span><h1>Ищем тех, кто превращает чужие искры в пламя</h1>
+    <p class="lead" style="font-size:26px;max-width:700px">Список открытых позиций появится здесь. Портфолио и вопросы — <a href="mailto:ask@oxygen-agency.ru" style="color:inherit">ask@oxygen-agency.ru</a></p>`,
 };
