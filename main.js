@@ -12,9 +12,9 @@ import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { DRACOLoader } from 'three/addons/loaders/DRACOLoader.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
-const gltfLoader = new GLTFLoader().setDRACOLoader(new DRACOLoader().setDecoderPath('https://cdn.jsdelivr.net/npm/three@0.169.0/examples/jsm/libs/draco/gltf/'));
-import { CASES, renderCase, MODALS } from './cases.js?v=1117b';
-import { buildRobozoneGen, buildTdojoGen, buildOzonCorpAlley, buildOzonCorpGen, buildSelectGen, buildBaltika7Gen, buildMerchGen } from './zones/zones.js?v=1117b';
+const gltfLoader = new GLTFLoader().setDRACOLoader(new DRACOLoader().setDecoderPath('assets/vendor/three/addons/libs/draco/gltf/'));
+import { CASES, renderCase, MODALS, slug } from './cases.js?v=1117c';
+import { buildRobozoneGen, buildTdojoGen, buildOzonCorpAlley, buildOzonCorpGen, buildSelectGen, buildBaltika7Gen, buildMerchGen } from './zones/zones.js?v=1117c';
 // учёт загрузки для прелоадера-искры: каждый файл через общий менеджер, картинки кейсов — вручную в caseTexture
 const LD = { done: 0, total: 0 }, LM = THREE.DefaultLoadingManager, lmStart = LM.itemStart, lmEnd = LM.itemEnd;
 LM.itemStart = u => { LD.total++; lmStart.call(LM, u); }; LM.itemEnd = u => { LD.done++; lmEnd.call(LM, u); };
@@ -29,7 +29,9 @@ const V = (x, y, z) => new THREE.Vector3(x, y, z);
 // ---------- рендер ----------
 const canvas = document.getElementById('gl');
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: false, powerPreference: 'high-performance' });
-renderer.setPixelRatio(Math.min(devicePixelRatio, 1.25));
+// облегчённый режим для телефонов и слабых устройств: пиксели 1×, без затенения GTAO, тени 1024, зеркало пола грубее
+const LITE = matchMedia('(max-width: 760px), (pointer: coarse)').matches || (navigator.hardwareConcurrency || 8) <= 4;
+renderer.setPixelRatio(Math.min(devicePixelRatio, LITE ? 1 : 1.25));
 renderer.setSize(innerWidth, innerHeight);
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
 renderer.toneMappingExposure = 1.0;
@@ -57,7 +59,7 @@ composer.addPass(new RenderPass(scene, camera));
 const gtao = new GTAOPass(scene, camera, innerWidth, innerHeight);
 gtao.updateGtaoMaterial({ radius: 7, distanceExponent: 1.4, thickness: 3, scale: 1.3, samples: 8 });
 gtao.updatePdMaterial({ lumaPhi: 10, depthPhi: 2, normalPhi: 3, radius: 6, rings: 2, samples: 8 });
-gtao.blendIntensity = 1; composer.addPass(gtao);
+gtao.blendIntensity = 1; if (!LITE) composer.addPass(gtao);   // на телефонах без GTAO
 const bloom = new UnrealBloomPass(new THREE.Vector2(innerWidth / 2, innerHeight / 2), 0, 0, 1);
 bloom.enabled = false;   // без ореолов и засветов   // половинное разрешение: быстрее и мягче, без пересветов
 composer.addPass(bloom);
@@ -177,11 +179,11 @@ function canvasTexSky() {
 }
 const KEY_DIR = new THREE.Vector3(0.82, 0.5, 0.28).normalize();   // жёсткий боковой ключ вне кадра: одна грань белая, другая чёрная, тени с резким краем
 const sun = new THREE.DirectionalLight(0xffffff, 6.5);   // жёсткий белый ключ: чёрное и белое, чёткие тени sun.castShadow = true;
-sun.shadow.mapSize.set(2048, 2048); Object.assign(sun.shadow.camera, { left: -300, right: 300, top: 300, bottom: -300, near: 1, far: 1300 });
+sun.shadow.mapSize.set(LITE ? 1024 : 2048, LITE ? 1024 : 2048); Object.assign(sun.shadow.camera, { left: -300, right: 300, top: 300, bottom: -300, near: 1, far: 1300 });
 sun.shadow.radius = 0; sun.shadow.bias = -0.0006; sun.shadow.normalBias = 0.6; scene.add(sun, sun.target);
 function updateSun(lookAt) {
   // ось тени — земля под точкой взгляда; шаг привязан к текселю карты, чтобы тени не дрожали при движении
-  const e = 600 / 2048, gx = Math.round(lookAt.x / e) * e, gz = Math.round(lookAt.z / e) * e;
+  const e = 600 / sun.shadow.mapSize.x, gx = Math.round(lookAt.x / e) * e, gz = Math.round(lookAt.z / e) * e;
   sun.target.position.set(gx, 0, gz); sun.position.set(gx, 0, gz).addScaledVector(KEY_DIR, 600);
 }
 
@@ -425,7 +427,7 @@ function buildCity() {
   [[-260, -900], [180, -1000], [0, 2250], [-320, 2150], [300, 2300]].forEach(([x, z]) => mega(x, z, 260 + fr() * 200, 400 + fr() * 300, 160));
   // пол — чёрный мокрый камень: снизу настоящее зеркало (Reflector), сверху полупрозрачный тёмный слой с тенями —
   // в нём отражаются цветные кубы брендов, их свет и силуэты домов, как куб в воде на рефе
-  const mirrorFloor = new Reflector(new THREE.PlaneGeometry(5000, 5000), { textureWidth: innerWidth * 0.35, textureHeight: innerHeight * 0.35, color: 0x9a9a9a });
+  const mirrorFloor = new Reflector(new THREE.PlaneGeometry(5000, 5000), { textureWidth: innerWidth * (LITE ? 0.22 : 0.35), textureHeight: innerHeight * (LITE ? 0.22 : 0.35), color: 0x9a9a9a });
   mirrorFloor.rotation.x = -Math.PI / 2; mirrorFloor.position.y = -0.4; scene.add(mirrorFloor); CITY.mirror = mirrorFloor;
   const ground = new THREE.Mesh(new THREE.PlaneGeometry(5000, 5000), new THREE.MeshStandardMaterial({ color: 0x1a1a1a, roughness: 0.45, transparent: true, opacity: 0.55, depthWrite: false }));
   ground.receiveShadow = true; ground.rotation.x = -Math.PI / 2; scene.add(ground); CITY.ground = ground;
@@ -1679,7 +1681,7 @@ STORIES.forEach(([id, a, b, r, side, more, orbitBtn]) => {
     const res = c.result.filter(x => x[0] !== '—')[0];
     el.className = 'ov left flex'; el.dataset.a = w.p - Math.max(w.span * 0.3, 0.008); el.dataset.b = b; el.dataset.f = 0.004; el.dataset.route = r;   // титр набирает полную непрозрачность раньше, чем камера встаёт на остановку
     el.innerHTML = `<span class="t">${c.pass.клиент}</span><h2>${c.title}</h2><p class="idea">${c.idea}</p>
-      ${res ? `<div class="hit"><b>${res[0]}</b><span class="t">${res[1]}</span></div>` : ''}<button class="btn" data-case="${id}">кейс целиком</button> <a class="btn ghost" href="cases/${id}.html">читать кейс →</a>`;
+      ${res ? `<div class="hit"><b>${res[0]}</b><span class="t">${res[1]}</span></div>` : ''}<button class="btn" data-case="${id}">кейс целиком</button> <a class="btn ghost" href="cases/${slug(id)}.html">читать кейс →</a>`;
     return document.body.insertBefore(el, document.getElementById('orbitUi'));
   }
   el.className = `ov ${side} panel`; el.dataset.a = a; el.dataset.b = b; el.dataset.f = 0.005; el.dataset.route = r; el.style.maxWidth = '460px';
@@ -1710,7 +1712,6 @@ function updateOverlay(p) {
   });
   routeBtn.style.display = route && p > FORK - 0.005 ? '' : 'none'; routeBtn.querySelectorAll('button').forEach(b => b.classList.toggle('on', b.dataset.go === route));
   arrowsEl.classList.toggle('on', INTRO.done && !modal.classList.contains('on')); arrowsEl.children[0].disabled = p < P0 + 0.003; arrowsEl.children[1].disabled = p > 0.997;
-  micro?.classList.toggle('dim', ovs.some(o => o.el.classList.contains('right') && o.el.classList.contains('panel') && o.el.classList.contains('on')));
 }
 const modal = document.getElementById('modal'), modalBody = document.getElementById('modalBody');
 const openModal = html => { modalBody.innerHTML = html; modal.classList.add('on'); modal.scrollTop = 0; };
@@ -1807,31 +1808,8 @@ function hit(e) {
 canvas.addEventListener('click', e => { if (orbitOn) return; const o = hit(e); if (!o) return; if (o.userData.go) return goTo(o.userData.go); o.userData.case ? openModal(renderCase(o.userData.case)) : openModal(MODALS[o.userData.modal]); });
 let hoverT = 0; canvas.addEventListener('pointermove', e => { const now = performance.now(); if (orbitOn || now - hoverT < 120) return; hoverT = now; canvas.style.cursor = hit(e) ? 'pointer' : ''; });   // наведение — не чаще 8 раз в секунду: лучи по тяжёлым моделям зон тормозили кадр
 
-// ---------- 2D-слой: микротекст, простые формы по сетке, вайп заголовка ----------
-const micro = document.getElementById('micro');
-const INDEX = [['{00}', 'вход', 0], ['{01}', 'искра', 0.1], ['{02}', 'фильм', 0.45], ['{03}', 'развилка', 0.53],
-  ...WORLD.map(w => [w.r === 'btl' ? '{04}' : '{05}', w.nav, w.p, w.r]), ['{06}', 'награды', 0.93], ['{07}', 'бриф', 0.975]];
-// пункт навигации кликабелен: прыжок к остановке, маршрут подставляется сам
-const jumpTo = (p, r) => {
-  closeModal(); if (orbitOn) closeOrbit(); if (r) route = r; else if (p > FORK && !route) route = 'btl';
-  const max = document.documentElement.scrollHeight - innerHeight, t = p;
-  if (Math.abs(t - pSm) < 0.08) return scrollTo({ top: toScroll(t), behavior: 'smooth' });
-  curtainWord.textContent = WORD_OF(p); curtain.className = 'in';
-  setTimeout(() => { scrollTo(0, toScroll(t)); CS.snap = true; curtain.className = 'out'; }, 380);
-};
-const WORD_OF = p => (INDEX.filter(s => Math.abs(s[2] - p) < 1e-6)[0] || [, ''])[1];
-micro?.addEventListener('click', e => { const d = e.target.closest('[data-j]'); if (!d) return; e.preventDefault(); jumpTo(+d.dataset.j, d.dataset.r || null); });
-let lastStage = '', sqT = 0, frameN = 0;
-function hud2d(p, time) {
-  frameN++;
-  const cur = INDEX.filter(s => p >= s[2] && (!s[3] || s[3] === route)).pop();
-  const stop = route && p > FORK && p < 0.93 ? WORLD.filter(w => w.r === route && p >= w.a).pop() : null, moreKey = stop && ZONES[stop.zone].more;
-  const html = INDEX.filter(s => !s[3] || !route || s[3] === route).map(s => `<div class="${s === cur ? 'on' : ''}" data-j="${s[2]}"${s[3] ? ` data-r="${s[3]}"` : ''}>${s[0]} ${s[1]}${s === cur ? ' ←' : ''}</div>`).join('') + (moreKey ? `<div style="margin-top:8px;pointer-events:auto"><a href="#" data-more="${moreKey}" style="color:var(--cream)">${MORE[moreKey].t} →</a></div>` : '');
-  if (micro && html !== micro._h) { micro.innerHTML = html; micro._h = html; }
-  if (cur && cur[1] !== lastStage) {
-    lastStage = cur[1];
-  }
-}
+let frameN = 0;
+function hud2d() { frameN++; }
 
 // ---------- режим «покрутить зону» ----------
 let orbit = null, orbitOn = false, savedScroll = 0;
@@ -1848,35 +1826,13 @@ function closeOrbit() {
 }
 document.getElementById('closeOrbit').addEventListener('click', closeOrbit);
 
-// ---------- временные обзорные виды на кварталы: камера отдельно от скролла, крутится мышью ----------
-const VIEWS = Object.fromEntries(Object.keys(ZONES).map(k => { const [z0, z1] = ZR[k], air = !!ZONES[k].over;
-  return [k, { t: V(air ? -10 : -8, air ? 62 : 8, (z0 + z1) / 2), p: V(30, air ? 140 : 70, z0 - 110) }]; }));
-let viewKey = null; const viewInfo = document.getElementById('viewInfo');
-function openView(key) {
-  if (orbitOn && !viewKey) closeOrbit();
-  if (!viewKey) savedScroll = scrollY;
-  viewKey = key; orbitOn = true; document.body.classList.add('qview');
-  orbit?.dispose(); orbit = new OrbitControls(camera, canvas); orbit.enableDamping = true;
-  orbit.minDistance = 10; orbit.maxDistance = 260; orbit.maxPolarAngle = Math.PI * 0.49;
-  orbit.target.copy(VIEWS[key].t); camera.position.copy(VIEWS[key].p); orbit.update();
-  document.querySelectorAll('#views [data-view]').forEach(b => b.classList.toggle('on', b.dataset.view === key));
-  const grp = { t: ZONES[key].t, ids: WORLD.filter(w => w.zone === key).map(w => w.id) };
-  viewInfo.innerHTML = `<span class="t">{обзор} · ${grp.t.replace('другие ', '')}</span>${grp.ids.map(id => `<button data-case="${id}"><b>${CASES[id].title}</b><span class="t">${CASES[id].pass.клиент} · ${CASES[id].pass.год}</span><span class="d">${CASES[id].task}</span></button>`).join('')}`; viewInfo.style.display = 'block';
-}
-function closeView() {
-  if (!viewKey) return; viewKey = null; viewInfo.style.display = 'none'; orbitOn = false; orbit.dispose(); orbit = null; document.body.classList.remove('qview');
-  document.querySelectorAll('#views [data-view]').forEach(b => b.classList.remove('on'));
-  requestAnimationFrame(() => scrollTo(0, savedScroll));
-}
-document.getElementById('views')?.addEventListener('click', e => { const b = e.target.closest('[data-view]'); if (!b) return; b.dataset.view === 'off' ? closeView() : openView(b.dataset.view); });
-
 const ISK_RED = new THREE.Color(RED), ISK_BLACK = new THREE.Color(0x0d0d0f), LOGO_DARK = new THREE.Color(0x1a0707);
 // ---------- цикл ----------
 // стабильный кадр: если кадры тяжелеют, на ходу снижаем плотность пикселей (до 0,7), когда снова легко — возвращаем
-const RES = { pr: Math.min(devicePixelRatio, 1.25), avg: 16, t: 0 };
+const RES = { pr: Math.min(devicePixelRatio, LITE ? 1 : 1.25), avg: 16, t: 0 };
 function adaptRes(dt) {
   RES.avg += (dt * 1000 - RES.avg) * 0.05; RES.t += dt; if (RES.t < 1.2) return; RES.t = 0;
-  const max = Math.min(devicePixelRatio, 1.25), want = RES.avg > 24 ? Math.max(0.7, RES.pr - 0.1) : RES.avg < 15 ? Math.min(max, RES.pr + 0.05) : RES.pr;
+  const max = Math.min(devicePixelRatio, LITE ? 1 : 1.25), want = RES.avg > 24 ? Math.max(0.7, RES.pr - 0.1) : RES.avg < 15 ? Math.min(max, RES.pr + 0.05) : RES.pr;
   if (Math.abs(want - RES.pr) > 0.01) { RES.pr = want; renderer.setPixelRatio(want); composer.setPixelRatio?.(want); composer.setSize(innerWidth, innerHeight); }
 }
 const WHITE = { k: 0 };
@@ -1994,17 +1950,19 @@ await Promise.all(ZLIVE.map(z => z.Z.ready).filter(Boolean)).catch(() => {});
   camera.position.copy(p0); camera.quaternion.copy(q); }
 clearInterval(ldTick); ldPct.textContent = '100'; document.getElementById('say2').classList.add('on');   // вторая строка прелоадера — в конце загрузки
 await new Promise(r => setTimeout(r, 900));
-window.__cam = () => ({ p: +pSm.toFixed(4), s: +CS.s.toFixed(1), v: +CS.v.toFixed(1), pos: camera.position.toArray().map(v => +v.toFixed(1)) });
-window.__three = { renderer, scene, CAM, THREE, WORLD, BR, checkPath, go: (p, r) => { INTRO.done = true; document.documentElement.classList.remove('lock'); route = r; scrollTo(0, toScroll(p)); CS.snap = true; } };   // для отладки
+const DEV = /[?&]dev\b/.test(location.search);   // отладка — только по ?dev, гостям не видна
+if (DEV) window.__cam = () => ({ p: +pSm.toFixed(4), s: +CS.s.toFixed(1), v: +CS.v.toFixed(1), pos: camera.position.toArray().map(v => +v.toFixed(1)) });
+const NAVGO = (p, r) => { INTRO.done = true; document.documentElement.classList.remove('lock'); route = r; scrollTo(0, toScroll(p)); CS.snap = true; };
+if (DEV) window.__three = { renderer, scene, CAM, THREE, WORLD, BR, checkPath, go: (p, r) => { INTRO.done = true; document.documentElement.classList.remove('lock'); route = r; scrollTo(0, toScroll(p)); CS.snap = true; } };   // для отладки
 scrollTo(0, 0); unlocked = true;   // скролл откроется после вступления (frame)
 document.getElementById('loader').classList.add('done');
-if (location.search.includes('dev')) checkPath();   // для отладки производительности
+if (DEV) checkPath();   // для отладки производительности
 // ?at=lion:-0.3 — сразу встать на остановку кейса (для скриншотов)
-const AT = new URLSearchParams(location.search).get('at');
-if (AT) { const [id, t] = AT.split(':'), w = WORLD.find(w => w.id === id); window.__three.go(w.p + w.span * (+t || 0), w.r); }
+const AT = DEV && new URLSearchParams(location.search).get('at');
+if (AT) { const [id, t] = AT.split(':'), w = WORLD.find(w => w.id === id); NAVGO(w.p + w.span * (+t || 0), w.r); }
 // возврат со страницы кейса: #case-<id> — сразу к кейсу в 3D, #brief — к форме, #btl / #atl — к маршруту
 { const h = location.hash.slice(1), w = h.startsWith('case-') && WORLD.find(w => w.id === h.slice(5));
-  if (w) window.__three.go(w.p, w.r); else if (h === 'brief') window.__three.go(1, route || 'btl'); else if (h === 'btl' || h === 'atl') window.__three.go(GO[h], h); }
+  if (w) NAVGO(w.p, w.r); else if (h === 'brief') NAVGO(1, route || 'btl'); else if (h === 'btl' || h === 'atl') NAVGO(GO[h], h); }
 // форма: приёмника заявок пока нет — честно говорим об этом и даём письмо с уже заполненным текстом
 document.getElementById('briefForm').addEventListener('submit', e => {
   e.preventDefault(); const f = e.target, v = n => f.querySelector(`[name="${n}"]`)?.value || '', dir = document.getElementById('briefDir').value;

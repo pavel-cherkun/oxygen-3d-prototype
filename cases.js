@@ -392,7 +392,9 @@ CASES.gpnMerch = {   // текст и кадры — со страницы ке�
 CASES.gdriveMerch.title = 'мерч g-drive для ралли';
 // синегривый лев: кадры из папки кейса «Зенит Маскот Кейс» (ключевой визуал, стикерпак, 2D, эскизы, 3D-ракурсы)
 CASES.lion.how = [...CASES.lion.how, [C + 'lion-case-kv.jpg', 'ключевой визуал', ''], [C + 'lion-case-stickers.jpg', 'стикерпак', ''], [C + 'lion-case-2d.jpg', '2D-образ', ''], [C + 'lion-case-sketch.jpg', 'поиск образа', 'эскизы'], [C + 'lion-case-3d-1.jpg', '3D-образ', ''], [C + 'lion-case-3d-2.jpg', '3D-образ', '']];
-export const ORDER = { btl: ['fandom', 'tbank', 'robozon', 'selekt', 'ironstar', 'gdrive', 'baltika7', 'baltikaPlant', 'megafon', 'mice', 'megafonTravel', 'gdriveMerch', 'gpnMerch', 'oxygenSet', 'lionMerch'], atl: ['treschnutye', 'zaklinateli', 'dino', 'izhora', 'avangard', 'lion', 'derbent', 'tevredens', 'aiFonbet', 'aiMango', 'aiLavka', 'aiAlfa', 'aiDracondaz', 'aiBeep', 'ai'] };
+export const ORDER = { btl: ['fandom', 'tbank', 'robozon', 'selekt', 'ironstar', 'gdrive', 'baltika7', 'baltikaPlant', 'megafon', 'mice', 'megafonTravel', 'gdriveMerch', 'gpnMerch', 'oxygenSet', 'lionMerch'], atl: ['treschnutye', 'zaklinateli', 'dino', 'izhora', 'avangard', 'lion', 'derbent', 'tevredens', 'aiFonbet', 'aiMango', 'aiLavka', 'aiAlfa', 'aiDracondaz', 'aiBeep', 'ai', 'ozonTravel'] };
+// адрес страницы кейса — в нижнем регистре через дефис: aiFonbet → ai-fonbet
+export const slug = id => id.replace(/[A-Z0-9]+/g, m => '-' + m.toLowerCase());
 
 export function renderCase(id) {
   const c = CASES[id], list = ORDER[c.dir], next = list[(list.indexOf(id) + 1) % list.length], nn = i => String(i + 1).padStart(2, '0');
@@ -404,11 +406,11 @@ export function renderCase(id) {
   ${c.task ? `<div class="ti"><div><span class="t">{задача}</span><p>${c.task}</p></div><div><span class="t">{идея}</span><p>${c.idea}</p></div></div>` : ''}
   ${c.steps ? `<span class="t">{как сделали}</span><ol class="steps">${c.steps.map(([h, d], i) => `<li><span class="n">${nn(i)}</span><span class="t">{${nn(i)}}</span><b>${h}</b><p>${d}</p></li>`).join('')}</ol>` : ''}
   ${c.how && c.how.length ? `<div class="gal">${c.how.map(([src, h, d]) => `<figure><img src="${src}" alt="${c.title}: ${h}" loading="lazy">${h ? `<figcaption><b>${h}</b><br><span class="t">${d}</span></figcaption>` : ''}</figure>`).join('')}</div>` : ''}
-  ${c.result && c.result.length && c.result[0][0] !== '—' ? `<span class="t">{результат}</span><div class="res">${c.result.map(([n, d]) => `<div><b>${n}</b><span>${d}</span></div>`).join('')}</div>` : ''}
+  ${c.result && c.result.length && c.result[0][0] !== '—' ? `<span class="t">{результат}</span><div class="res">${c.result.map(([n, d]) => /\d/.test(n) ? `<div><b>${n}</b><span>${d}</span></div>` : `<div><span style="font-size:26px">${d} — ${n}</span></div>`).join('')}</div>` : ''}
   ${c.quotes ? c.quotes.map(([q, a]) => `<blockquote class="q"><p>«${q.replace(/^«|»$/g, '')}»</p><cite class="t">— ${a}</cite></blockquote>`).join('') : ''}
   <div class="cta"><p class="lead">нужен похожий результат?</p>
   <button class="btn" data-brief="${c.dir}" data-brief-case="${c.title}">хочу так же</button>
-  <a class="btn ghost" href="cases/${id}.html">отдельная страница кейса →</a>
+  <a class="btn ghost" href="cases/${slug(id)}.html">отдельная страница кейса →</a>
   ${next !== id ? `<button class="btn ghost" data-case="${next}">следующий: ${CASES[next].title} →</button>` : ''}</div>
   </div>`;
 }

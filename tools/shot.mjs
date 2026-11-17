@@ -10,7 +10,7 @@ let id = 0; const pend = {}; ws.onmessage = e => { const m = JSON.parse(e.data);
 const cmd = (method, params = {}) => new Promise(r => { pend[++id] = r; ws.send(JSON.stringify({ id, method, params })); });
 await cmd('Runtime.enable'); ws.addEventListener('message', e => { const m = JSON.parse(e.data); if (m.method === 'Runtime.exceptionThrown') console.log('ERR', m.params.exceptionDetails.exception?.description || m.params.exceptionDetails.text); });
 await cmd('Emulation.setDeviceMetricsOverride', { width: W, height: H, deviceScaleFactor: 1, mobile: W < 760 });
-await cmd('Page.navigate', { url: process.env.URL || 'http://127.0.0.1:5181/' });
+await cmd('Page.navigate', { url: process.env.URL || 'http://127.0.0.1:5181/?dev' });
 for (let i = 0; i < 200; i++) { const r = await cmd('Runtime.evaluate', { expression: '!!window.__three', returnByValue: true }); if (r.result.value) break; await wait(500); }
 await wait(3000); const cp = await cmd('Runtime.evaluate', { expression: 'window.__three.checkPath().length', returnByValue: true }); console.log('checkPath hits', cp.result.value);
 for (const s of shots) {

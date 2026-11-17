@@ -1,7 +1,7 @@
 // node tools/build-pages.mjs — собирает из cases.js статические страницы кейсов, sitemap.xml, llms.txt
 // и HTML-слой главной (список кейсов, клиенты, награды) между маркерами <!--SEO:start--> и <!--SEO:end--> в index.html.
 // Факты берутся только из cases.js и текстов Никиты. Запускать после каждой правки cases.js.
-import { CASES, ORDER } from '../cases.js';
+import { CASES, ORDER, slug } from '../cases.js';
 import { writeFileSync, readFileSync, mkdirSync, existsSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
@@ -20,7 +20,7 @@ const known = v => v && v !== '—';
 // обложки для превью ссылок 1200×630 — из первой картинки кейса
 mkdirSync(ROOT + 'assets/og', { recursive: true });
 function og(id) {
-  const out = `assets/og/${id}.jpg`, src = CASES[id].how?.[0]?.[0];
+  const out = `assets/og/${slug(id)}.jpg`, src = CASES[id].how?.[0]?.[0];
   if (!existsSync(ROOT + out) && src && existsSync(ROOT + src))
     try { execFileSync('ffmpeg', ['-loglevel', 'error', '-y', '-i', ROOT + src, '-vf', 'scale=1200:630:force_original_aspect_ratio=increase,crop=1200:630', '-q:v', '4', ROOT + out]); } catch {}
   return existsSync(ROOT + out) ? out : 'assets/og/main.jpg';
@@ -73,11 +73,11 @@ const footer = rel => `<footer><span>Oxygen · ai-first рекламное аг�
 mkdirSync(ROOT + 'cases', { recursive: true });
 for (const id of ids) {
   const c = CASES[id], list = ORDER[c.dir], i = list.indexOf(id), prev = list[(i - 1 + list.length) % list.length], next = list[(i + 1) % list.length];
-  const url = `${BASE}/cases/${id}.html`, img = og(id), client = c.pass.клиент;
+  const url = `${BASE}/cases/${slug(id)}.html`, img = og(id), client = c.pass.клиент;
   const title = cut(`${cap(c.title)} — кейс ${client} · Oxygen`, 70);
-  const desc = cut(`${cap(c.idea || c.task)}. ${known(c.result?.[0]?.[0]) ? c.result.map(([n, d]) => `${n} ${d}`).join(', ') + '.' : ''}`, 160);
+  const desc = cut(`${cap(c.idea || c.task)}. ${(c.result || []).filter(r => /\d/.test(r[0])).map(([n, d]) => `${n} ${d}`).join(', ')}${(c.result || []).some(r => /\d/.test(r[0])) ? '.' : ''}`.trim(), 160);
   const ld = { '@context': 'https://schema.org', '@graph': [
-    { '@type': 'CreativeWork', name: c.title, url, image: `${BASE}/${img}`, about: client, abstract: c.idea, creator: { '@type': 'Organization', name: 'Oxygen', url: BASE + '/' }, inLanguage: 'ru', genre: DIR[c.dir],
+    { '@type': 'CreativeWork', name: c.title, url, image: `${BASE}/${img}`, about: client, abstract: c.idea, creator: { '@type': 'Organization', '@id': BASE + '/#org', name: 'Oxygen', url: BASE + '/' }, inLanguage: 'ru', genre: DIR[c.dir],
       ...(known(c.pass.год) ? { dateCreated: c.pass.год } : {}), ...(c.awards.length ? { award: c.awards } : {}) },
     { '@type': 'BreadcrumbList', itemListElement: [{ '@type': 'ListItem', position: 1, name: 'Oxygen', item: BASE + '/' }, { '@type': 'ListItem', position: 2, name: DIR[c.dir], item: `${BASE}/#${c.dir}` }, { '@type': 'ListItem', position: 3, name: c.title, item: url }] }] };
   const res = (c.result || []).filter(r => known(r[0]));
@@ -99,23 +99,24 @@ ${c.awards.length ? `<div class="tags" aria-label="награды">${c.awards.ma
 ${c.task ? `<section class="ti"><div><h2 class="t" style="font-size:13px;margin:40px 0 0">задача</h2><p>${esc(c.task)}</p></div><div><h2 class="t" style="font-size:13px;margin:40px 0 0">идея</h2><p>${esc(c.idea)}</p></div></section>` : ''}
 ${c.steps ? `<section><h2>как сделали</h2><ol class="steps">${c.steps.map(([h, d]) => `<li><b>${esc(h)}</b><p>${esc(d)}</p></li>`).join('')}</ol></section>` : ''}
 ${c.formats ? `<section><h2>форматы</h2><ol class="steps">${c.formats.map(([h, d]) => `<li><b>${esc(h)}</b><p>${esc(d)}</p></li>`).join('')}</ol></section>` : ''}
-${res.length ? `<section><h2>результат</h2><div class="res">${res.map(([n, d]) => `<p><b>${esc(n)}</b><span>${esc(d)}</span></p>`).join('')}</div></section>` : ''}
+${res.length ? `<section><h2>результат</h2><div class="res">${res.map(([n, d]) => /\d/.test(n) ? `<p><b>${esc(n)}</b><span>${esc(d)}</span></p>` : `<p><span style="font-size:24px">${esc(d)} — ${esc(n)}</span></p>`).join('')}</div></section>` : ''}
 ${c.how?.length ? `<section><h2>как это выглядело</h2><div class="gal">${c.how.map(([src, h, d]) => `<figure><img src="../${src}" alt="${esc(c.title)}${h && h !== c.title ? ': ' + esc(h) : ''}${d ? ' — ' + esc(d) : ''}" loading="lazy">${h || d ? `<figcaption>${esc(h)}${d ? `<br><span class="t">${esc(d)}</span>` : ''}</figcaption>` : ''}</figure>`).join('')}</div></section>` : ''}
 ${c.quotes ? c.quotes.map(([q, a]) => `<blockquote><p>«${esc(q.replace(/^«|»$/g, ''))}»</p><cite class="t">— ${esc(a)}</cite></blockquote>`).join('') : ''}
 <a class="btn" href="../index.html#brief">хочу так же</a>
 </article>
-<nav class="next" aria-label="другие кейсы"><a href="${prev}.html">← ${esc(CASES[prev].title)}</a><a href="../index.html#case-${id}">к кейсу в 3D</a><a href="${next}.html">${esc(CASES[next].title)} →</a></nav>
+<nav class="next" aria-label="другие кейсы"><a href="${slug(prev)}.html">← ${esc(CASES[prev].title)}</a><a href="../index.html#case-${id}">к кейсу в 3D</a><a href="${slug(next)}.html">${esc(CASES[next].title)} →</a></nav>
 </main>
 ${footer('../')}
 </body>
 </html>
 `;
-  writeFileSync(ROOT + `cases/${id}.html`, html);
+  writeFileSync(ROOT + `cases/${slug(id)}.html`, html);
 }
 
 // HTML-слой главной: то же содержание, что в 3D, — для поисковиков, нейросетей и тех, у кого не запустился WebGL
-const li = id => `<li><a href="cases/${id}.html">${esc(CASES[id].title)}</a> — ${esc(CASES[id].pass.клиент)}${known(CASES[id].pass.год) ? ', ' + CASES[id].pass.год : ''}</li>`;
-const clients = [...new Set(ids.map(id => CASES[id].pass.клиент).flatMap(s => s.split(' · ')))].filter(known);
+const li = id => `<li><a href="cases/${slug(id)}.html">${esc(CASES[id].title)}</a> — ${esc(CASES[id].pass.клиент)}${known(CASES[id].pass.год) ? ', ' + CASES[id].pass.год : ''}</li>`;
+const norm = n => n.replace(/[«»"]/g, '').replace(/\s*\(.*?\)/g, '').replace(/\s+/g, ' ').trim().toLowerCase();   // ФК «Зенит» и ФК Зенит — один клиент
+const clients = [...new Map(ids.map(id => CASES[id].pass.клиент).flatMap(s => s.split(/ · |, /)).filter(known).map(n => [norm(n), n.replace(/\s*\(.*?\)/g, '')])).values()];
 const awards = ids.filter(id => CASES[id].awards.length).map(id => `<li>${esc(CASES[id].title)} (${esc(CASES[id].pass.клиент)}): ${CASES[id].awards.map(esc).join('; ')}</li>`);
 const layer = `<!--SEO:start-->
 <div class="vh" id="seo">
@@ -126,6 +127,7 @@ const layer = `<!--SEO:start-->
 <section id="awards"><h2>Оценили не только клиенты</h2><ul>${awards.join('')}</ul></section>
 <section id="clients"><h2>Клиенты</h2><p>${clients.map(esc).join(', ')}</p></section>
 <section id="jobs"><h2>Ищем тех, кто превращает чужие искры в пламя</h2><p>Вакансии появятся здесь. Пока — портфолио на <a href="mailto:${ORG.email}">${ORG.email}</a>.</p></section>
+<section id="credits"><h2>Сторонние ассеты</h2><p>3D-модели автомобилей: Ford Mustang GT Convertible — adrianaflak09, Chery Tiggo 8 Pro — niev (Sketchfab, CC BY). Скалы — Poly Haven (CC0). three.js — MIT.</p></section>
 <section id="contacts"><h2>Горит? Раздуем</h2><address>Oxygen, ${ORG.city}, ${ORG.street}. <a href="mailto:${ORG.email}">${ORG.email}</a>, <a href="tel:+78126790559">${ORG.phone}</a></address></section>
 </div>
 <!--SEO:end-->`;
@@ -141,7 +143,7 @@ const today = new Date().toISOString().slice(0, 10);
 writeFileSync(ROOT + 'sitemap.xml', `<?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
 <url><loc>${BASE}/</loc><lastmod>${today}</lastmod></url>
-${ids.map(id => `<url><loc>${BASE}/cases/${id}.html</loc><lastmod>${today}</lastmod></url>`).join('\n')}
+${ids.map(id => `<url><loc>${BASE}/cases/${slug(id)}.html</loc><lastmod>${today}</lastmod></url>`).join('\n')}
 </urlset>
 `);
 writeFileSync(ROOT + 'llms.txt', `# Oxygen
@@ -153,9 +155,9 @@ writeFileSync(ROOT + 'llms.txt', `# Oxygen
 Контакты: ${ORG.email}, ${ORG.phone}, ${ORG.city}, ${ORG.street}.
 
 ## Кейсы ATL и AI
-${ORDER.atl.filter(id => CASES[id]).map(id => `- [${CASES[id].title}](${BASE}/cases/${id}.html): ${CASES[id].pass.клиент}. ${CASES[id].idea}`).join('\n')}
+${ORDER.atl.filter(id => CASES[id]).map(id => `- [${CASES[id].title}](${BASE}/cases/${slug(id)}.html): ${CASES[id].pass.клиент}. ${CASES[id].idea}`).join('\n')}
 
 ## Кейсы BTL
-${ORDER.btl.filter(id => CASES[id]).map(id => `- [${CASES[id].title}](${BASE}/cases/${id}.html): ${CASES[id].pass.клиент}. ${CASES[id].idea}`).join('\n')}
+${ORDER.btl.filter(id => CASES[id]).map(id => `- [${CASES[id].title}](${BASE}/cases/${slug(id)}.html): ${CASES[id].pass.клиент}. ${CASES[id].idea}`).join('\n')}
 `);
 console.log(`страниц кейсов: ${ids.length}; клиентов: ${clients.length}; с наградами: ${awards.length}`);
