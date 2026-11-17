@@ -437,13 +437,14 @@ const CAM0 = { pos: V(104, 34, -236), look: V(90, -120, -900) };   // кадр �
 function camKeys(endKeys) {
   const K = [{ pos: CAM0.pos.clone(), dir: CAM0.look.clone().sub(CAM0.pos).normalize() },   // с парапета — вниз над лестницей (между её бортами), из лестницы — в зал
     { pos: V(108, -40, -420), dir: V(-14, -70, -480).normalize() }, { pos: V(104, LOW + 48, -585), dir: V(-60, -8, -300).normalize(), stair: true }, { pos: V(80, LOW + 46, -690) }];   // взгляд — вперёд вниз по лестнице, не в её борт
+  if (SHOTS !== ALL && SHOTS[0] && SHOTS[0].zone === 'hyp' && Math.abs(SHOTS[0].n.z) > 0.5) K.push({ pos: V(140, LOW + 46, -760) }, { pos: V(140, LOW + 48, -1180) });   // маршрут сразу к торцевой стене гипостиля — по просвету между колоннами x = 140
   ALL.forEach((c, i) => {
     // проход мимо кадра: камера едет вдоль стены (по ходу), взгляд всё это время прикован к картинке
     const zr = ZR[c.zone], L = c.cam.D * 0.5, cz = z => Math.min(zr[0], Math.max(zr[1], z));
     const A = c.cam.pos.clone().addScaledVector(c.cam.f, -L / 2), B = c.cam.pos.clone().addScaledVector(c.cam.f, L / 2); A.z = cz(A.z); B.z = cz(B.z);
     const pr = ALL[i - 1]; if (pr && pr.zone !== c.zone) DOORS[`${pr.zone}>${c.zone}`].forEach(p => { if (p.z > A.z + 5) K.push({ pos: p.clone() }); });
     if (SHOTS.includes(c)) K.push({ pos: A, dir: lockDir(c, A), shot: c, hold: 'A' }, { pos: B, dir: lockDir(c, B), shot: c, hold: 'B' });
-    else K.push({ pos: c.cam.pos.clone().lerp(A, 0.5).setZ((A.z + B.z) / 2) });   // чужой маршрут: тот же проход (без колонн), но без остановки — взгляд за неоном
+    else if (SHOTS === ALL) K.push({ pos: c.cam.pos.clone().lerp(A, 0.5).setZ((A.z + B.z) / 2) });   // (только до выбора маршрута; на маршруте — напрямую к его кейсам)   // чужой маршрут: тот же проход (без колонн), но без остановки — взгляд за неоном
   });
   K.push({ pos: V(0, LOW + 60, -5080) }, { pos: V(0, LOW + 58, -5150) });   // к проёму в вентшахту — по оси
   return K.concat(endKeys);
@@ -489,7 +490,7 @@ const ZONES = [      // дымка и общий свет по локациям 
   { z: -5120, haze: [0.0110, 0.0120, 0.0150], k: 0.0006, amb: [0.0120, 0.0126, 0.0144] },
   { z: -5240, haze: [0.05, 0.022, 0.008], k: 0.0011, amb: [0.0018, 0.0015, 0.0012] },
 ];
-let PATH = [], SEG = [], S_TOTAL = 0;
+let PATH = [], SEG = [], S_TOTAL = 0, NEON_TAIL = []; const COLS = [];   // колонны гипостиля (центры, 30×30)
 const FX = { beams: [], glows: [], cubes: [], dots: [] };
 
 // стена с круглым проёмом: коробки вокруг квадратного выреза и вставка с круглой дырой
@@ -530,7 +531,7 @@ function buildWorld(slot) {
     [V(xl, 0.25, 9), up], [V(90, 0.25, 9), up], [V(90, 0.25, STAIR.z0 - run), up]];
   const zBot = STAIR.z0 - run + 2 * LOW;
   P.push([V(90, LOW + 0.25, zBot), V(0, run, -rise).normalize()]);
-  [[90, -700], [-672, -700], [-672, -1185], [672, -1200], [672, -1440], [0, -1440], [0, -1860], [-112, -1905], [-211, -2023], [-211, -2177], [211, -2177], [112, -2295], [0, -2370], [0, -2470], [-140, -2470], [-140, -3205], [140, -3215], [140, -3285], [0, -3285], [0, -3460], [-672, -3460], [-672, -4225], [672, -4235], [672, -4420], [0, -4420], [0, -4470], [-292, -4470], [-292, -4920], [292, -4930], [292, -5100], [0, -5100], [0, ZN.fan + 40]]
+  (NEON_TAIL = [[90, -700], [-672, -700], [-672, -1185], [672, -1200], [672, -1440], [0, -1440], [0, -1860], [-112, -1905], [-211, -2023], [-211, -2177], [211, -2177], [112, -2295], [0, -2370], [0, -2470], [-140, -2470], [-140, -3205], [140, -3215], [140, -3285], [0, -3285], [0, -3460], [-672, -3460], [-672, -4225], [672, -4235], [672, -4420], [0, -4420], [0, -4470], [-292, -4470], [-292, -4920], [292, -4930], [292, -5100], [0, -5100], [0, ZN.fan + 40]])
     .forEach(([x, zz]) => P.push([V(x, LOW + 0.25, zz), up]));
   PATH = P;
   let s = 0; SEG = [];
@@ -549,7 +550,7 @@ function buildWorld(slot) {
   const lampGlow = [];
   for (let x = -630; x <= 630; x += 140) for (let zz = -400; zz >= -1440; zz -= 140) {
     if (nearPath(x, zz, 50) || kept2(x, zz, 22) || (x > 30 && x < 160 && zz > -660)) continue;
-    box(x - 15, x + 15, LOW, HY, zz - 15, zz + 15, 0.9 + rnd() * 0.15);
+    box(x - 15, x + 15, LOW, HY, zz - 15, zz + 15, 0.9 + rnd() * 0.15); COLS.push(V(x, LOW, zz));
     const lx = x + 70, lz = zz - 70; lampGlow.push(V(lx, HY - 4, lz));
     if (((x + 630) / 140 + (zz + 400) / 140) % 2 === 0) LAMPS.push({ p: V(lx, HY - 30, lz), r: 60, c: V(1, 0.9, 0.78).multiplyScalar(0.55) });
   }
@@ -881,6 +882,26 @@ function buildNeon() {
   }));
   neon.frustumCulled = false; scene.add(neon);
 }
+// ===== три маршрута неона: «все кейсы» — вдоль стен через все проекции (как запекался свет); atl / btl — с лестницы сразу к кейсам маршрута:
+// по проходу камеры (там нет колонн), у каждого кейса — к стене под картинку и вдоль неё; в колодце — по мосту; к вентшахте — по оси
+const NEON = {};
+function routeNeonPoints() {
+  // тот же чистый путь вдоль стен, что у «всех кейсов» (прямые и прямые углы), но залы без кейсов маршрута проходим напрямую
+  const key = t => t.map(p => p.join(',')).join(';'), T = NEON_TAIL.map(p => p.slice()), cut = (from, to, by) => { const i = T.findIndex(p => key([p]) === key([from])), j = T.findIndex(p => key([p]) === key([to])); if (i >= 0 && j > i) T.splice(i, j - i + 1, ...by); };
+  const zones = new Set(SHOTS.map(c => c.zone)), hypEnd = SHOTS.every(c => c.zone !== 'hyp' || Math.abs(c.n.z) > 0.5);
+  if (hypEnd) cut([90, -700], [0, -1440], zones.has('hyp') ? [[90, -700], [140, -700], [140, -1440], [0, -1440]] : [[90, -700], [140, -700], [140, -1440], [0, -1440]]);   // гипостиль: к торцу по просвету между колоннами x = 140
+  if (!zones.has('ai')) cut([0, -3460], [0, -4420], [[0, -3460], [0, -4420]]);   // зал AI без кейсов — по оси (центральный проход свободен)
+  if (!zones.has('sport')) cut([0, -4470], [0, -5100], [[0, -4470], [0, -5100]]);
+  return T.map(([x, z]) => V(x, LOW + 0.25, z));
+}
+function setNeon(r) {
+  if (!NEON.all) NEON.all = { P: PATH, SEG, S: S_TOTAL, mesh: neon };
+  if (!NEON[r]) { const P = PATH.slice(0, 10).concat(routeNeonPoints().map(p => [p, V(0, 1, 0)])); let s = 0; const sg = [];
+    for (let i = 0; i < P.length - 1; i++) { const a = P[i][0], b = P[i + 1][0], l = a.distanceTo(b); if (l < 0.01) continue; sg.push({ a, b, n: P[i + 1][1], s0: s, s1: s + l }); s += l; }
+    const keep = [PATH, SEG, S_TOTAL, neon]; SEG = sg; buildNeon(); NEON[r] = { P, SEG: sg, S: s, mesh: neon }; [PATH, SEG, S_TOTAL, neon] = keep; }
+  Object.values(NEON).forEach(n => { n.mesh.visible = false; });
+  const n = NEON[r]; PATH = n.P; SEG = n.SEG; S_TOTAL = n.S; neon = n.mesh; neon.visible = true;
+}
 const headAt = (s, out = V(0, 0, 0)) => { s = Math.min(Math.max(s, 0), S_TOTAL); const sg = SEG.find(g => s <= g.s1) || SEG[SEG.length - 1]; return out.lerpVectors(sg.a, sg.b, (s - sg.s0) / (sg.s1 - sg.s0 || 1)); };
 
 // ---------- логотип и Искра (из брендбука: assets/logo.svg) ----------
@@ -930,7 +951,7 @@ const RIG = { pos: [], look: [], s0: 0, step: 4 };
 function buildTimeline() {
   const s = slot, L0 = LOGO, rc = REEL.c, sl = iskra.userData.S;
   const sAt = pt => { let best = 0, bd = 1e9; for (let x = 0; x <= S_TOTAL; x += 1) { const d = headAt(x).distanceTo(pt); if (d < bd) { bd = d; best = x; } } return best; };
-  const sv = PATH.map(p => sAt(p[0]));
+  const sv = PATH.slice(0, 10).map(p => sAt(p[0]));   // общий для всех маршрутов кусок: стена, шоурил, терраса, лестница
   const at = (x, z) => sAt(V(x, LOW + 0.25, z));
   // p ↔ длина ленты: стена неторопливо, дальше — по локациям, на каждой своё время
   SMAP = [[P_LINE, 0], [0.25, sv[1]], [0.36, sv[4]], [0.42, sv[6]], [0.53, sv[7]], [0.58, sv[8]], [0.62, sv[9]]];
@@ -1319,9 +1340,9 @@ const jumpTo = p => { const f = document.getElementById('fade'); f.classList.add
 document.querySelectorAll('[data-jump]').forEach(el => el.addEventListener('click', e => { e.preventDefault(); el.blur(); jumpTo(0); }));
 // маршрут atl / btl: те же стены и проекторы, горят только кейсы маршрута; путь камеры пересобирается под шторкой
 function setRoute(r) {
-  if (ROUTE === r) return; ROUTE = r; SHOTS = ALL.filter(c => c.dir === r);
+  if (ROUTE === r) return; ROUTE = r; SHOTS = r === 'all' ? ALL : ALL.filter(c => c.dir === r);
   ALL.forEach(c => { if (!SHOTS.includes(c)) { c.on = 0; if (c.beam) { c.beam.visible = false; c.dust.visible = false; } c.video?.pause(); } });
-  buildTimeline(); buildNotes(); capId = null; document.body.dataset.route = r;
+  setNeon(r); buildTimeline(); buildNotes(); capId = null; document.body.dataset.route = r;
 }
 const goRoute = (r, p) => { const f = document.getElementById('fade'); f.classList.add('on');
   setTimeout(() => { setRoute(r); window.__mega.go(typeof p === 'function' ? p() : p); setTimeout(() => f.classList.remove('on'), 160); }, 360); };
@@ -1351,7 +1372,7 @@ addEventListener('keydown', e => { if (e.key !== 'Tab' || !TRAP.el) return; cons
   L.addEventListener('mousemove', e => { const a = e.target.closest('a[data-img]'); if (a && a.dataset.img) { if (peek.getAttribute('src') !== a.dataset.img) peek.src = a.dataset.img; peek.style.left = e.clientX + 'px'; peek.style.top = e.clientY + 'px'; peek.classList.add('on'); } else peek.classList.remove('on'); });
   L.addEventListener('mouseleave', () => peek.classList.remove('on'));
   L.addEventListener('click', e => { const a = e.target.closest('a[data-id]'); if (!a) return; e.preventDefault(); close(); const c = ALL.find(t => t.id === a.dataset.id);
-    if (ROUTE === c.dir) jumpTo(c.pMid); else goRoute(c.dir, () => c.pMid); }); }
+    if (ROUTE === 'all' || ROUTE === c.dir) jumpTo(c.pMid); else goRoute(c.dir, () => c.pMid); }); }
 // «о нас» — короткие заметки на длинных перегонах между кейсами (тексты — из портфолио 20_26, без изменений)
 const NOTE_TXT = {   // «О нас» и подпись наград — тексты Никиты (копирайт 17.11) дословно; цифры и премии — из портфолио 20_26
   a1: `<span class="t">о нас</span><h2 class="lc">Берём на себя скучное и возвращаем интересное</h2><p class="lc">Провести вашу концепцию через сорок носителей, три подрядчика и два круга правок, не растеряв драйв по дороге, — в этой работе мы так же устойчивы, как в креативе.</p>`,
@@ -1422,8 +1443,8 @@ buildWorld(slot); buildLight(); buildZones(); buildNeon(); buildReel(); if (!LIT
 // запечённый свет снят с геометрии до 3D-зон (колонны в гипостиле переставлены) — пока живой расчёт; ?baked включает старое запекание
 if (!QS0.has('live') && !LITE) await loadBaked();
 renderer.compile(scene, camera);
-window.__mega = { cam: camera, composer, bloom, fanMesh: FX.fan.bi, LAMPS, SHAFTS, glows: FX.glows, U, rigAt: q => { camTarget(q); return [camT.toArray(), look.toArray()]; }, go: p => { if (!ROUTE && p > P_A + 1e-4 && p < P_B) setRoute(new URLSearchParams(location.search).get('route') || 'btl'); scrollTo(0, toRaw(p) * (document.documentElement.scrollHeight - innerHeight)); FOL.s = scrollY / innerHeight; FOL.v = 0; FOL.a = 0; pSm = p; snapCam = true; }, STOPS: () => SHOTS.map(c => [c.id, +c.pMid.toFixed(4)]), setRoute: r => setRoute(r), pScroll: () => toP(clamp01(scrollY / (document.documentElement.scrollHeight - innerHeight))), get SHOTS() { return SHOTS; }, ALL, get ROUTE() { return ROUTE; }, CP, renderer, scene };
-{ const r = new URLSearchParams(location.search).get('route'); if (r === 'atl' || r === 'btl') setRoute(r); }
+window.__mega = { cam: camera, composer, bloom, fanMesh: FX.fan.bi, LAMPS, SHAFTS, glows: FX.glows, U, rigAt: q => { camTarget(q); return [camT.toArray(), look.toArray()]; }, go: p => { if (!ROUTE && p > P_A + 1e-4 && p < P_B) setRoute(new URLSearchParams(location.search).get('route') || 'btl'); scrollTo(0, toRaw(p) * (document.documentElement.scrollHeight - innerHeight)); FOL.s = scrollY / innerHeight; FOL.v = 0; FOL.a = 0; pSm = p; snapCam = true; }, STOPS: () => SHOTS.map(c => [c.id, +c.pMid.toFixed(4)]), setRoute: r => setRoute(r), pScroll: () => toP(clamp01(scrollY / (document.documentElement.scrollHeight - innerHeight))), get SHOTS() { return SHOTS; }, ALL, COLS, SEG: () => SEG, get ROUTE() { return ROUTE; }, CP, renderer, scene };
+{ const r = new URLSearchParams(location.search).get('route'); if (r === 'atl' || r === 'btl' || r === 'all') setRoute(r); }
 const AT = new URLSearchParams(location.search).get('p'); if (AT) window.__mega.go(+AT);
 frame();
 await new Promise(res => { const t0 = performance.now(); let calm = 0; const tick = () => { calm = LOAD.total === LOAD.loaded ? calm + 1 : 0; if (calm > 3 || performance.now() - t0 > 30000) return res(); setTimeout(tick, 150); }; tick(); });
