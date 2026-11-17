@@ -65,6 +65,8 @@ header nav{display:flex;gap:12px;align-items:flex-start}
 #form{overflow-y:auto}#form form{margin:auto;padding:70px 0 40px}#form.sent .ok{display:block}#form.sent label,#form.sent .row,#form.sent .ask,#form.sent .two,#form.sent .note{display:none}
 .ov{position:fixed;z-index:4;max-width:520px;opacity:0;transition:opacity .5s;pointer-events:none}
 .ov.on{opacity:1}
+.ov.first{z-index:11}   /* H1/H2 видны сразу, поверх прелоадера */
+
 .ov h1{font-weight:520;font-size:clamp(56px,7.4vw,124px);line-height:.9;letter-spacing:-.02em}
 .ov h2{font-weight:520;font-size:clamp(34px,3.6vw,58px);line-height:.95;letter-spacing:-.01em}
 .ov p,.ov .sub{margin-top:14px;font-size:18px;max-width:34ch;font-weight:400;line-height:1.45;letter-spacing:0}
@@ -95,17 +97,21 @@ header nav{display:flex;gap:12px;align-items:flex-start}
 @keyframes hover{0%,100%{transform:translateY(-6px) rotate(-6deg)}50%{transform:translateY(6px) rotate(8deg)}}
 @keyframes flick{50%{opacity:.93}}
 #loader.done{opacity:0;pointer-events:none}
+@media(max-width:760px){#loader{align-items:flex-start;padding-top:13vh}#loader .ll{top:calc(13vh + 64px + 20px)!important}#loader .t{bottom:auto;top:calc(13vh + 64px + 110px)}}
 #loader .ll{position:absolute;left:0;right:0;top:calc(50% + clamp(64px,7vw,104px));text-align:center;font-weight:520;font-size:clamp(22px,2.4vw,34px);line-height:1.15;letter-spacing:-.01em;text-transform:lowercase}#loader .ll span{display:block;opacity:0;transform:translateY(8px);transition:opacity .9s,transform .9s}#loader .ll .l1{opacity:1;transform:none}#loader.end .ll .l2{opacity:1;transform:none;color:var(--red)}
 .lc{text-transform:lowercase}
 .sr{position:absolute!important;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);clip-path:inset(50%);white-space:nowrap}
 @media(prefers-reduced-motion:reduce){#loader img{animation:none}.ov,#case,#note,#route,#arrows,#list,#form,#fade{transition-duration:.01s!important}}
 #arrows{position:fixed;left:50%;bottom:22px;z-index:6;display:flex;gap:4px;padding:4px;border:1px solid #2a2724;border-radius:40px;background:rgba(1,1,1,.45);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);transform:translate(-50%,8px);opacity:0;pointer-events:none;transition:opacity .4s,transform .4s}#arrows.on{opacity:1;transform:translate(-50%,0);pointer-events:auto}
 #arrows button{width:46px;height:36px;border:0;border-radius:40px;background:none;color:var(--cream);font:18px/1 "TT",sans-serif;cursor:pointer;transition:background .25s,opacity .25s}#arrows button:hover:not(:disabled){background:var(--red)}#arrows button:disabled{opacity:.25;cursor:default}
+
+/* закрытые окна и скрытые кнопки не ловят Tab */
+#form:not(.on),#list:not(.on),#route:not(.on),#arrows:not(.on),#case:not(.on),#page:not(.on){visibility:hidden;transition-property:opacity,transform,visibility;transition-delay:0s,0s,.4s}
 #fade{position:fixed;inset:0;z-index:9;background:#010101;opacity:0;pointer-events:none;transition:opacity .35s}#fade.on{opacity:1}
 @media(max-width:760px){header{padding:16px}.menu .in{columns:1}.l,.r{left:16px;right:16px;text-align:left}.r p{margin-left:0}}
 </style>
 <script type="importmap">
-{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.169.0/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.169.0/examples/jsm/"}}
+{"imports":{"three":"./vendor/three/build/three.module.js","three/addons/":"./vendor/three/jsm/"}}
 </script>
 </head>
 <body>
@@ -142,7 +148,7 @@ header nav{display:flex;gap:12px;align-items:flex-start}
 <div id="arrows"><button type="button" aria-label="предыдущий кейс">←</button><button type="button" aria-label="следующий кейс">→</button></div>
 
 <!-- текст живёт в HTML: его видят поисковики, 3D только иллюстрирует -->
-<section class="ov l" data-a="0" data-b="0.045">
+<section class="ov l on first" data-a="0" data-b="0.045">
   <span class="t">oxygen · санкт-петербург</span>
   <h1 class="lc" style="margin-top:12px">Топливо<br>ваших идей</h1>
   <h2 class="lc sub">AI-first рекламное агентство из Петербурга: федеральные кампании, бренд-зоны и ивенты, продакшн полного цикла. Здесь идеи разгораются, а не тлеют в рутине</h2>
@@ -221,7 +227,6 @@ header nav{display:flex;gap:12px;align-items:flex-start}
 </main>
 <noscript><style>html.lock,html.lock body{overflow:auto}#loader,canvas#gl,#scroll,#pct,.ov,#arrows,#route{display:none}#seo{position:static!important;width:auto;height:auto;clip:auto;clip-path:none;white-space:normal;max-width:900px;margin:110px auto 80px;padding:0 28px}#seo h2{margin:40px 0 10px}#seo a{color:var(--cream)}</style>
 <p style="max-width:900px;margin:90px auto 0;padding:0 28px">Топливо ваших идей. AI-first рекламное агентство из Петербурга: федеральные кампании, бренд-зоны и ивенты, продакшн полного цикла. Трёхмерная версия сайта работает с включённым JavaScript; ниже — всё содержание текстом.</p></noscript>
-<div id="pct" class="t">000% · 20_26</div>
 <div id="scroll"></div>
 <script type="module" src="main.js"></script>
 </body>

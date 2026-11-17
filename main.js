@@ -31,7 +31,11 @@ THREE.DefaultLoadingManager.onProgress = (u, l, t) => { LOAD.loaded = l; LOAD.to
 // ---------- рендер ----------
 const canvas = document.getElementById('gl');
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: false, powerPreference: 'high-performance' });
-renderer.setPixelRatio(Math.min(devicePixelRatio, 1.25));
+// лёгкий режим (телефоны и планшеты с тачем, или ?lite): без запечённого света (~28 МБ), без отражающего пола, без роликов на проекторах
+// (на стене — обложка), без лучей и свечения в постобработке, меньше пикселей
+const QS0 = new URLSearchParams(location.search);
+const LITE = QS0.has('lite') || (!QS0.has('full') && matchMedia('(pointer: coarse)').matches && Math.min(screen.width, screen.height) < 820);
+renderer.setPixelRatio(LITE ? Math.min(devicePixelRatio, 1) * 0.8 : Math.min(devicePixelRatio, 1.25));
 renderer.setSize(innerWidth, innerHeight);
 renderer.toneMapping = THREE.ACESFilmicToneMapping; renderer.toneMappingExposure = 0.92;
 const scene = new THREE.Scene(); scene.background = new THREE.Color(0x010101);
@@ -52,8 +56,8 @@ const rays = new ShaderPass({
       gl_FragColor = vec4(base.rgb + acc * uK * 0.008, base.a);
     }`,
 });
-composer.addPass(rays);
-composer.addPass(bloom); composer.addPass(new OutputPass());
+if (!LITE) composer.addPass(rays);
+if (!LITE) composer.addPass(bloom); composer.addPass(new OutputPass());
 // плёнка: зерно и виньетка, как на раскадровке
 const grain = new ShaderPass({
   uniforms: { tDiffuse: { value: null }, uT: { value: 0 } },
@@ -795,7 +799,7 @@ function buildLight() {
     if (c.ceil || z.ceil) rods.push({ m: beam(P.clone().addScaledVector(dir, -7), V(P.x, c.ceil || z.ceil, P.z).addScaledVector(dir, -7), 0.8), c: dark });
     else bodies.push({ m: M(P.clone().addScaledVector(dir, -7).add(V(0, -6, 0)), [0, 0, 0], V(5, 6, 5)), c: dark });
     const cover = a => { const fa = 16 / 9; c.sc.set(a > fa ? fa / a : 1, a > fa ? 1 : a / fa); };
-    if (c.vid) {
+    if (c.vid && !LITE) {
       const v = Object.assign(document.createElement('video'), { src: `assets/${c.vid}.mp4`, muted: true, loop: true, playsInline: true, crossOrigin: 'anonymous', preload: 'auto' });
       v.addEventListener('loadedmetadata', () => cover(v.videoWidth / v.videoHeight)); c.video = v; c.tex = new THREE.VideoTexture(v);
     } else if (!c.img) c.tex = caseCard(c);   // у кейса нет материалов (или их нельзя показывать) — проектор показывает типографскую карточку
@@ -1218,7 +1222,7 @@ function frame() {
   // ролик
   if (!promo.on && pSm > 0.2) { promo.on = true; promo.v.play().then(() => promo.m.material.color.set(0xffffff)).catch(() => addEventListener('pointerdown', () => promo.v.play().then(() => promo.m.material.color.set(0xffffff)), { once: true })); }
   ovs.forEach(o => o.el.classList.toggle('on', pSm >= o.a && pSm <= o.b)); caption(pSm);
-  pctEl.textContent = `${String(Math.round(pSm * 100)).padStart(3, '0')}% · 20_26`;
+  if (pctEl) pctEl.textContent = `${String(Math.round(pSm * 100)).padStart(3, '0')}% · 20_26`;
   updateRays(); grain.uniforms.uT.value = time;
   { const fk = smooth(clamp01((pSm - 0.94) / 0.045)); finale.uniforms.uK.value = fk; finale.uniforms.uT.value = time;
     _sp.set(0, VENT.cy, ZN.fan).project(camera); finale.uniforms.uC.value.set(_sp.x * 0.5 + 0.5, _sp.y * 0.5 + 0.5);
@@ -1251,7 +1255,7 @@ async function loadBaked() {
 // тёплый ключ сверху и контровой свет сзади — как у всего в мегаструктуре; бетон вокруг остаётся своим
 function buildZones() {
   const env = new THREE.PMREMGenerator(renderer).fromScene(new RoomEnvironment(), 0.04).texture;
-  const gltfZ = new GLTFLoader().setDRACOLoader(new DRACOLoader().setDecoderPath('https://cdn.jsdelivr.net/npm/three@0.169.0/examples/jsm/libs/draco/gltf/'));   // модели зон (Higgsfield → Блендер) сжаты Draco
+  const gltfZ = new GLTFLoader().setDRACOLoader(new DRACOLoader().setDecoderPath('vendor/three/jsm/libs/draco/gltf/'));   // модели зон (Higgsfield → Блендер) сжаты Draco
   const envOn = (root) => root.traverse(m => { if (m.isMesh && m.material) [].concat(m.material).forEach(mt => { if (mt.isMeshStandardMaterial) { mt.envMap = env; mt.envMapIntensity = 0.35; } }); });
   Object.entries(ZONES3).forEach(([k, Z]) => {
     const o = Z.gen ? Z.build(THREE, gltfZ) : Z.build(THREE, { kv: 'assets/cases/ozon-fandom-kv-1.jpg', width: 15, length: 26 }), g = o.group;
@@ -1326,14 +1330,22 @@ const goRoute = (r, p) => { const f = document.getElementById('fade'); f.classLi
   el.querySelectorAll('button').forEach(b => b.addEventListener('click', () => { const r = b.dataset.r; if (ROUTE === r) return navNext(); goRoute(r, P_A); setTimeout(() => navNext(), 900); }));
   const upd = () => { el.classList.toggle('on', !ROUTE && pSm > P_A - 0.006 && pSm < P_A + 0.01); requestAnimationFrame(upd); }; upd(); }
 let openForm = () => {}, openList = () => {};
+// окна: фокус внутрь при открытии, Tab ходит по кругу внутри окна, при закрытии фокус возвращается туда, откуда открыли
+const TRAP = { el: null, back: null };
+const FOCUSABLE = 'a[href],button:not([disabled]),input:not([disabled]),textarea,select,[tabindex]:not([tabindex="-1"])';
+const trapOpen = (el, first) => { TRAP.back = document.activeElement; TRAP.el = el; setTimeout(() => (first || el.querySelector(FOCUSABLE))?.focus(), 60); };
+const trapClose = el => { if (TRAP.el !== el) return; TRAP.el = null; const b = TRAP.back; TRAP.back = null; if (b && document.contains(b)) b.focus(); };
+addEventListener('keydown', e => { if (e.key !== 'Tab' || !TRAP.el) return; const f = [...TRAP.el.querySelectorAll(FOCUSABLE)].filter(x => x.offsetParent !== null); if (!f.length) return;
+  const a = f[0], z = f[f.length - 1]; if (e.shiftKey && document.activeElement === a) { e.preventDefault(); z.focus(); } else if (!e.shiftKey && document.activeElement === z) { e.preventDefault(); a.focus(); }
+  else if (!TRAP.el.contains(document.activeElement)) { e.preventDefault(); a.focus(); } });
 // «кейсы» — список во весь экран: atl и btl, у курсора — превью (некликабельное); клик — к кейсу (если он с другого маршрута — маршрут меняется)
 { const L = document.getElementById('list'), peek = document.getElementById('peek'), html = document.documentElement, img = c => c.img ? `assets/${c.img}.jpg` : '';
   const col = r => { const cs = ALL.filter(c => c.dir === r); return `<div><h3><span>${r === 'atl' ? 'atl + ai' : r}</span><i>${cs.length} кейсов</i></h3>${cs.map((c, k) => { const k_ = CASES[c.id] || {}, ps = k_.pass || {};
     return `<a href="#" data-id="${c.id}" data-img="${img(c)}"><i>${String(k + 1).padStart(2, '0')}</i><b>${k_.title || c.id}</b><span>${[ps.клиент, ps.год].filter(x => x && x !== '—').join(' · ')}</span></a>`; }).join('')}</div>`; };
   L.querySelector('.in').innerHTML = col('atl') + col('btl');
-  const open = () => { L.querySelectorAll('a').forEach(a => a.classList.toggle('cur', a.dataset.id === capId)); L.classList.add('on'); html.classList.add('lock'); };
-  const close = () => { L.classList.remove('on'); peek.classList.remove('on'); if (!pageEl.classList.contains('on')) html.classList.remove('lock'); };
-  openList = open; document.getElementById('listBtn').addEventListener('click', e => { e.preventDefault(); e.currentTarget.blur(); open(); });
+  const open = () => { L.querySelectorAll('a').forEach(a => a.classList.toggle('cur', a.dataset.id === capId)); L.classList.add('on'); html.classList.add('lock'); trapOpen(L, L.querySelector('a[data-id]')); };
+  const close = () => { L.classList.remove('on'); peek.classList.remove('on'); if (!pageEl.classList.contains('on')) html.classList.remove('lock'); trapClose(L); };
+  openList = open; document.getElementById('listBtn').addEventListener('click', e => { e.preventDefault(); open(); });
   L.querySelector('.x').addEventListener('click', close);
   addEventListener('keydown', e => { if (e.key === 'Escape' && L.classList.contains('on')) close(); });
   L.addEventListener('mousemove', e => { const a = e.target.closest('a[data-img]'); if (a && a.dataset.img) { if (peek.getAttribute('src') !== a.dataset.img) peek.src = a.dataset.img; peek.style.left = e.clientX + 'px'; peek.style.top = e.clientY + 'px'; peek.classList.add('on'); } else peek.classList.remove('on'); });
@@ -1359,8 +1371,8 @@ function buildNotes() {
   const upd = () => { const n = NOTES.find(n => pSm >= n.a && pSm <= n.b); if (n && n.k !== shown) { el.innerHTML = NOTE_TXT[n.k]; shown = n.k; } el.classList.toggle('on', !!n); sh.classList.toggle('on', !!n); requestAnimationFrame(upd); }; upd(); }
 // «контакты» — короткая форма; отправка пока через почтовую программу (сервера под заявки ещё нет)
 { const fm = document.getElementById('form'), form = fm.querySelector('form'), html = document.documentElement;
-  const open = (caseId) => { if (caseId && CASES[caseId]) form.elements.task.value = `по мотивам кейса «${CASES[caseId].title}»\n`; fm.classList.remove('sent'); fm.classList.add('on'); html.classList.add('lock'); setTimeout(() => form.elements.name.focus(), 50); };
-  const close = () => { fm.classList.remove('on'); if (!pageEl.classList.contains('on')) html.classList.remove('lock'); };
+  const open = (caseId) => { if (caseId && CASES[caseId]) form.elements.task.value = `по мотивам кейса «${CASES[caseId].title}»\n`; fm.classList.remove('sent'); fm.classList.add('on'); html.classList.add('lock'); trapOpen(fm, form.elements.name); };
+  const close = () => { fm.classList.remove('on'); if (!pageEl.classList.contains('on')) html.classList.remove('lock'); trapClose(fm); };
   openForm = open; document.getElementById('contactsBtn').addEventListener('click', e => { e.preventDefault(); open(); });
   fm.querySelector('.x').addEventListener('click', close);
   fm.addEventListener('click', e => { if (e.target === fm) close(); });
@@ -1406,9 +1418,9 @@ addEventListener('keydown', e => { if (e.key === 'Escape' && pageEl.classList.co
 history.scrollRestoration = 'manual'; scrollTo(0, 0);
 await document.fonts.load('520 64px TT').catch(() => {}); await document.fonts.load('30px AP').catch(() => {});
 await buildLogo();
-buildWorld(slot); buildLight(); buildZones(); buildNeon(); buildReel(); buildWetFloor(); buildTimeline();
+buildWorld(slot); buildLight(); buildZones(); buildNeon(); buildReel(); if (!LITE) buildWetFloor(); buildTimeline();
 // запечённый свет снят с геометрии до 3D-зон (колонны в гипостиле переставлены) — пока живой расчёт; ?baked включает старое запекание
-if (!new URLSearchParams(location.search).has('live')) await loadBaked();
+if (!QS0.has('live') && !LITE) await loadBaked();
 renderer.compile(scene, camera);
 window.__mega = { cam: camera, composer, bloom, fanMesh: FX.fan.bi, LAMPS, SHAFTS, glows: FX.glows, U, rigAt: q => { camTarget(q); return [camT.toArray(), look.toArray()]; }, go: p => { if (!ROUTE && p > P_A + 1e-4 && p < P_B) setRoute(new URLSearchParams(location.search).get('route') || 'btl'); scrollTo(0, toRaw(p) * (document.documentElement.scrollHeight - innerHeight)); FOL.s = scrollY / innerHeight; FOL.v = 0; FOL.a = 0; pSm = p; snapCam = true; }, STOPS: () => SHOTS.map(c => [c.id, +c.pMid.toFixed(4)]), setRoute: r => setRoute(r), pScroll: () => toP(clamp01(scrollY / (document.documentElement.scrollHeight - innerHeight))), get SHOTS() { return SHOTS; }, ALL, get ROUTE() { return ROUTE; }, CP, renderer, scene };
 { const r = new URLSearchParams(location.search).get('route'); if (r === 'atl' || r === 'btl') setRoute(r); }
