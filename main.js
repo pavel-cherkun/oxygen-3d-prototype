@@ -358,7 +358,7 @@ const ZP = {   // высота камеры над полом; потолок д
 const SHC = V(0, 0, (ZN.hyp - 12 + ZN.asia + ZN.asiaR) / 2);
 const wallPt = (x, y, z, nx) => ({ C: V(x, LOW + y, z), n: V(nx, 0, 0) });
 const cylPt = (c, R, deg, y) => { const a = THREE.MathUtils.degToRad(deg), si = Math.sin(a), co = Math.cos(a); return { C: V(c.x + R * si, LOW + y, c.z + R * co), n: V(-si, 0, -co) }; };
-const VIDS = { aiFonbet: 'ai-fonbet', aiMango: 'ai-mango', aiLavka: 'ai-lavka', aiAlfa: 'ai-alfa', tevredens: 'tevredens', zaklinateli: 'zaklinateli' };   // где есть ролик — проектор крутит ролик
+const VIDS = { dracondaz: 'ai-dracondaz', beep: 'ai-beep', aiFonbet: 'ai-fonbet', aiMango: 'ai-mango', aiLavka: 'ai-lavka', aiAlfa: 'ai-alfa', tevredens: 'tevredens', zaklinateli: 'zaklinateli' };   // где есть ролик — проектор крутит ролик
 const PJ = (id, img, loc, zone, w, W, o = {}) => Object.assign({ id, img, loc, zone, C: w.C, n: w.n, W, H: W * 9 / 16, sc: new THREE.Vector2(1, 1), vid: VIDS[id] }, o);
 // раскладка: в каждом зале сначала подряд кейсы одной стены, потом — другой стены во второй половине зала (камера не возвращается к уже виденному)
 const AS = V(0, 0, ZN.asia), wallZ = (x, y, z) => ({ C: V(x, LOW + y, z), n: V(0, 0, 1) });
@@ -388,7 +388,9 @@ const ALL = [
   PJ('aiFonbet', 'cases/ai-fonbet', 'ai-продакшн', 'ai', wallPt(-699.5, 125, -3540, 1), 190),
   PJ('aiMango', 'cases/ai-mango', 'ai-продакшн', 'ai', wallPt(-699.5, 125, -3760, 1), 190),
   PJ('aiLavka', 'cases/ai-lavka', 'ai-продакшн', 'ai', wallPt(-699.5, 125, -3980, 1), 190),
-  PJ('aiAlfa', 'cases/ai-alfa', 'ai-продакшн', 'ai', wallPt(699.5, 125, -4230, -1), 190),
+  PJ('dracondaz', 'cases/ai-dracondaz', 'ai-продакшн', 'ai', wallPt(699.5, 125, -3880, -1), 190),
+  PJ('beep', 'cases/ai-beep', 'ai-продакшн', 'ai', wallPt(699.5, 135, -4050, -1), 112, { H: 199 }),   // вертикальный ролик 9:16 — и проекция вертикальная
+  PJ('aiAlfa', 'cases/ai-alfa', 'ai-продакшн', 'ai', wallPt(699.5, 125, -4210, -1), 190),
   PJ('lion', 'dp/lion-1', 'спорт', 'sport', wallPt(-319.5, 110, -4540, 1), 150),
   PJ('ironstar', 'cases/gdrive-ironstar-1', 'спорт', 'sport', wallPt(-319.5, 110, -4700, 1), 150),
   PJ('oxygenSet', 'cases/oxygen-set-1', 'мерч', 'sport', wallPt(-319.5, 110, -4860, 1), 150),
@@ -437,12 +439,13 @@ const CAM0 = { pos: V(104, 34, -236), look: V(90, -120, -900) };   // кадр �
 function camKeys(endKeys) {
   const K = [{ pos: CAM0.pos.clone(), dir: CAM0.look.clone().sub(CAM0.pos).normalize() },   // с парапета — вниз над лестницей (между её бортами), из лестницы — в зал
     { pos: V(108, -40, -420), dir: V(-14, -70, -480).normalize() }, { pos: V(104, LOW + 48, -585), dir: V(-60, -8, -300).normalize(), stair: true }, { pos: V(80, LOW + 46, -690) }];   // взгляд — вперёд вниз по лестнице, не в её борт
-  if (SHOTS !== ALL && SHOTS[0] && SHOTS[0].zone === 'hyp' && Math.abs(SHOTS[0].n.z) > 0.5) K.push({ pos: V(140, LOW + 46, -760) }, { pos: V(140, LOW + 48, -1180) });   // маршрут сразу к торцевой стене гипостиля — по просвету между колоннами x = 140
   ALL.forEach((c, i) => {
     // проход мимо кадра: камера едет вдоль стены (по ходу), взгляд всё это время прикован к картинке
     const zr = ZR[c.zone], L = c.cam.D * 0.5, cz = z => Math.min(zr[0], Math.max(zr[1], z));
     const A = c.cam.pos.clone().addScaledVector(c.cam.f, -L / 2), B = c.cam.pos.clone().addScaledVector(c.cam.f, L / 2); A.z = cz(A.z); B.z = cz(B.z);
-    const pr = ALL[i - 1]; if (pr && pr.zone !== c.zone) DOORS[`${pr.zone}>${c.zone}`].forEach(p => { if (p.z > A.z + 5) K.push({ pos: p.clone() }); });
+    const pr = ALL[i - 1]; if (pr && pr.zone !== c.zone) { const D_ = DOORS[`${pr.zone}>${c.zone}`], pre = V(0, D_[0].y, D_[0].z + 120);
+      if (pre.z < K[K.length - 1].pos.z - 40) K.push({ pos: pre });   // к проёму — заранее выходим на его ось, без захода наискосок в стену
+      D_.forEach(p => { if (p.z > A.z + 5) K.push({ pos: p.clone() }); }); }
     if (SHOTS.includes(c)) K.push({ pos: A, dir: lockDir(c, A), shot: c, hold: 'A' }, { pos: B, dir: lockDir(c, B), shot: c, hold: 'B' });
     else if (SHOTS === ALL) K.push({ pos: c.cam.pos.clone().lerp(A, 0.5).setZ((A.z + B.z) / 2) });   // (только до выбора маршрута; на маршруте — напрямую к его кейсам)   // чужой маршрут: тот же проход (без колонн), но без остановки — взгляд за неоном
   });
@@ -461,12 +464,58 @@ function camPath(K) {
   return { pos, arc, n };
 }
 // зона, которую нельзя застраивать: путь камеры и взгляд на каждую картинку — колонны, балки и товары здесь не ставим
+// ===== неон: один генератор на три маршрута («все кейсы», atl, btl) =====
+// под каждой проекцией маршрута — вдоль стены (28 от стены, в круглом зале — по дуге), между стенами — напрямую, между залами — через проёмы по оси,
+// в зале с сакурой — по кольцу вокруг ствола, в колодце — по мосту; все повороты скруглены
+const ZORD = ['hyp', 'shaft', 'asia', 'ret', 'ai', 'sport'], RR = 238;
+function neonRoute(shots) {
+  const Y = LOW + 0.25, P = [], add = (x, z) => { const q = V(x, Y, z); if (!P.length || P[P.length - 1].distanceTo(q) > 1) P.push(q); };
+  const ang = (x, z) => Math.atan2(x, z - ZN.asia), last = () => P[P.length - 1];
+  const ringTo = a1 => { const L = last(), a0 = ang(L.x, L.z); let d = a1 - a0; d = Math.atan2(Math.sin(d), Math.cos(d)); const n = Math.max(1, Math.ceil(Math.abs(d) / 0.1)); for (let i = 1; i <= n; i++) { const a = a0 + d * i / n; add(RR * Math.sin(a), ZN.asia + RR * Math.cos(a)); } };
+  let zone = 'hyp';
+  const goZone = to => { for (let i = ZORD.indexOf(zone); i < ZORD.indexOf(to); i++) { if (ZORD[i] === 'asia') ringTo(Math.PI); DOORS[`${ZORD[i]}>${ZORD[i + 1]}`].forEach(d => add(0, d.z)); zone = ZORD[i + 1]; } };
+  // внутренний прямоугольник зала (28 от стен): участки вдоль стен не вылезают за угол
+  const BOX = { hyp: [671, -330, -1471], ret: [141, -2485, -3291], ai: [671, -3460, -4412], sport: [291, -4500, -5132] };
+  const clampB = (z_, p) => { const b = BOX[z_]; if (!b) return p; p.x = Math.max(-b[0], Math.min(b[0], p.x)); p.z = Math.min(b[1], Math.max(b[2], p.z)); return p; };
+  // цели по порядку: участок вдоль стены [p, q] или точка; направление участка — с учётом следующей цели (без хвостов и разворотов)
+  const items = shots.map(c => {
+    if (c.zone === 'shaft') return { zone: c.zone, pt: V(0, Y, SHC.z) };
+    if (c.zone === 'asia') { const a = ang(c.C.x, c.C.z), h = (c.W * 0.45) / 259.5; return { zone: c.zone, ring: [a - h, a + h] }; }
+    const T0 = c.n.clone().negate().cross(V(0, 1, 0)).normalize(), base = V(c.C.x, Y, c.C.z).addScaledVector(c.n, 28);
+    return { zone: c.zone, run: [clampB(c.zone, base.clone().addScaledVector(T0, c.W * 0.45)), clampB(c.zone, base.clone().addScaledVector(T0, -c.W * 0.45))] }; });
+  const entry = it => it.pt || (it.run ? it.run[0].clone().lerp(it.run[1], 0.5) : V(RR * Math.sin((it.ring[0] + it.ring[1]) / 2), Y, ZN.asia + RR * Math.cos((it.ring[0] + it.ring[1]) / 2)));
+  const exitPt = (k) => { const nx = items[k + 1]; if (!nx) return V(0, Y, -5100); if (nx.zone !== items[k].zone) { const d = DOORS[`${items[k].zone}>${ZORD[ZORD.indexOf(items[k].zone) + 1]}`]; return d ? V(0, Y, d[0].z) : entry(nx); } return entry(nx); };
+  add(90, -700);
+  items.forEach((it, k) => {
+    goZone(it.zone);
+    if (it.pt) { add(it.pt.x, it.pt.z); return; }
+    const L = last(), N = exitPt(k);
+    if (it.ring) { const a0 = ang(L.x, L.z), d0 = x => Math.abs(Math.atan2(Math.sin(x - a0), Math.cos(x - a0))); const [p, q] = d0(it.ring[0]) < d0(it.ring[1]) ? it.ring : [it.ring[1], it.ring[0]]; ringTo(p); ringTo(q); return; }
+    let [p, q] = it.run; if (L.distanceTo(q) + p.distanceTo(N) < L.distanceTo(p) + q.distanceTo(N)) [p, q] = [q, p];
+    const t = clamp01(N.clone().sub(p).dot(q.clone().sub(p)) / (q.distanceToSquared(p) || 1)); if (t > 0.05 && t < 0.95) q = p.clone().lerp(q, t);   // выход посреди участка — не доходим до конца и не возвращаемся
+    add(p.x, p.z); add(q.x, q.z);
+  });
+  goZone('sport'); add(0, -5100); add(0, ZN.fan + 40);
+  // скругление углов: дуга радиусом до 34 (не больше 40% соседних отрезков)
+  const out = [P[0]];
+  for (let i = 1; i < P.length - 1; i++) { const a = P[i - 1], b = P[i], c = P[i + 1], u = a.clone().sub(b), w = c.clone().sub(b), lu = u.length(), lw = w.length(), th = u.angleTo(w);
+    if (th > Math.PI - 0.05 || th < 0.08 || lu < 1 || lw < 1) { out.push(b); continue; }
+    const r = Math.min(34, 0.4 * Math.min(lu, lw) * Math.tan(th / 2)), t = r / Math.tan(th / 2);
+    const p0 = b.clone().addScaledVector(u.normalize(), t), p1 = b.clone().addScaledVector(w.normalize(), t), n = Math.max(2, Math.ceil((Math.PI - th) / 0.14));
+    for (let k = 0; k <= n; k++) { const s_ = k / n, q = p0.clone().multiplyScalar((1 - s_) * (1 - s_)).addScaledVector(b, 2 * s_ * (1 - s_)).addScaledVector(p1, s_ * s_); out.push(q); } }
+  out.push(P[P.length - 1]); return out;
+}
+// маршруты: кейсы и неон для каждого; зона без колонн и балок — объединение всех трёх (камера, взгляд на кадры, лучи проекторов, неон)
+const ROUTES = { all: ALL, atl: ALL.filter(c => c.dir === 'atl'), btl: ALL.filter(c => c.dir === 'btl') };
+const NEON_ROUTES = Object.fromEntries(Object.entries(ROUTES).map(([k, sh]) => [k, neonRoute(sh)]));
 const KEEP = [];
-{ const KK0 = camKeys([{ pos: V(0, LOW + 42, -5200) }]), pp = camPath(KK0).pos;
+Object.values(ROUTES).forEach(sh => { const prev = SHOTS; SHOTS = sh;
+  const KK0 = camKeys([{ pos: V(0, LOW + 42, -5200) }]), pp = camPath(KK0).pos; SHOTS = prev;
   for (let i = 0; i < pp.length - 6; i += 6) KEEP.push({ a: pp[i], b: pp[i + 6], r: 24 });
   KK0.filter(k => k.shot).forEach(k => { const c = k.shot, T0 = c.n.clone().negate().cross(V(0, 1, 0)).normalize();
-    for (let a = -2; a <= 2; a++) for (let b = -1; b <= 1; b++) { const g = c.C.clone().addScaledVector(T0, a * c.W / 4.4).add(V(0, b * c.H / 2.2, 0)); KEEP.push({ a: k.pos, b: g, r: 6 }, { a: c.cam.pos, b: g, r: 6 }); if (!c.z3) KEEP.push({ a: c.P, b: g, r: 5 }); } });
-  KEEP.forEach(k => { k.a2 = k.a.clone().setY(0); k.b2 = k.b.clone().setY(0); }); }
+    for (let a = -2; a <= 2; a++) for (let b = -1; b <= 1; b++) { const g = c.C.clone().addScaledVector(T0, a * c.W / 4.4).add(V(0, b * c.H / 2.2, 0)); KEEP.push({ a: k.pos, b: g, r: 6 }, { a: c.cam.pos, b: g, r: 6 }); if (!c.z3) KEEP.push({ a: c.P, b: g, r: 5 }); } }); });
+Object.values(NEON_ROUTES).forEach(P => { for (let i = 0; i < P.length - 1; i++) KEEP.push({ a: P[i], b: P[i + 1], r: 12 }); });
+KEEP.forEach(k => { k.a2 = k.a.clone().setY(0); k.b2 = k.b.clone().setY(0); });
 function segD(px, py, pz, a, b) { const bx = b.x - a.x, by = b.y - a.y, bz = b.z - a.z; let t = ((px - a.x) * bx + (py - a.y) * by + (pz - a.z) * bz) / ((bx * bx + by * by + bz * bz) || 1); t = t < 0 ? 0 : t > 1 ? 1 : t;
   const dx = a.x + bx * t - px, dy = a.y + by * t - py, dz = a.z + bz * t - pz; return Math.sqrt(dx * dx + dy * dy + dz * dz); }
 // весь луч проектора (в плане) — тоже без колонн, иначе картинка ложится на колонну перед стеной
@@ -490,7 +539,7 @@ const ZONES = [      // дымка и общий свет по локациям 
   { z: -5120, haze: [0.0110, 0.0120, 0.0150], k: 0.0006, amb: [0.0120, 0.0126, 0.0144] },
   { z: -5240, haze: [0.05, 0.022, 0.008], k: 0.0011, amb: [0.0018, 0.0015, 0.0012] },
 ];
-let PATH = [], SEG = [], S_TOTAL = 0, NEON_TAIL = []; const COLS = [];   // колонны гипостиля (центры, 30×30)
+let PATH = [], SEG = [], S_TOTAL = 0; const COLS = [];   // колонны гипостиля (центры, 30×30)
 const FX = { beams: [], glows: [], cubes: [], dots: [] };
 
 // стена с круглым проёмом: коробки вокруг квадратного выреза и вставка с круглой дырой
@@ -531,8 +580,7 @@ function buildWorld(slot) {
     [V(xl, 0.25, 9), up], [V(90, 0.25, 9), up], [V(90, 0.25, STAIR.z0 - run), up]];
   const zBot = STAIR.z0 - run + 2 * LOW;
   P.push([V(90, LOW + 0.25, zBot), V(0, run, -rise).normalize()]);
-  (NEON_TAIL = [[90, -700], [-672, -700], [-672, -1185], [672, -1200], [672, -1440], [0, -1440], [0, -1860], [-112, -1905], [-211, -2023], [-211, -2177], [211, -2177], [112, -2295], [0, -2370], [0, -2470], [-140, -2470], [-140, -3205], [140, -3215], [140, -3285], [0, -3285], [0, -3460], [-672, -3460], [-672, -4225], [672, -4235], [672, -4420], [0, -4420], [0, -4470], [-292, -4470], [-292, -4920], [292, -4930], [292, -5100], [0, -5100], [0, ZN.fan + 40]])
-    .forEach(([x, zz]) => P.push([V(x, LOW + 0.25, zz), up]));
+  NEON_ROUTES.all.forEach(q => P.push([q.clone(), up]));
   PATH = P;
   let s = 0; SEG = [];
   for (let i = 0; i < P.length - 1; i++) { const a = P[i][0], b = P[i + 1][0], l = a.distanceTo(b); SEG.push({ a, b, n: P[i + 1][1], s0: s, s1: s + l }); s += l; }
@@ -603,7 +651,7 @@ function buildWorld(slot) {
   box(-AX, -60, LOW, AY, ZN.ai0 - 12, ZN.ai0); box(60, AX, LOW, AY, ZN.ai0 - 12, ZN.ai0); box(-60, 60, LOW + 140, AY, ZN.ai0 - 12, ZN.ai0);
   box(-AX, -80, LOW, AY, ZN.ai1 - 12, ZN.ai1); box(80, AX, LOW, AY, ZN.ai1 - 12, ZN.ai1); box(-80, 80, LOW + 200, AY, ZN.ai1 - 12, ZN.ai1);
   buildSphere(V(0, LOW + 430, -3930), 230);
-  SHAFTS.push({ x: 0, z: -3930, r: 170, k: 0.9, floor: LOW, top: AY });
+  SHAFTS.push({ x: 0, z: -3930, r: 170, k: 0.7, floor: LOW, top: AY });
   [[-560, -3600], [560, -3600], [-560, -4250], [560, -4250]].forEach(([x, zz]) => LAMPS.push({ p: V(x, LOW + 120, zz), r: 140, c: V(0.55, 0.75, 1).multiplyScalar(0.4) }));
   LAMPS.push({ p: V(0, LOW + 430, -4260), r: 520, c: V(0.8, 0.9, 1).multiplyScalar(1.0) });
 
@@ -779,7 +827,7 @@ const glowPoints = (pts, col, size) => { const g = new THREE.BufferGeometry().se
 function buildLight() {
   SHAFTS.forEach(sh => {
     const len = sh.top - sh.floor, b = new THREE.Mesh(new THREE.CylinderGeometry(sh.r * 0.85, sh.r * 1.05, len, 32, 1, true), beamMat());
-    b.position.set(sh.x, sh.floor + len / 2, sh.z); scene.add(b); FX.beams.push({ b, k: sh.k * 0.6 });
+    b.position.set(sh.x, sh.floor + len / 2, sh.z); scene.add(b); FX.beams.push({ b, k: sh.beam ?? sh.k * 0.6 });
     const hole = new THREE.Mesh(new THREE.CircleGeometry(sh.r * 0.95, 48), basic(0xdfe6ff, 2.2)); hole.rotation.x = Math.PI / 2; hole.position.set(sh.x, sh.top - 1, sh.z); scene.add(hole); FX.glows.push(hole);
   });
   // светильники гипостильного зала и красной трубы
@@ -788,7 +836,6 @@ function buildLight() {
   slab(80, 330, V(470, LOW + 260, -299), 2.4); slab(50, 330, V(590, LOW + 260, -299), 2.4);                                                                    // кадр 1: свет из-за края стены
   FX.slitsHyp.forEach(o => slab(o.w, 340, V(o.x, LOW + 190, ZN.hyp + 0.6)));                                 // кадры 2–3
   const bot = new THREE.Mesh(new THREE.CircleGeometry(FX.shaftR - 10, 64), basic(cold, 1.4)); bot.rotation.x = -Math.PI / 2; bot.position.set(0, LOW - 2560, FX.shaftC.z); scene.add(bot); FX.glows.push(bot);   // кадр 4
-  slab(118, 138, V(0, LOW + 70, ZN.ret1 - 4), 1.9);                                                           // кадр 6: конец прохода
   const back = new THREE.Mesh(new THREE.CircleGeometry(300, 96), basic(cold, 2.8)); back.position.set(0, LOW + 430, -4350); scene.add(back); FX.glows.push(back);   // кадр 7
   FX.slitsSt.forEach(o => slab(o.w, 600, V(o.x, LOW + 560, ZN.st1 + 0.6), 2.4));                             // кадр 8
   for (let zz = ZN.st1 - 64; zz > ZN.st1 - 520; zz -= 48) [-1, 1].forEach(sd => { const m = slab(3, 180, V(sd * (VENT.x - 0.6), LOW + 100, zz), 2.6); m.rotation.y = -sd * Math.PI / 2; });   // кадр 9: щели
@@ -799,7 +846,7 @@ function buildLight() {
     bodies.push({ m: new THREE.Matrix4().compose(P.clone().addScaledVector(dir, -7), q, V(11, 7, 15)), c: dark });
     if (c.ceil || z.ceil) rods.push({ m: beam(P.clone().addScaledVector(dir, -7), V(P.x, c.ceil || z.ceil, P.z).addScaledVector(dir, -7), 0.8), c: dark });
     else bodies.push({ m: M(P.clone().addScaledVector(dir, -7).add(V(0, -6, 0)), [0, 0, 0], V(5, 6, 5)), c: dark });
-    const cover = a => { const fa = 16 / 9; c.sc.set(a > fa ? fa / a : 1, a > fa ? 1 : a / fa); };
+    const cover = a => { const fa = c.W / c.H; c.sc.set(a > fa ? fa / a : 1, a > fa ? 1 : a / fa); };
     if (c.vid && !LITE) {
       const v = Object.assign(document.createElement('video'), { src: `assets/${c.vid}.mp4`, muted: true, loop: true, playsInline: true, crossOrigin: 'anonymous', preload: 'auto' });
       v.addEventListener('loadedmetadata', () => cover(v.videoWidth / v.videoHeight)); c.video = v; c.tex = new THREE.VideoTexture(v);
@@ -885,18 +932,9 @@ function buildNeon() {
 // ===== три маршрута неона: «все кейсы» — вдоль стен через все проекции (как запекался свет); atl / btl — с лестницы сразу к кейсам маршрута:
 // по проходу камеры (там нет колонн), у каждого кейса — к стене под картинку и вдоль неё; в колодце — по мосту; к вентшахте — по оси
 const NEON = {};
-function routeNeonPoints() {
-  // тот же чистый путь вдоль стен, что у «всех кейсов» (прямые и прямые углы), но залы без кейсов маршрута проходим напрямую
-  const key = t => t.map(p => p.join(',')).join(';'), T = NEON_TAIL.map(p => p.slice()), cut = (from, to, by) => { const i = T.findIndex(p => key([p]) === key([from])), j = T.findIndex(p => key([p]) === key([to])); if (i >= 0 && j > i) T.splice(i, j - i + 1, ...by); };
-  const zones = new Set(SHOTS.map(c => c.zone)), hypEnd = SHOTS.every(c => c.zone !== 'hyp' || Math.abs(c.n.z) > 0.5);
-  if (hypEnd) cut([90, -700], [0, -1440], zones.has('hyp') ? [[90, -700], [140, -700], [140, -1440], [0, -1440]] : [[90, -700], [140, -700], [140, -1440], [0, -1440]]);   // гипостиль: к торцу по просвету между колоннами x = 140
-  if (!zones.has('ai')) cut([0, -3460], [0, -4420], [[0, -3460], [0, -4420]]);   // зал AI без кейсов — по оси (центральный проход свободен)
-  if (!zones.has('sport')) cut([0, -4470], [0, -5100], [[0, -4470], [0, -5100]]);
-  return T.map(([x, z]) => V(x, LOW + 0.25, z));
-}
 function setNeon(r) {
   if (!NEON.all) NEON.all = { P: PATH, SEG, S: S_TOTAL, mesh: neon };
-  if (!NEON[r]) { const P = PATH.slice(0, 10).concat(routeNeonPoints().map(p => [p, V(0, 1, 0)])); let s = 0; const sg = [];
+  if (!NEON[r]) { const P = PATH.slice(0, 10).concat(NEON_ROUTES[r].map(p => [p.clone(), V(0, 1, 0)])); let s = 0; const sg = [];
     for (let i = 0; i < P.length - 1; i++) { const a = P[i][0], b = P[i + 1][0], l = a.distanceTo(b); if (l < 0.01) continue; sg.push({ a, b, n: P[i + 1][1], s0: s, s1: s + l }); s += l; }
     const keep = [PATH, SEG, S_TOTAL, neon]; SEG = sg; buildNeon(); NEON[r] = { P, SEG: sg, S: s, mesh: neon }; [PATH, SEG, S_TOTAL, neon] = keep; }
   Object.values(NEON).forEach(n => { n.mesh.visible = false; });
@@ -1038,7 +1076,9 @@ function buildTimeline() {
   const tanS0 = tan.map((_, j) => { const a = V(0, 0, 0); for (let k = -40; k <= 40; k += 4) a.add(tan[Math.min(N, Math.max(0, j + k))]); return a.normalize(); });
   // между кейсами камера идёт за лучом: смотрит на неон впереди (≈200 м по ленте) и чуть вверх — виден масштаб, луч остаётся в кадре
   const nearS = []; { let ss = sv[9]; for (let j = 0; j <= N; j++) { let best = ss, bd = 1e9; for (let x = ss - 100; x <= ss + 700; x += 6) { const d = hd(x).distanceTo(cp[j]); if (d < bd) { bd = d; best = x; } } ss = Math.max(ss, best); nearS.push(ss); } }
-  const tanS1 = cp.map((p, j) => { const t = hd(nearS[j] + 360), d = t.sub(p); const hz = Math.hypot(d.x, d.z) || 1; d.y = Math.max(-0.25, Math.min(0.12, d.y / hz)) * hz + hz * 0.12; return d.normalize().lerp(tanS0[j], 0.3).normalize(); });
+  const zoneZ = z => { for (const [k, [a, b]] of Object.entries(ZR)) if (z <= a + 60 && z >= b - 60) return k; return null; };
+  const tanS1 = cp.map((p, j) => { const t = hd(nearS[j] + 360); if (zoneZ(t.z) !== zoneZ(p.z)) return tanS0[j].clone();   // неон уже за стеной (в следующем зале) — смотрим по ходу, а не в бетон
+    const d = t.sub(p); const hz = Math.hypot(d.x, d.z) || 1; d.y = Math.max(-0.25, Math.min(0.12, d.y / hz)) * hz + hz * 0.05; return d.normalize().lerp(tanS0[j], 0.3).normalize(); });
   const tanS = tanS1.map((_, j) => { const a = V(0, 0, 0); for (let k = -48; k <= 48; k += 4) a.add(tanS1[Math.min(N, Math.max(0, j + k))]); return a.normalize(); });
   const anc = KK.filter(k => k.dir), RT = 150, dirs = [];
   for (let j = 0, ai = 0; j <= N; j++) {
@@ -1049,6 +1089,14 @@ function buildTimeline() {
     if (L < 2 * RT || (a.shot && b.shot && a.shot.zone === b.shot.zone)) dirs.push(slerpV(a.dir, b.dir, sm(clamp01(d1 / (L || 1)))));
     else dirs.push(slerpV(slerpV(tanS[j], a.dir, sm(clamp01(1 - d1 / RT))), b.dir, sm(clamp01(1 - d2 / RT))));
   }
+  // проёмы между залами: за 130 до проёма и на 90 после — взгляд выравнивается по оси прохода (не в его стенку);
+  // вне кадров взгляд не задирается выше ~12° (иначе после высоко висящего кадра камера смотрит в потолочные светильники)
+  { const ahead = V(0, -0.03, -1).normalize(), inHold = j => KK.some((k, i) => k.hold === 'A' && j >= k.j && j <= KK[i + 1].j);
+    const holdDist = j => { let d = 1e9; KK.forEach((k, i) => { if (k.hold !== 'A') return; const b = KK[i + 1]; d = Math.min(d, j < k.j ? arc[k.j] - arc[j] : j > b.j ? arc[j] - arc[b.j] : 0); }); return d; };
+    for (let j = 0; j <= N; j++) { if (inHold(j)) continue; const p = cp[j]; let w = 0;
+      Object.values(DOORS).forEach(([d0, d1]) => { if (Math.abs(p.x) > 90) return; const t = p.z > d0.z ? 1 - (p.z - d0.z) / 130 : p.z < d1.z ? 1 - (d1.z - p.z) / 90 : 1; w = Math.max(w, smooth(clamp01(t))); });
+      if (w > 0) dirs[j] = slerpV(dirs[j], ahead, w).normalize();
+      const k = smooth(clamp01(holdDist(j) / 45)), ymax = THREE.MathUtils.lerp(1, 0.2, k); if (dirs[j].y > ymax) { const h = Math.hypot(dirs[j].x, dirs[j].z) || 1; dirs[j].set(dirs[j].x / h * Math.sqrt(1 - ymax * ymax), ymax, dirs[j].z / h * Math.sqrt(1 - ymax * ymax)); } } }
   // скорость: у кадра — едва движется (наезд 10 м занимает заметный кусок скролла), разгон и торможение плавные
   const holds = KK.filter(k => k.hold === 'A').map(k => [k.arc, KK[KK.indexOf(k) + 1].arc]);
   const vel = x => { let d = 1e9; holds.forEach(([a, b]) => { d = Math.min(d, x < a ? a - x : x > b ? x - b : 0); }); return 0.1 + 0.9 * sm(clamp01(d / 140)); };
@@ -1340,7 +1388,7 @@ const jumpTo = p => { const f = document.getElementById('fade'); f.classList.add
 document.querySelectorAll('[data-jump]').forEach(el => el.addEventListener('click', e => { e.preventDefault(); el.blur(); jumpTo(0); }));
 // маршрут atl / btl: те же стены и проекторы, горят только кейсы маршрута; путь камеры пересобирается под шторкой
 function setRoute(r) {
-  if (ROUTE === r) return; ROUTE = r; SHOTS = r === 'all' ? ALL : ALL.filter(c => c.dir === r);
+  if (ROUTE === r) return; ROUTE = r; SHOTS = ROUTES[r];
   ALL.forEach(c => { if (!SHOTS.includes(c)) { c.on = 0; if (c.beam) { c.beam.visible = false; c.dust.visible = false; } c.video?.pause(); } });
   setNeon(r); buildTimeline(); buildNotes(); capId = null; document.body.dataset.route = r;
 }
@@ -1443,7 +1491,7 @@ buildWorld(slot); buildLight(); buildZones(); buildNeon(); buildReel(); if (!LIT
 // запечённый свет снят с геометрии до 3D-зон (колонны в гипостиле переставлены) — пока живой расчёт; ?baked включает старое запекание
 if (!QS0.has('live') && !LITE) await loadBaked();
 renderer.compile(scene, camera);
-window.__mega = { cam: camera, composer, bloom, fanMesh: FX.fan.bi, LAMPS, SHAFTS, glows: FX.glows, U, rigAt: q => { camTarget(q); return [camT.toArray(), look.toArray()]; }, go: p => { if (!ROUTE && p > P_A + 1e-4 && p < P_B) setRoute(new URLSearchParams(location.search).get('route') || 'btl'); scrollTo(0, toRaw(p) * (document.documentElement.scrollHeight - innerHeight)); FOL.s = scrollY / innerHeight; FOL.v = 0; FOL.a = 0; pSm = p; snapCam = true; }, STOPS: () => SHOTS.map(c => [c.id, +c.pMid.toFixed(4)]), setRoute: r => setRoute(r), pScroll: () => toP(clamp01(scrollY / (document.documentElement.scrollHeight - innerHeight))), get SHOTS() { return SHOTS; }, ALL, COLS, SEG: () => SEG, get ROUTE() { return ROUTE; }, CP, renderer, scene };
+window.__mega = { cam: camera, composer, bloom, fanMesh: FX.fan.bi, LAMPS, SHAFTS, glows: FX.glows, U, rigAt: q => { camTarget(q); return [camT.toArray(), look.toArray()]; }, go: p => { if (!ROUTE && p > P_A + 1e-4 && p < P_B) setRoute(new URLSearchParams(location.search).get('route') || 'btl'); scrollTo(0, toRaw(p) * (document.documentElement.scrollHeight - innerHeight)); FOL.s = scrollY / innerHeight; FOL.v = 0; FOL.a = 0; pSm = p; snapCam = true; }, STOPS: () => SHOTS.map(c => [c.id, +c.pMid.toFixed(4)]), setRoute: r => setRoute(r), pScroll: () => toP(clamp01(scrollY / (document.documentElement.scrollHeight - innerHeight))), get SHOTS() { return SHOTS; }, ALL, COLS, SEG: () => SEG, NEON_ROUTES, get ROUTE() { return ROUTE; }, CP, renderer, scene };
 { const r = new URLSearchParams(location.search).get('route'); if (r === 'atl' || r === 'btl' || r === 'all') setRoute(r); }
 const AT = new URLSearchParams(location.search).get('p'); if (AT) window.__mega.go(+AT);
 frame();
