@@ -1,0 +1,6 @@
+# поисковики и ИИ-поиск открыты; обучающие боты (GPTBot, ClaudeBot, Google-Extended) — решение руководства, пока не закрыты
+# на черновике страницы закрыты meta robots noindex; на боевом домене — пересобрать с INDEX=1
+User-agent: *
+Allow: /
+
+Sitemap: https://oxygen-agency.ru/sitemap.xml

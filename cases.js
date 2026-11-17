@@ -979,3 +979,6 @@ for (const [id, u] of Object.entries(UPD_1311)) {
 }
 CASES.oxygenSet.result = [];   // в документе результат — цитата
 ORDER.btl.push('robozone'); ORDER.atl.push('ozonTravel', 'dracondaz', 'beep');
+// направления — по разделам документа Никиты 13.11: «Хроники Ижоры» в ATL, «Авангард» в BTL
+CASES.izhora.dir = 'atl'; CASES.avangard.dir = 'btl';
+ORDER.btl = ORDER.btl.filter(x => x !== 'izhora'); ORDER.atl = ORDER.atl.filter(x => x !== 'avangard'); ORDER.atl.splice(ORDER.atl.indexOf('dino') + 1, 0, 'izhora'); ORDER.btl.push('avangard');

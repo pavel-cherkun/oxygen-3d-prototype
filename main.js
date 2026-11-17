@@ -26,7 +26,7 @@ const rnd = mulberry(2026);
 
 // ---------- загрузка: прелоадер ждёт всё ----------
 const LOAD = { loaded: 0, total: 0 };
-THREE.DefaultLoadingManager.onProgress = (u, l, t) => { LOAD.loaded = l; LOAD.total = t; document.getElementById('loadPct').textContent = String(Math.round(100 * l / Math.max(1, t))).padStart(3, '0'); };
+THREE.DefaultLoadingManager.onProgress = (u, l, t) => { LOAD.loaded = l; LOAD.total = t; if (t > 4 && l / t > 0.85) document.getElementById('loader').classList.add('end'); document.getElementById('loadPct').textContent = String(Math.round(100 * l / Math.max(1, t))).padStart(3, '0'); };
 
 // ---------- рендер ----------
 const canvas = document.getElementById('gl');
@@ -1116,6 +1116,7 @@ function updateRays() {
 const zoneAt = z => { let i = 0; while (i < ZONES.length - 2 && z < ZONES[i + 1].z) i++; const a = ZONES[i], b = ZONES[i + 1], t = smooth(clamp01((a.z - z) / (a.z - b.z))); const mix = (u, v) => u.map((x, k) => x + (v[k] - x) * t); return { haze: mix(a.haze, b.haze), k: a.k + (b.k - a.k) * t, amb: mix(a.amb, b.amb) }; };
 const camT = V(0, 0, 0), rigPos = V(0, 0, 0), rigQ = new THREE.Quaternion(), _qT = new THREE.Quaternion(), _qS = new THREE.Quaternion(), _m4 = new THREE.Matrix4(), _up = V(0, 1, 0);
 let snapCam = true, snapPrev = true;
+const RM = matchMedia('(prefers-reduced-motion: reduce)').matches;   // спокойный режим: без пролётов — переходы шторкой, камера сразу на месте
 const FOL = { s: 0, v: 0, a: 0, boost: 1, vmax: 60, amax: 90, dec: 55 };   // догонка скролла в единицах vh
 // цель камеры: интро — по ключам; дальше — по таблице траектории (по длине ленты)
 function camTarget(q) {
@@ -1144,7 +1145,7 @@ function caption(p) {
   const t = nearShot(p, 'p0', 0), k = SHOTS.indexOf(t);
   if (!t) { capEl.classList.remove('on'); shadeEl.classList.remove('on'); capId = null; return; }
   if (capId !== t.id) { capId = t.id; const c = CASES[t.id] || {}, ps = c.pass || {};
-    capEl.innerHTML = `<span class="t">{${String(k + 1).padStart(2, '0')}} ${t.loc}</span><h2>${c.title || ''}</h2><p class="m">${[ps.клиент, ps.год].filter(x => x && x !== '—').join(' · ')}</p><p>${c.idea || c.task || ''}</p><a class="btn" href="#case/${t.id}">читать кейс</a>`;
+    capEl.innerHTML = `<span class="t">{${String(k + 1).padStart(2, '0')}} ${t.loc}</span><h2>${c.title || ''}</h2><p class="m">${[ps.клиент, ps.год].filter(x => x && x !== '—').join(' · ')}</p><p>${c.idea || c.task || ''}</p><a class="btn" href="cases/${t.id}.html">читать кейс</a>`;
     capEl.classList.toggle('left', t.cam.s > 0); shadeEl.classList.toggle('left', t.cam.s > 0); }   // подпись — на свободной половине кадра
   capEl.classList.add('on'); shadeEl.classList.add('on');
 }
@@ -1153,6 +1154,7 @@ function frame() {
   const max = document.documentElement.scrollHeight - innerHeight;
   if (!ROUTE && max > 0) { const pr = toP(clamp01(scrollY / max)); if (pr > P_A + 1e-4 && pr < P_B) scrollTo(0, toRaw(P_A) * max); }   // без выбора маршрута — стоп на парапете
   // камера догоняет скролл по кривой торможения без пружины (из форка 2): скорость к цели сама гаснет, разгон с ограничением рывка, перелёта нет
+  if (RM) { FOL.s = scrollY / innerHeight; FOL.v = 0; }
   { const tgt = scrollY / innerHeight, err = tgt - FOL.s, dist = Math.abs(err), sg = Math.sign(err);
     FOL.boost += Math.max(-0.8 * dt, Math.min(0.8 * dt, Math.min(1.5, 1 + dist / 120) - FOL.boost));
     const vT = sg * Math.min(FOL.vmax * FOL.boost, Math.sqrt(2 * FOL.dec * FOL.boost * dist), 3 * dist);
@@ -1323,14 +1325,15 @@ const goRoute = (r, p) => { const f = document.getElementById('fade'); f.classLi
 { const el = document.getElementById('route');
   el.querySelectorAll('button').forEach(b => b.addEventListener('click', () => { const r = b.dataset.r; if (ROUTE === r) return navNext(); goRoute(r, P_A); setTimeout(() => navNext(), 900); }));
   const upd = () => { el.classList.toggle('on', !ROUTE && pSm > P_A - 0.006 && pSm < P_A + 0.01); requestAnimationFrame(upd); }; upd(); }
+let openForm = () => {}, openList = () => {};
 // «кейсы» — список во весь экран: atl и btl, у курсора — превью (некликабельное); клик — к кейсу (если он с другого маршрута — маршрут меняется)
 { const L = document.getElementById('list'), peek = document.getElementById('peek'), html = document.documentElement, img = c => c.img ? `assets/${c.img}.jpg` : '';
-  const col = r => { const cs = ALL.filter(c => c.dir === r); return `<div><h3><span>${r}</span><i>${cs.length} кейсов</i></h3>${cs.map((c, k) => { const k_ = CASES[c.id] || {}, ps = k_.pass || {};
+  const col = r => { const cs = ALL.filter(c => c.dir === r); return `<div><h3><span>${r === 'atl' ? 'atl + ai' : r}</span><i>${cs.length} кейсов</i></h3>${cs.map((c, k) => { const k_ = CASES[c.id] || {}, ps = k_.pass || {};
     return `<a href="#" data-id="${c.id}" data-img="${img(c)}"><i>${String(k + 1).padStart(2, '0')}</i><b>${k_.title || c.id}</b><span>${[ps.клиент, ps.год].filter(x => x && x !== '—').join(' · ')}</span></a>`; }).join('')}</div>`; };
   L.querySelector('.in').innerHTML = col('atl') + col('btl');
   const open = () => { L.querySelectorAll('a').forEach(a => a.classList.toggle('cur', a.dataset.id === capId)); L.classList.add('on'); html.classList.add('lock'); };
   const close = () => { L.classList.remove('on'); peek.classList.remove('on'); if (!pageEl.classList.contains('on')) html.classList.remove('lock'); };
-  document.getElementById('listBtn').addEventListener('click', e => { e.preventDefault(); e.currentTarget.blur(); open(); });
+  openList = open; document.getElementById('listBtn').addEventListener('click', e => { e.preventDefault(); e.currentTarget.blur(); open(); });
   L.querySelector('.x').addEventListener('click', close);
   addEventListener('keydown', e => { if (e.key === 'Escape' && L.classList.contains('on')) close(); });
   L.addEventListener('mousemove', e => { const a = e.target.closest('a[data-img]'); if (a && a.dataset.img) { if (peek.getAttribute('src') !== a.dataset.img) peek.src = a.dataset.img; peek.style.left = e.clientX + 'px'; peek.style.top = e.clientY + 'px'; peek.classList.add('on'); } else peek.classList.remove('on'); });
@@ -1338,33 +1341,36 @@ const goRoute = (r, p) => { const f = document.getElementById('fade'); f.classLi
   L.addEventListener('click', e => { const a = e.target.closest('a[data-id]'); if (!a) return; e.preventDefault(); close(); const c = ALL.find(t => t.id === a.dataset.id);
     if (ROUTE === c.dir) jumpTo(c.pMid); else goRoute(c.dir, () => c.pMid); }); }
 // «о нас» — короткие заметки на длинных перегонах между кейсами (тексты — из портфолио 20_26, без изменений)
-const NOTE_TXT = {
-  who: `<span class="t">кто мы</span><h2>у каждого бренда есть огонь</h2><p>чаще всего он тлеет — в отчётах, согласованиях и «давайте аккуратнее». мы не приносим огонь со стороны: находим ваш и даём ему дышать</p>`,
+const NOTE_TXT = {   // «О нас» и подпись наград — тексты Никиты (копирайт 17.11) дословно; цифры и премии — из портфолио 20_26
+  a1: `<span class="t">о нас</span><h2 class="lc">Берём на себя скучное и возвращаем интересное</h2><p class="lc">Провести вашу концепцию через сорок носителей, три подрядчика и два круга правок, не растеряв драйв по дороге, — в этой работе мы так же устойчивы, как в креативе.</p>`,
+  a2: `<span class="t">о нас</span><h2 class="lc">Раскручиваем то, что в брифе только намечалось</h2><p class="lc">Ищем точку, где вашу идею можно усилить, и доводим её до системы: стратегия или креативная рамка, брендбук или дизайн-система, которые держат консистентность. Чем больше у кампании точек входа, тем дольше она живёт.</p>`,
+  a3: `<span class="t">о нас</span><h2 class="lc">Вам есть что показать — мы делаем так, чтобы это заметили</h2><p class="lc">У любого бренда есть то, чем он отличается: продукт, история, люди, привычки его покупателей. Чаще всего преимущество тонет в общем шуме. Мы ищем форму, в которой отличие становится видно, — собственных героев, спецпроект, место, где бренд не ждали. После этого рекламу перестают терпеть и начинают пересматривать.</p>`,
   num: `<span class="t">кто мы</span><div class="num"><b>2007</b><span>год основания агентства</span><b>52</b><span>специалиста в штате</span><b>10+</b><span>лет опыта у ключевых сотрудников</span><b>вся РФ</b><span>география проектов, дом — петербург</span></div>`,
-  awd: `<span class="t">награды и рейтинги</span><h2>нас считают. в хорошем смысле</h2><div class="num"><b>4</b><span>gold</span><b>6</b><span>silver</span><b>6</b><span>bronze</span><b>4</b><span>short-list</span></div><p>silver mercury, red apple, e+ awards, white square, perspectum awards, sreda, dprofile awards · 3 место — adindex, качество услуг · 4 место — АКАР, брендинг, 2022</p>`,
-  atl: `<span class="t">что делаем</span><h2>креатив, брендинг, дизайн, продакшн</h2><p>большие идеи и федеральные кампании: от инсайта до эфира. видео, 3d, cg, анимация, съёмка, ии-продакшн, звук</p>`,
-  btl: `<span class="t">что делаем</span><h2>btl, event, MICE, спорт</h2><p>бренд-зоны, фестивали, корпоративы, презентации. гонки, марафоны, клубы: от зоны до айдентики сезона</p>`,
+  awd: `<span class="t">награды и рейтинги</span><h2 class="lc">Оценили не только клиенты</h2><div class="num"><b>4</b><span>gold</span><b>6</b><span>silver</span><b>6</b><span>bronze</span><b>4</b><span>short-list</span></div><p>silver mercury, red apple, e+ awards, white square, perspectum awards, sreda, dprofile awards · 3 место — adindex, качество услуг · 4 место — АКАР, брендинг, 2022</p>`,
 };
 let NOTES = [];
 function buildNotes() {
   const gaps = [], hs = SHOTS.map(c => [c.p0, c.p1]).sort((a, b) => a[0] - b[0]); let prev = P_A + 0.02;
   hs.forEach(([a, b]) => { if (a - prev > 0.012) gaps.push([prev, a]); prev = Math.max(prev, b); }); if (P_B - 0.01 - prev > 0.012) gaps.push([prev, P_B - 0.01]);
-  const pick = gaps.sort((x, y) => (y[1] - y[0]) - (x[1] - x[0])).slice(0, 4).sort((x, y) => x[0] - y[0]), keys = ['who', 'num', 'awd', ROUTE];
+  const pick = gaps.sort((x, y) => (y[1] - y[0]) - (x[1] - x[0])).slice(0, 5).sort((x, y) => x[0] - y[0]), keys = ['a1', 'num', 'a2', 'awd', 'a3'];
   NOTES = pick.map(([a, b], i) => ({ a: a + (b - a) * 0.2, b: b - (b - a) * 0.2, k: keys[i] }));
 }
 { const el = document.getElementById('note'), sh = document.getElementById('nshade'); let shown = null;
   const upd = () => { const n = NOTES.find(n => pSm >= n.a && pSm <= n.b); if (n && n.k !== shown) { el.innerHTML = NOTE_TXT[n.k]; shown = n.k; } el.classList.toggle('on', !!n); sh.classList.toggle('on', !!n); requestAnimationFrame(upd); }; upd(); }
 // «контакты» — короткая форма; отправка пока через почтовую программу (сервера под заявки ещё нет)
 { const fm = document.getElementById('form'), form = fm.querySelector('form'), html = document.documentElement;
-  const open = () => { fm.classList.remove('sent'); fm.classList.add('on'); html.classList.add('lock'); setTimeout(() => form.elements.name.focus(), 50); };
+  const open = (caseId) => { if (caseId && CASES[caseId]) form.elements.task.value = `по мотивам кейса «${CASES[caseId].title}»\n`; fm.classList.remove('sent'); fm.classList.add('on'); html.classList.add('lock'); setTimeout(() => form.elements.name.focus(), 50); };
   const close = () => { fm.classList.remove('on'); if (!pageEl.classList.contains('on')) html.classList.remove('lock'); };
-  document.getElementById('contactsBtn').addEventListener('click', e => { e.preventDefault(); open(); });
+  openForm = open; document.getElementById('contactsBtn').addEventListener('click', e => { e.preventDefault(); open(); });
   fm.querySelector('.x').addEventListener('click', close);
   fm.addEventListener('click', e => { if (e.target === fm) close(); });
   addEventListener('keydown', e => { if (e.key === 'Escape' && fm.classList.contains('on')) close(); });
   form.addEventListener('submit', e => { e.preventDefault(); const d = form.elements;
-    let bad = false; [d.name, d.contact].forEach(i => { const v = !i.value.trim(); i.style.borderColor = v ? 'var(--red)' : ''; bad ||= v; }); if (bad) return;
-    const body = `Имя: ${d.name.value.trim()}\nКонтакт: ${d.contact.value.trim()}\n\n${d.task.value.trim()}`;
+    let bad = false; [d.name, d.contact].forEach(i => { const v = !i.value.trim(); i.style.borderColor = v ? 'var(--red)' : ''; bad ||= v; });
+    const pd = form.querySelector('.pd'); pd.style.color = d.pd.checked ? '' : 'var(--red)'; bad ||= !d.pd.checked; if (bad) return;
+    const asks = [...form.querySelectorAll('input[name=ask]:checked')].map(i => i.value);
+    const L = [`Имя: ${d.name.value.trim()}`]; if (d.company.value.trim()) L.push(`Компания: ${d.company.value.trim()}`); L.push(`Контакт: ${d.contact.value.trim()}`);
+    if (asks.length) L.push(`С чем приходим: ${asks.join('; ')}`); if (d.task.value.trim()) L.push('', d.task.value.trim()); const body = L.join('\n');
     location.href = `mailto:ask@oxygen-agency.ru?subject=${encodeURIComponent('Задача с сайта')}&body=${encodeURIComponent(body)}`; fm.classList.add('sent'); }); }
 let navNext = () => {};
 // листание по кейсам (из форка 2): один жест колеса / свайп / клавиша = один кейс; стрелки ← → внизу посередине.
@@ -1376,7 +1382,7 @@ let navNext = () => {};
     return p >= P_A - E && p <= P_B + E && !(dir > 0 && p >= P_B - E) && !(dir < 0 && p <= P_A + E); };
   const busy = () => pageEl.classList.contains('on') || document.getElementById('form').classList.contains('on') || document.getElementById('list').classList.contains('on');
   const navStep = dir => { if (!ROUTE && dir > 0) { if (pNow() < P_A - E) scrollTo(0, toRaw(P_A) * maxS()); return; } const T = targets(), p = pNow(), cur = dir > 0 ? Math.max(p, pSm) : p;
-    const t = dir > 0 ? T.find(x => x > cur + E) : [...T].reverse().find(x => x < cur - E); if (t == null) return; scrollTo(0, toRaw(t) * maxS()); };
+    const t = dir > 0 ? T.find(x => x > cur + E) : [...T].reverse().find(x => x < cur - E); if (t == null) return; if (RM) return jumpTo(t); scrollTo(0, toRaw(t) * maxS()); };
   const N = { acc: 0, lock: 0, last: 0, tail: 1e9, armed: true };
   addEventListener('wheel', e => { if (busy() || e.ctrlKey) return; const dy = e.deltaMode === 1 ? e.deltaY * 16 : e.deltaY, dir = Math.sign(dy); if (!dir || !zone(dir)) return;
     e.preventDefault(); const now = performance.now(), gap = now - N.last, a = Math.abs(dy); N.last = now;
@@ -1409,4 +1415,6 @@ window.__mega = { cam: camera, composer, bloom, fanMesh: FX.fan.bi, LAMPS, SHAFT
 const AT = new URLSearchParams(location.search).get('p'); if (AT) window.__mega.go(+AT);
 frame();
 await new Promise(res => { const t0 = performance.now(); let calm = 0; const tick = () => { calm = LOAD.total === LOAD.loaded ? calm + 1 : 0; if (calm > 3 || performance.now() - t0 > 30000) return res(); setTimeout(tick, 150); }; tick(); });
-document.getElementById('loader').classList.add('done'); document.documentElement.classList.remove('lock'); openCase();
+document.getElementById('loader').classList.add('end'); await new Promise(r => setTimeout(r, 900)); document.getElementById('loader').classList.add('done');
+// ссылки со страниц кейсов: #cases — список, #contact — форма, ?brief=<id> — форма с пометкой кейса
+{ const q = new URLSearchParams(location.search); if (location.hash === '#cases') openList(); else if (location.hash === '#contact' || q.get('brief')) openForm(q.get('brief')); } document.documentElement.classList.remove('lock'); openCase();
